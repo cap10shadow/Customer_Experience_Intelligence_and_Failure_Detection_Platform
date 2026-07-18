@@ -1,0 +1,219 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: oi_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-operational_intelligence}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-operational_intelligence}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  gateway_service:
+    build:
+      context: .
+      dockerfile: backend/services/gateway_service/Dockerfile
+    container_name: oi_gateway
+    command: uvicorn backend.services.gateway_service.app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "${GATEWAY_SERVICE_PORT:-8000}:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  ingestion_service:
+    build:
+      context: .
+      dockerfile: backend/services/ingestion_service/Dockerfile
+    container_name: oi_ingestion
+    command: uvicorn backend.services.ingestion_service.app.main:app --host 0.0.0.0 --port 8001 --reload
+    ports:
+      - "${INGESTION_SERVICE_PORT:-8001}:8001"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  nlp_service:
+    build:
+      context: .
+      dockerfile: backend/services/nlp_service/Dockerfile
+    container_name: oi_nlp
+    command: uvicorn backend.services.nlp_service.app.main:app --host 0.0.0.0 --port 8002 --reload
+    ports:
+      - "${NLP_SERVICE_PORT:-8002}:8002"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  anomaly_service:
+    build:
+      context: .
+      dockerfile: backend/services/anomaly_service/Dockerfile
+    container_name: oi_anomaly
+    command: uvicorn backend.services.anomaly_service.app.main:app --host 0.0.0.0 --port 8003 --reload
+    ports:
+      - "${ANOMALY_SERVICE_PORT:-8003}:8003"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  root_cause_service:
+    build:
+      context: .
+      dockerfile: backend/services/root_cause_service/Dockerfile
+    container_name: oi_root_cause
+    command: uvicorn backend.services.root_cause_service.app.main:app --host 0.0.0.0 --port 8004 --reload
+    ports:
+      - "${ROOT_CAUSE_SERVICE_PORT:-8004}:8004"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  business_impact_service:
+    build:
+      context: .
+      dockerfile: backend/services/business_impact_service/Dockerfile
+    container_name: oi_business_impact
+    command: uvicorn backend.services.business_impact_service.app.main:app --host 0.0.0.0 --port 8005 --reload
+    ports:
+      - "${BUSINESS_IMPACT_SERVICE_PORT:-8005}:8005"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8005/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  recommendation_service:
+    build:
+      context: .
+      dockerfile: backend/services/recommendation_service/Dockerfile
+    container_name: oi_recommendation
+    command: uvicorn backend.services.recommendation_service.app.main:app --host 0.0.0.0 --port 8006 --reload
+    ports:
+      - "${RECOMMENDATION_SERVICE_PORT:-8006}:8006"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8006/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  copilot_service:
+    build:
+      context: .
+      dockerfile: backend/services/copilot_service/Dockerfile
+    container_name: oi_copilot
+    command: uvicorn backend.services.copilot_service.app.main:app --host 0.0.0.0 --port 8007 --reload
+    ports:
+      - "${COPILOT_SERVICE_PORT:-8007}:8007"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8007/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: oi_frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - VITE_API_BASE_URL=http://localhost:8000
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

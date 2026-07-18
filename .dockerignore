@@ -1,0 +1,30 @@
+# Frontend — not needed in backend service builds
+frontend/
+
+# Analytical workspaces
+notebooks/
+datasets/
+docs/
+
+# Git
+.git/
+.github/
+
+# Python artifacts
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+
+# Environment — never bake into images
+.env
+
+# Node artifacts
+**/node_modules/
+
+# Editor artifacts
+.vscode/
+.idea/
+**/*.swp
+**/*.swo
