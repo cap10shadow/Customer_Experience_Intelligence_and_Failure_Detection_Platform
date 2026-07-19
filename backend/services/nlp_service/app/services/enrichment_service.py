@@ -5,8 +5,11 @@ from typing import Optional
 
 from backend.services.nlp_service.app.models.complaint_enrichment import ComplaintEnrichment
 from backend.services.nlp_service.app.repositories.complaint_enrichment_repository import EnrichmentRepository
-from backend.services.nlp_service.app.utils.classifiers import SentimentClassifier, UrgencyClassifier, IssueCategorizer
-from backend.services.nlp_service.app.utils.text_processing import KeywordExtractor, Summarizer
+from backend.services.nlp_service.app.services.sentiment_analyzer import SentimentAnalyzer
+from backend.services.nlp_service.app.services.urgency_analyzer import UrgencyAnalyzer
+from backend.services.nlp_service.app.services.category_classifier import CategoryClassifier
+from backend.services.nlp_service.app.services.keyword_extractor import KeywordExtractor
+from backend.services.nlp_service.app.services.summarizer import Summarizer
 from backend.services.nlp_service.app.schemas.complaint_enrichment import (
     ExplainabilityMetadata,
     HeuristicsNamespace,
@@ -44,9 +47,9 @@ class EnrichmentService:
         start_time = time.perf_counter()
 
         # 1. Deterministic Classification
-        sentiment_label, sentiment_kws = SentimentClassifier.classify(text)
-        urgency_label, urgency_kws = UrgencyClassifier.classify(text)
-        issue_category, issue_kws = IssueCategorizer.categorize(text)
+        sentiment_label, sentiment_kws = SentimentAnalyzer.classify(text)
+        urgency_label, urgency_kws = UrgencyAnalyzer.classify(text)
+        issue_category, issue_kws = CategoryClassifier.classify(text)
 
         # 2. Text Processing
         extracted_keywords = KeywordExtractor.extract(text)

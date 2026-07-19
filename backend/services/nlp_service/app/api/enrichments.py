@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -114,7 +113,7 @@ async def list_enrichments(
     """
     List and filter enrichments with pagination.
     """
-    enrichments_task = repository.list_enrichments(
+    items = await repository.list_enrichments(
         skip=skip,
         limit=limit,
         sentiment_label=sentiment,
@@ -123,17 +122,15 @@ async def list_enrichments(
         start_date=start_date,
         end_date=end_date,
     )
-    
-    count_task = repository.count_enrichments(
+
+    total = await repository.count_enrichments(
         sentiment_label=sentiment,
         urgency_label=urgency,
         issue_category=issue_category,
         start_date=start_date,
         end_date=end_date,
     )
-    
-    items, total = await asyncio.gather(enrichments_task, count_task)
-    
+
     # Calculate current page based on skip and limit
     page = (skip // limit) + 1 if limit > 0 else 1
     

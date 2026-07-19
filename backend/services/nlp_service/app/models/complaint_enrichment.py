@@ -2,9 +2,9 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import ARRAY, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ARRAY, DateTime, Enum, Float, Index, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.shared.constants.enums.complaint import IssueCategory, SentimentLabel, UrgencyLabel
 from backend.shared.database.base import Base, PrimaryKeyMixin, TimestampMixin
@@ -33,8 +33,13 @@ class ComplaintEnrichment(Base, PrimaryKeyMixin, TimestampMixin):
     __tablename__ = "complaint_enrichments"
 
     # Identity & Linkage
+    # Deliberately not an ORM-level ForeignKey: the NLP service does not import
+    # or map the Complaint entity, so "complaints" is never registered in this
+    # process's metadata and a ForeignKey object would fail to resolve during
+    # flush. Referential integrity is enforced at the database level by the
+    # Alembic migration's raw ForeignKeyConstraint instead.
     complaint_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("complaints.id", ondelete="CASCADE"),
+        UUID(as_uuid=True),
         nullable=False,
         index=True,
         unique=True,
@@ -66,10 +71,6 @@ class ComplaintEnrichment(Base, PrimaryKeyMixin, TimestampMixin):
     # Operational Metadata
     processing_latency_ms: Mapped[Optional[int]] = mapped_column(Integer)
     enrichment_source: Mapped[str] = mapped_column(String(255), nullable=False)
-
-    # Lightweight unidirectional relationship — no back_populates to prevent
-    # tight coupling across service boundaries.
-    complaint = relationship("Complaint", foreign_keys=[complaint_id], viewonly=True)
 
     # Composite indexes for analytics workloads.
     # Leading columns (sentiment_label, urgency_label, detected_issue_category) do not

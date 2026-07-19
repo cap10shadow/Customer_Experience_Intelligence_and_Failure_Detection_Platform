@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python -m pytest backend/services/nlp_service/tests/test_api_enrichments.py -v)",
+      "Bash(cd \"c:\\\\Users\\\\DELL\\\\Desktop\\\\ME\\\\Customer_Experience_Intelligence_and_Failure_Detection_Platform\" && rm backend/services/nlp_service/app/utils/classifiers.py backend/services/nlp_service/app/utils/text_processing.py && rm -f backend/services/nlp_service/app/utils/__pycache__/classifiers.cpython-*.pyc backend/services/nlp_service/app/utils/__pycache__/text_processing.cpython-*.pyc && echo done)",
+      "Bash(python -m pytest backend/services/nlp_service/tests/ -v)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\DELL\\Desktop\\ME\\Customer_Experience_Intelligence_and_Failure_Detection_Platform\\backend\\services\\nlp_service\\app\\utils\\__pycache__"
+    ]
+  }
+}

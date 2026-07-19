@@ -5,7 +5,6 @@ from datetime import datetime
 
 from backend.services.nlp_service.app.main import app
 from backend.services.nlp_service.app.dependencies.services import get_enrichment_service, get_enrichment_repository
-from backend.services.ingestion_service.app.models.complaint import Complaint
 from backend.shared.constants.enums.complaint import SentimentLabel, UrgencyLabel, IssueCategory
 
 
