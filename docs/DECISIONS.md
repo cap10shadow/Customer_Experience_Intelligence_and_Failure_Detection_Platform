@@ -184,3 +184,42 @@ The `ComplaintEnrichment` entity stores the `complaint_id` without an ORM `Forei
 
 - Requires careful management of raw database migrations.
 - SQLAlchemy cannot automatically traverse relationships via `.complaint`.
+
+---
+
+## DATA-002 — Service-Local Read Models
+
+**Status:** Accepted
+
+**Date:** 2026-07-19
+
+### Problem
+
+Some services legitimately need to read data owned by another service — for example, the Anomaly Service's Trend Engine must read `complaints` and `complaint_enrichments`, owned by the Ingestion and NLP services respectively. Importing another service's SQLAlchemy ORM model class to do this reintroduces the same class of problem seen in Phase 4: SQLAlchemy mapper/metadata coupling, fragile startup behavior, and a hard Python-level dependency between services that are supposed to remain independently deployable.
+
+### Decision
+
+- Backend services must never import ORM models owned by another service.
+- Each service defines its own minimal SQLAlchemy Core read models when direct database access to another service's tables is required.
+- Read models exist only for querying already-persisted, shared data — they are not used for writes and carry no business logic.
+- Business ownership of an entity (schema, migrations, write access) remains exclusively within the owning service, regardless of how many other services read from it.
+
+### Rationale
+
+- Prevents SQLAlchemy metadata coupling between services — the root cause of the Phase 4 mapper-initialization failure.
+- Preserves service autonomy: any service can be developed, tested, and deployed without importing another service's Python package.
+- Keeps read access explicit and minimal — a service declares exactly the columns it needs, nothing more.
+- Generalizes the precedent set by ARCH-003 and DATA-001 (the NLP/Complaint relationship removal) into a platform-wide engineering standard rather than a one-off fix.
+
+### Consequences
+
+**Pros**
+
+- No cross-service ORM class imports, ever.
+- Each service's mapper configuration is fully self-contained and cannot be broken by another service's schema changes.
+- Read models are cheap to write and easy to audit — a handful of `Column` declarations on a dedicated `MetaData` instance.
+
+**Cons**
+
+- Column definitions for a shared table may be duplicated, in reduced form, across every service that reads it.
+- If the owning service changes a column's type or name, every dependent service's read model must be updated manually — there is no shared source of truth beyond the migration history.

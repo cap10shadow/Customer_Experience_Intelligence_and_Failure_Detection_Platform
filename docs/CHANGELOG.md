@@ -9,6 +9,34 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-07-19
 
+## Phase 5 – Step 1
+
+### Added
+
+- Trend Analysis Engine (`TrendEngine`) for the Anomaly Service, orchestrating five modular aggregators.
+- Modular aggregators: `VolumeAggregator`, `CategoryAggregator`, `RegionAggregator`, `SentimentAggregator`, `UrgencyAggregator` — each with a single responsibility.
+- `TrendRepository` for read-only, SQL-side aggregation queries against `complaints` and `complaint_enrichments`.
+- Six read-only trend endpoints: `/trends`, `/trends/daily`, `/trends/categories`, `/trends/regions`, `/trends/sentiment`, `/trends/urgency`.
+- Architectural decision DATA-002 for service-local read models.
+
+### Changed
+
+- Registered the trends router in the Anomaly Service's application entrypoint.
+
+### Verified
+
+- Full Anomaly Service test suite and full-repository test suite passing.
+- Docker Compose build and startup for the Anomaly Service alongside Postgres, the Ingestion Service, and the NLP Service.
+- OpenAPI schema generation.
+- All six trend endpoints against real seeded and NLP-enriched data.
+- No database changes: metrics are computed dynamically from existing tables, with no new migrations.
+
+### Notes
+
+- Purely descriptive, explainable analytics — no anomaly detection, severity scoring, or persistence introduced in this step; reserved for Phase 5 Step 2.
+
+---
+
 ## Phase 4 – Step 4
 
 ### Added
@@ -107,9 +135,8 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 The next planned milestone is:
 
-**Phase 5 – Trend & Anomaly Detection**
+**Phase 5 – Step 2 – Anomaly Detection Engine**
 
-- Complaint trend analysis.
 - Spike detection.
 - Regional monitoring.
 - Issue clustering.

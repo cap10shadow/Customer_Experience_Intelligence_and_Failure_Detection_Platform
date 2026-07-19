@@ -13,7 +13,7 @@
 
 # Overall Progress
 
-**Estimated Completion:** ~30%
+**Estimated Completion:** ~32%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -23,7 +23,7 @@
 
 **Current Phase:** Phase 5 – Trend & Anomaly Detection
 
-**Current Step:** Step 1
+**Current Step:** Step 2
 
 **Status:** Ready to Begin
 
@@ -46,6 +46,15 @@
 | ⬜ Phase 11 – Observability & Reliability | Pending     |
 | ⬜ Phase 12 – AI Copilot                  | Pending     |
 | ⬜ Phase 13 – Production Hardening        | Pending     |
+
+---
+
+# Phase 5 Progress
+
+| Step               | Status   |
+| ------------------ | -------- |
+| ✅ Step 1 – Trend Analysis Engine | Complete |
+| ⬜ Step 2 – Anomaly Detection Engine | Next     |
 
 ---
 
@@ -81,7 +90,7 @@
 | Gateway Service         | Foundation Complete |
 | Ingestion Service       | Stable              |
 | NLP Service             | Stable              |
-| Anomaly Service         | Scaffolded          |
+| Anomaly Service         | In Progress (Trend Engine complete) |
 | Root Cause Service      | Scaffolded          |
 | Business Impact Service | Scaffolded          |
 | Recommendation Service  | Scaffolded          |
@@ -99,21 +108,22 @@
 
 # Current Focus
 
-**Phase 5 – Trend & Anomaly Detection**
+**Phase 5 Step 2 – Anomaly Detection Engine**
 
 ---
 
 # Next Milestone
 
-**Phase 5 – Trend & Anomaly Detection**
+**Phase 5 Step 2 – Anomaly Detection Engine**
 
 Primary objectives:
 
-- Complaint trend analysis
 - Spike detection
 - Regional monitoring
 - Issue clustering
 - Anomaly APIs
+
+> Complaint trend analysis (Phase 5 Step 1) is complete; the Anomaly Detection Engine consumes its trend metrics as input.
 
 ---
 
