@@ -9,7 +9,7 @@ from backend.shared.constants.enums.complaint import (
     UrgencyLabel
 )
 from backend.shared.constants.enums.enrichment import ProcessingStage
-from backend.shared.constants.enums.anomaly import AnomalyType, AnomalySeverity
+from backend.shared.constants.enums.anomaly import AnomalyType, AnomalySeverity, AnomalyStatus, AnomalyEventType
 from backend.shared.constants.enums.recommendation import (
     RecommendationType,
     RecommendationStatus,
@@ -33,6 +33,8 @@ __all__ = [
     "ProcessingStage",
     "AnomalyType",
     "AnomalySeverity",
+    "AnomalyStatus",
+    "AnomalyEventType",
     "RecommendationType",
     "RecommendationStatus",
     "RecommendationPriority",

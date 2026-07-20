@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Tuple
 
 
 @dataclass(frozen=True)
@@ -20,3 +21,18 @@ def resolve_window(days: int) -> TrendWindow:
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
     return TrendWindow(start=start, end=end, label=f"Last {days} Days")
+
+
+def resolve_comparison_windows(days: int) -> Tuple[TrendWindow, TrendWindow]:
+    """
+    Resolves two equal-sized, back-to-back windows ending now: the current
+    window and the immediately preceding "previous equivalent" window used
+    as the anomaly detection baseline (e.g. "Last 7 Days" vs "Previous 7 Days").
+    """
+    current = resolve_window(days)
+    previous = TrendWindow(
+        start=current.start - timedelta(days=days),
+        end=current.start,
+        label=f"Previous {days} Days",
+    )
+    return current, previous

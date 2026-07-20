@@ -7,6 +7,34 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-07-20
+
+## Phase 5 – Step 2
+
+### Added
+
+- Active anomaly lifecycle management
+- Historical anomaly tracking
+- Fingerprint-based identity
+- Explainability layer
+- Five deterministic detectors
+- REST API endpoints
+- Alembic migration
+
+### Changed
+
+- Centralized severity model
+- New anomaly enums
+
+### Validation
+
+- Live Docker verification
+- PostgreSQL migration verification
+- OpenAPI verification
+- Full test suite passing
+
+---
+
 # 2026-07-19
 
 ## Phase 5 – Step 1

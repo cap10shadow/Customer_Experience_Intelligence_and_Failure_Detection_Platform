@@ -5,6 +5,7 @@ class AnomalyType(BaseStringEnum):
     COMPLAINT_SPIKE = "complaint_spike"
     REGIONAL_SPIKE = "regional_spike"
     CATEGORY_SPIKE = "category_spike"
+    URGENCY_SPIKE = "urgency_spike"
     SENTIMENT_SHIFT = "sentiment_shift"
     ESCALATION_SURGE = "escalation_surge"
     OPERATIONAL_DEGRADATION = "operational_degradation"
@@ -13,8 +14,26 @@ class AnomalyType(BaseStringEnum):
 
 
 class AnomalySeverity(BaseStringEnum):
-    """Represents operational anomaly severity."""
-    INFORMATIONAL = "informational"
-    WARNING = "warning"
-    SEVERE = "severe"
+    """
+    Represents deterministic anomaly severity, keyed to the magnitude of
+    percentage change between a current and baseline time window.
+    NORMAL means no anomaly: the change fell within expected bounds.
+    """
+    NORMAL = "normal"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
     CRITICAL = "critical"
+
+
+class AnomalyStatus(BaseStringEnum):
+    """Represents the lifecycle state of an anomaly in `active_anomalies`."""
+    ACTIVE = "active"
+    RESOLVED = "resolved"
+
+
+class AnomalyEventType(BaseStringEnum):
+    """Represents the kind of lifecycle event recorded in `anomaly_history`."""
+    DETECTED = "detected"
+    UPDATED = "updated"
+    RESOLVED = "resolved"

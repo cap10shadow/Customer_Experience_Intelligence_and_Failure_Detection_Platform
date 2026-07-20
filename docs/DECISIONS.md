@@ -223,3 +223,113 @@ Some services legitimately need to read data owned by another service — for ex
 
 - Column definitions for a shared table may be duplicated, in reduced form, across every service that reads it.
 - If the owning service changes a column's type or name, every dependent service's read model must be updated manually — there is no shared source of truth beyond the migration history.
+
+---
+
+## ANOMALY-001 — Hybrid Anomaly Lifecycle Management
+
+**Status:** Accepted
+
+**Date:** 2026-07-20
+
+### Problem
+
+The Anomaly Detection Engine needs a persistence strategy to store detected anomalies. Pure snapshot persistence (storing every anomaly on every run) leads to unbounded database growth and massive duplication, creating performance bottlenecks for simple dashboard queries. Conversely, latest-state-only persistence (overwriting existing anomalies) destroys the timeline, making future Root Cause Analysis (RCA) and Business Impact Analysis impossible.
+
+### Alternatives Considered
+
+1. **Pure Snapshot Persistence (Event Sourcing):** Create a new record for every detected anomaly during every run. (Rejected due to database bloat and slow querying for current state).
+2. **Latest-State-Only Persistence (CRUD):** Update the anomaly in place, losing historical progression. (Rejected due to inability to support RCA and Explainability).
+3. **Hybrid Approach:** Maintain an active state table for fast operational querying and an append-only timeline table for state changes. (Chosen).
+
+### Decision
+
+Implement a hybrid persistence architecture using two tables:
+- `active_anomalies`: A mutable table representing the current state of ongoing issues (fast operational lookups).
+- `anomaly_history`: An append-only ledger tracking lifecycle state changes (e.g., detection, severity updates, resolution) for historical RCA.
+
+### Rationale
+
+This approach provides O(1) operational dashboarding by querying only the active anomalies, while perfectly preserving the timeline context required by the future AI Copilot and Root Cause engines without storing redundant data. 
+
+### Consequences
+
+**Pros**
+- Zero data bloat (snapshots are only created on state changes).
+- Fast UI rendering (Dashboard only queries `active_anomalies`).
+- Full auditability and perfect RCA integration (Timeline is preserved in `anomaly_history`).
+
+**Cons**
+- Requires more complex persistence logic to calculate state deltas during the detection run.
+
+### Anomaly Lifecycle State Machine
+
+The following diagram illustrates the anomaly lifecycle:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Detected
+    Detected --> Active
+    Active --> Updated
+    Updated --> Active
+    Active --> Resolved
+    Resolved --> Reactivated
+    Reactivated --> Active
+    Resolved --> [*]
+```
+
+### Execution Flow
+
+The sequence of the hybrid persistence model during a detection run:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Anomaly API
+    participant Engine as Anomaly Engine
+    participant DB as Database (active & history)
+    
+    Client->>API: POST /anomalies/run
+    API->>Engine: trigger_detection()
+    Engine->>Engine: calculate_trends()
+    Engine->>Engine: evaluate_rules()
+    Engine->>Engine: generate_fingerprints()
+    Engine->>DB: query active_anomalies by fingerprint
+    alt New Anomaly
+        Engine->>DB: INSERT into active_anomalies
+        Engine->>DB: INSERT into anomaly_history (DETECTED)
+    else Existing Anomaly (Severity Changed)
+        Engine->>DB: UPDATE active_anomalies
+        Engine->>DB: INSERT into anomaly_history (UPDATED)
+    else Existing Anomaly (Unchanged)
+        Engine->>DB: UPDATE active_anomalies (last_seen_at)
+    else Resolved Anomaly
+        Engine->>DB: UPDATE active_anomalies (status=Resolved)
+        Engine->>DB: INSERT into anomaly_history (RESOLVED)
+    end
+    Engine-->>API: return detection results
+    API-->>Client: 200 OK (Run Summary)
+```
+
+---
+
+## ANOMALY-002 — Fingerprint-Based Anomaly Identity
+
+**Status:** Accepted
+
+**Date:** 2026-07-20
+
+### Purpose of Fingerprints
+
+To reliably match a newly detected anomaly from the current run against an existing active anomaly in the database, the system requires a deterministic, stable identifier.
+
+### Decision
+
+Implement a stable anomaly identity using a deterministic SHA-256 hash (fingerprint) of the anomaly's core dimensions (e.g., `detector_type`, `dimension_value`). 
+
+### Rationale
+
+- **Stable Anomaly Identity:** An anomaly maintains the exact same ID across multiple engine executions as long as the underlying dimensional issue persists.
+- **Duplicate Prevention:** The database enforces a unique constraint on the fingerprint for active anomalies, guaranteeing that the same issue is never double-counted.
+- **Reactivation Behavior:** If a previously resolved anomaly resurfaces with the same fingerprint, it can be seamlessly reactivated and linked to its historical timeline.
+- **Future Extensibility:** The fingerprinting logic is centralized. If new dimensions are added in the future, the hashing algorithm can be versioned to prevent breaking existing historical fingerprints.
