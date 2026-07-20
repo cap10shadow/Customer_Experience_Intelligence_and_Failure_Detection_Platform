@@ -13,7 +13,7 @@
 
 # Overall Progress
 
-**Estimated Completion:** ~32%
+**Estimated Completion:** ~38%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -21,9 +21,9 @@
 
 # Current Development Status
 
-**Current Phase:** Phase 5 – Trend & Anomaly Detection
+**Current Phase:** Phase 6 – Root Cause Correlation
 
-**Current Step:** Step 2
+**Current Step:** Step 1
 
 **Status:** Ready to Begin
 
@@ -37,8 +37,8 @@
 | ✅ Phase 2 – Operational Data Modeling    | Complete    |
 | ✅ Phase 3 – Data Ingestion Layer         | Complete    |
 | ✅ Phase 4 – NLP Intelligence Layer       | Complete    |
-| 🟡 Phase 5 – Trend & Anomaly Detection    | In Progress |
-| ⬜ Phase 6 – Root Cause Correlation       | Pending     |
+| ✅ Phase 5 – Trend, Anomaly & Incident Correlation | Complete |
+| 🟡 Phase 6 – Root Cause Correlation       | In Progress |
 | ⬜ Phase 7 – Business Impact Engine       | Pending     |
 | ⬜ Phase 8 – Intelligence Evaluation      | Pending     |
 | ⬜ Phase 9 – Recommendation Engine        | Pending     |
@@ -55,7 +55,7 @@
 | ------------------ | -------- |
 | ✅ Step 1 – Trend Analysis Engine | Complete |
 | ✅ Step 2 – Anomaly Detection Engine | Complete |
-| ⬜ Step 3 – Correlation & Root Cause Preparation | Next     |
+| ✅ Step 3 – Incident Correlation Engine | Complete |
 
 ---
 
@@ -91,7 +91,7 @@
 | Gateway Service         | Foundation Complete |
 | Ingestion Service       | Stable              |
 | NLP Service             | Stable              |
-| Anomaly Service         | In Progress (Trend Engine complete) |
+| Anomaly Service         | Stable              |
 | Root Cause Service      | Scaffolded          |
 | Business Impact Service | Scaffolded          |
 | Recommendation Service  | Scaffolded          |
@@ -109,20 +109,21 @@
 
 # Current Focus
 
-**Phase 5 Step 3 – Correlation & Root Cause Preparation**
+**Phase 6 Step 1 – Root Cause Engine Foundation**
 
 ---
 
 # Next Milestone
 
-**Phase 5 Step 3 – Correlation & Root Cause Preparation**
+**Phase 6 Step 1 – Root Cause Engine Foundation**
 
 Primary objectives:
 
-- Transitioning from anomaly detection to root cause analysis
-- Data structures for issue correlation
+- Initial data structures for causation mapping
+- Linking incidents to operational metrics
+- Foundational root cause algorithms
 
-> Anomaly Detection Engine (Phase 5 Step 2) is complete; the next step prepares the data structures for correlation.
+> Phase 5 (Trend, Anomaly & Incident Correlation) is complete; the Root Cause Service will consume incidents to determine likely causes.
 
 ---
 

@@ -32,6 +32,7 @@ Customer Signals
 → Data Ingestion
 → NLP Intelligence
 → Trend & Anomaly Detection
+→ Incident Correlation
 → Root Cause Correlation
 → Business Impact Analysis
 → Recommendation Generation
@@ -82,6 +83,7 @@ Responsible for:
 - NLP understanding
 - issue categorization
 - anomaly detection
+- incident correlation
 - root-cause analysis
 - business-risk estimation
 - recommendation generation
@@ -184,10 +186,12 @@ Responsibilities:
 - trend analysis
 - anomaly monitoring
 - regional issue tracking
+- incident correlation
 
 Outputs:
 - anomaly alerts
 - trend intelligence
+- incident groups
 
 ---
 
@@ -286,6 +290,7 @@ Complaint/Event Ingestion
 → NLP Enrichment
 → Trend Detection
 → Anomaly Analysis
+→ Incident Correlation
 → Root Cause Correlation
 → Business Impact Estimation
 → Recommendation Generation
@@ -302,6 +307,7 @@ Each intelligence stage enriches platform data progressively:
 raw complaints
 → enriched complaint intelligence
 → anomaly insights
+→ incident groups
 → root-cause intelligence
 → business-risk scoring
 → operational recommendations

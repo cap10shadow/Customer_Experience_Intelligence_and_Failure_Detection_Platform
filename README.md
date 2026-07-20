@@ -1,7 +1,71 @@
 # Customer Experience Intelligence & Failure Detection Platform
 
-An operational intelligence platform that ingests customer signals, detects anomalies,
-identifies root causes, and surfaces actionable recommendations for operational teams.
+An operational intelligence platform that ingests customer signals, detects anomalies, correlates incidents, identifies root causes, and surfaces actionable recommendations for operational teams.
+
+---
+
+## Current Implementation Status
+
+**Phase 1 through Phase 5 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, and incident correlation engines are operational.
+
+**Phase 6+ (Root Cause Analysis, AI Copilot, Recommendations) are PLANNED FUTURE PHASES.**
+
+---
+
+## Intelligence Pipeline
+
+### Implemented
+- **Complaint Data**
+- ↓
+- **Ingestion** (Validation & Normalization)
+- ↓
+- **NLP Intelligence** (Classification & Sentiment)
+- ↓
+- **Trend Analysis** (Metrics Aggregation)
+- ↓
+- **Anomaly Detection** (Spikes & Fingerprints)
+- ↓
+- **Incident Correlation** (Grouping Anomalies)
+
+### Planned Future Phases
+- ↓
+- **Root Cause Analysis**
+- ↓
+- **Business Impact Analysis**
+- ↓
+- **Recommendation Engine**
+- ↓
+- **AI Copilot**
+
+---
+
+## Current Architecture & Module Overview
+
+The platform uses a modular, service-based architecture sharing a single repository and database.
+
+| Service | Port | Responsibility | Status |
+|---------|------|----------------|--------|
+| gateway_service | 8000 | API routing and request orchestration | Implemented |
+| ingestion_service | 8001 | Data ingestion and validation | Implemented |
+| nlp_service | 8002 | NLP enrichment pipeline | Implemented |
+| anomaly_service | 8003 | Anomaly detection & Incident Correlation | Implemented |
+| root_cause_service | 8004 | Root cause correlation | Scaffolded / Planned |
+| business_impact_service | 8005 | Business impact estimation | Scaffolded / Planned |
+| recommendation_service | 8006 | Recommendation generation | Scaffolded / Planned |
+| copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |
+| frontend | 3000 | Operational dashboard | Scaffolded / Planned |
+
+Each service exposes a `/health` endpoint.
+
+---
+
+## Technology Stack
+
+- **Backend:** FastAPI (Python), REST APIs
+- **Database:** PostgreSQL, SQLAlchemy 2.x, Alembic
+- **Infrastructure:** Docker, Docker Compose
+- **Intelligence:** Deterministic rules, Scikit-learn (planned), LangGraph (planned)
+- **Frontend:** React, TypeScript (planned)
 
 ---
 
@@ -17,24 +81,6 @@ identifies root causes, and surfaces actionable recommendations for operational 
 cp .env.example .env
 docker compose up --build
 ```
-
----
-
-## Services
-
-| Service | Port | Responsibility |
-|---------|------|----------------|
-| gateway_service | 8000 | API routing and request orchestration |
-| ingestion_service | 8001 | Data ingestion and validation |
-| nlp_service | 8002 | NLP enrichment pipeline |
-| anomaly_service | 8003 | Anomaly and trend detection |
-| root_cause_service | 8004 | Root cause correlation |
-| business_impact_service | 8005 | Business impact estimation |
-| recommendation_service | 8006 | Recommendation generation |
-| copilot_service | 8007 | AI copilot and natural-language querying |
-| frontend | 3000 | Operational dashboard |
-
-Each service exposes a `/health` endpoint.
 
 ---
 

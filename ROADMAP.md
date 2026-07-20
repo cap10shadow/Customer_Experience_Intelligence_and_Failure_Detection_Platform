@@ -128,20 +128,18 @@ Raw complaints become enriched intelligence records.
 
 ---
 
-# Phase 5 — Trend & Anomaly Detection
+# Phase 5 — Trend, Anomaly Detection & Incident Correlation (Completed)
 
 ## Goals
-Detect operational issue spikes and patterns.
+Detect operational issue spikes, monitor patterns, and group related anomalies into actionable incidents.
 
 ## Deliverables
-- anomaly_service
-- trend analysis engine
-- spike detection logic
-- regional issue monitoring
-- issue clustering
+- Step 1: Trend Analysis Engine
+- Step 2: Anomaly Detection Engine
+- Step 3: Incident Correlation Engine
 
 ## Outcome
-The system detects emerging operational risks automatically.
+The system detects emerging operational risks automatically and clusters them into distinct, explainable operational incidents.
 
 ---
 

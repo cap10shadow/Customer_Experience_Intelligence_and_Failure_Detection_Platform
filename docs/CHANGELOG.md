@@ -9,6 +9,26 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-07-20
 
+## Phase 5 Complete (Trend, Anomaly & Incident Correlation)
+
+Phase 5 has been fully completed, successfully introducing the platform's core operational intelligence engine. The Anomaly Service is now stable and capable of detecting emerging risks before escalating them to the future Root Cause Engine.
+
+### Major Capabilities Introduced:
+- **Trend Analysis:** Real-time metrics aggregation across volumes, sentiments, and urgencies.
+- **Anomaly Detection:** Deterministic spike detection with lifecycle tracking and stable fingerprinting.
+- **Incident Correlation:** Grouping related anomalies into higher-level incidents, reducing noise and focusing investigations.
+
+---
+
+## Phase 5 – Step 3
+
+### Added
+- Incident Correlation Engine
+- Incident grouping logic for related anomalies
+- Transition structures preparing for Phase 6 Root Cause Analysis
+
+---
+
 ## Phase 5 – Step 2
 
 ### Added
