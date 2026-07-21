@@ -9,6 +9,24 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-07-21
 
+## Phase 6 – Step 2
+
+### Added
+
+- RootCause persistence layer (SQLAlchemy model, JSON evidence, Alembic migration).
+- RootCause and Incident Read Repositories maintaining CRUD boundaries.
+- Mapper layer (`RootCauseMapper`, `IncidentMapper`) to strictly isolate Domain logic from ORM objects.
+- `RootCauseApplicationService` to orchestrate mapping, inference, and persistence.
+- REST APIs (`POST /api/v1/root-causes`, `GET /api/v1/root-causes/{id}`, etc.).
+
+### Verified
+
+- 26 integration tests and 232 repository tests passing.
+- Complete end-to-end Root Cause pipeline validated via Docker and PostgreSQL.
+- Strict adherence to Clean Architecture and DATA-002 (no ORM leakage into the Domain Engine).
+
+---
+
 ## Phase 6 – Step 1
 
 ### Added

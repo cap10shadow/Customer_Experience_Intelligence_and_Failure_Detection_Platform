@@ -14,3 +14,17 @@ class RootCause(BaseStringEnum):
     INVENTORY_SHORTAGE = "inventory_shortage"
     CUSTOMER_SUPPORT_DELAY = "customer_support_delay"
     UNKNOWN = "unknown"
+
+
+class RootCauseStatus(BaseStringEnum):
+    """
+    Represents the lifecycle state of a persisted RootCause record.
+
+    Only IDENTIFIED is assigned by Phase 6 Step 2 (a RootCause is created
+    once, from a single deterministic analysis run, and never recalculated
+    here). CONFIRMED and REJECTED are reserved for Phase 6 Step 3's
+    lifecycle management and are never assigned by any logic in this step.
+    """
+    IDENTIFIED = "identified"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"

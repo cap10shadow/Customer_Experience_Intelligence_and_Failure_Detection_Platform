@@ -8,7 +8,7 @@ An operational intelligence platform that ingests customer signals, detects anom
 
 **Phase 1 through Phase 5 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, and incident correlation engines are operational.
 
-**Phase 6 (Root Cause Analysis) is IN PROGRESS.** Step 1 (Rule Engine) is complete.
+**Phase 6 (Step 1 & Step 2 Complete).** Lifecycle management (Step 3) is IN PROGRESS.
 
 **Phase 7+ (Business Impact, AI Copilot, Recommendations) are PLANNED FUTURE PHASES.**
 
@@ -31,7 +31,7 @@ An operational intelligence platform that ingests customer signals, detects anom
 
 ### In Progress
 - ↓
-- **Root Cause Analysis** (Rule Engine complete)
+- **Root Cause Analysis** (Step 1 & Step 2 Complete)
 
 ### Planned Future Phases
 - ↓
@@ -53,7 +53,7 @@ The platform uses a modular, service-based architecture sharing a single reposit
 | ingestion_service | 8001 | Data ingestion and validation | Implemented |
 | nlp_service | 8002 | NLP enrichment pipeline | Implemented |
 | anomaly_service | 8003 | Anomaly detection & Incident Correlation | Implemented |
-| root_cause_service | 8004 | Root cause correlation | In Progress |
+| root_cause_service | 8004 | Root cause correlation | Implemented (Phase 6 Step 1 & 2) |
 | business_impact_service | 8005 | Business impact estimation | Scaffolded / Planned |
 | recommendation_service | 8006 | Recommendation generation | Scaffolded / Planned |
 | copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |

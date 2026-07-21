@@ -149,6 +149,9 @@ The system detects emerging operational risks automatically and clusters them in
 Connect customer complaints with operational failures.
 
 ## Deliverables
+- Step 1: Root Cause Rule Engine (Completed)
+- Step 2: Persistence & APIs (Completed)
+- Step 3: Lifecycle & Validation (Active Milestone)
 - root_cause_service
 - operational correlation engine
 - dependency mapping

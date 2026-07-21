@@ -13,7 +13,7 @@
 
 # Overall Progress
 
-**Estimated Completion:** ~42%
+**Estimated Completion:** ~45%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -23,7 +23,7 @@
 
 **Current Phase:** Phase 6 – Root Cause Correlation
 
-**Current Step:** Step 2
+**Current Step:** Step 3
 
 **Status:** Ready to Begin
 
@@ -54,8 +54,8 @@
 | Step               | Status   |
 | ------------------ | -------- |
 | ✅ Step 1 – Root Cause Rule Engine | Complete |
-| 🟡 Step 2 – Persistence & APIs | In Progress |
-| ⬜ Step 3 – Lifecycle & Validation | Pending |
+| ✅ Step 2 – Persistence & APIs | Complete |
+| 🟡 Step 3 – Lifecycle & Validation | In Progress |
 
 ---
 
@@ -119,23 +119,23 @@
 
 # Current Focus
 
-**Phase 6 Step 2 – Persistence & APIs**
+**Phase 6 Step 3 – Lifecycle & Validation**
 
 ---
 
 # Next Milestone
 
-**Phase 6 Step 2 – Persistence & APIs**
+**Phase 6 Step 3 – Lifecycle & Validation**
 
 Primary objectives:
 
-- RootCause database model
-- Repository and Alembic migration
-- REST APIs
-- Incident ↔ RootCause relationship
-- Integration tests
+- Update logic and duplicate prevention
+- Resolution handling
+- Recalculation strategies
+- End-to-end validation
+- Documentation and ADRs
 
-> Phase 6 Step 1 (Root Cause Rule Engine) is complete. The deterministic rule engine, domain models, and specification pattern have been implemented purely in-memory. Step 2 will focus on database persistence and APIs.
+> Phase 6 Step 2 is complete. The deterministic engine is now integrated with the application through APIs and persistence mapping. Step 3 will refine lifecycle events and recalculations.
 
 ---
 
