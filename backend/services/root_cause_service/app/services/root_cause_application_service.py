@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional, Sequence
 
 from backend.services.root_cause_service.app.mappers.incident_mapper import IncidentMapper
@@ -9,8 +10,11 @@ from backend.services.root_cause_service.app.repositories.root_cause_repository 
 from backend.services.root_cause_service.app.services.exceptions import (
     IncidentNotFoundError,
     RootCauseAlreadyExistsError,
+    RootCauseNotFoundError,
 )
+from backend.services.root_cause_service.app.services.lifecycle_validator import LifecycleValidator
 from backend.services.root_cause_service.app.services.root_cause_engine import RootCauseEngine
+from backend.shared.constants.enums.root_cause import RootCauseStatus
 
 
 class RootCauseApplicationService:
@@ -68,3 +72,45 @@ class RootCauseApplicationService:
 
     async def list_root_causes(self) -> Sequence[RootCause]:
         return await self.root_cause_repository.list()
+
+    async def confirm_root_cause(self, root_cause_id: uuid.UUID) -> RootCause:
+        """Confirms a RootCause. Idempotent if already CONFIRMED; 409 if REJECTED."""
+        return await self._transition(root_cause_id, RootCauseStatus.CONFIRMED)
+
+    async def reject_root_cause(self, root_cause_id: uuid.UUID) -> RootCause:
+        """Rejects a RootCause. Idempotent if already REJECTED; 409 if CONFIRMED."""
+        return await self._transition(root_cause_id, RootCauseStatus.REJECTED)
+
+    async def refresh_root_cause(self, root_cause_id: uuid.UUID) -> RootCause:
+        """
+        Re-runs the (frozen) Rule Engine for a RootCause's Incident and
+        updates its analysis fields in place. Only allowed while IDENTIFIED
+        — CONFIRMED/REJECTED are final human decisions this step must never
+        silently overwrite. If the engine now finds no matching rule, the
+        RootCause is persisted as UNKNOWN with status left as IDENTIFIED —
+        no new lifecycle state is introduced for this case.
+        """
+        root_cause = await self.root_cause_repository.get(root_cause_id)
+        if root_cause is None:
+            raise RootCauseNotFoundError(root_cause_id)
+        LifecycleValidator.validate_refresh(root_cause.status)
+
+        persisted_incident = await self.incident_read_repository.get_by_id(root_cause.incident_id)
+        if persisted_incident is None:
+            raise IncidentNotFoundError(root_cause.incident_id)
+
+        domain_incident = IncidentMapper.to_domain(persisted_incident)
+        candidate = self.engine.analyze(domain_incident)
+        RootCauseMapper.apply(root_cause, candidate)
+        root_cause.updated_at = datetime.now(timezone.utc)
+        return await self.root_cause_repository.update(root_cause)
+
+    async def _transition(self, root_cause_id: uuid.UUID, target_status: RootCauseStatus) -> RootCause:
+        root_cause = await self.root_cause_repository.get(root_cause_id)
+        if root_cause is None:
+            raise RootCauseNotFoundError(root_cause_id)
+
+        LifecycleValidator.validate_transition(root_cause.status, target_status)
+        root_cause.status = target_status
+        root_cause.updated_at = datetime.now(timezone.utc)
+        return await self.root_cause_repository.update(root_cause)

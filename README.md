@@ -6,11 +6,11 @@ An operational intelligence platform that ingests customer signals, detects anom
 
 ## Current Implementation Status
 
-**Phase 1 through Phase 5 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, and incident correlation engines are operational.
+**Phase 1 through Phase 6 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, incident correlation, and root cause analysis engines are operational.
 
-**Phase 6 (Step 1 & Step 2 Complete).** Lifecycle management (Step 3) is IN PROGRESS.
+**Phase 7 (Business Impact Analysis) is the active development phase.**
 
-**Phase 7+ (Business Impact, AI Copilot, Recommendations) are PLANNED FUTURE PHASES.**
+**Phase 8+ (Intelligence Evaluation, Recommendation Engine, AI Copilot) are PLANNED FUTURE PHASES.**
 
 ---
 
@@ -28,14 +28,14 @@ An operational intelligence platform that ingests customer signals, detects anom
 - **Anomaly Detection** (Spikes & Fingerprints)
 - ↓
 - **Incident Correlation** (Grouping Anomalies)
+- ↓
+- **Root Cause Analysis** (Deterministic Rules, Lifecycle & Persistence)
 
 ### In Progress
 - ↓
-- **Root Cause Analysis** (Step 1 & Step 2 Complete)
+- **Business Impact Analysis**
 
 ### Planned Future Phases
-- ↓
-- **Business Impact Analysis**
 - ↓
 - **Recommendation Engine**
 - ↓
@@ -53,7 +53,7 @@ The platform uses a modular, service-based architecture sharing a single reposit
 | ingestion_service | 8001 | Data ingestion and validation | Implemented |
 | nlp_service | 8002 | NLP enrichment pipeline | Implemented |
 | anomaly_service | 8003 | Anomaly detection & Incident Correlation | Implemented |
-| root_cause_service | 8004 | Root cause correlation | Implemented (Phase 6 Step 1 & 2) |
+| root_cause_service | 8004 | Root cause correlation | Stable |
 | business_impact_service | 8005 | Business impact estimation | Scaffolded / Planned |
 | recommendation_service | 8006 | Recommendation generation | Scaffolded / Planned |
 | copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |

@@ -54,6 +54,14 @@ class RootCause(Base, PrimaryKeyMixin):
     )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    # Deliberately no `onupdate=func.now()`: SQLAlchemy's async ORM marks an
+    # onupdate-computed column "expired" after every UPDATE rather than
+    # eagerly refreshing it within the awaited flush, and a later
+    # synchronous attribute read (exactly what Pydantic's
+    # `model_validate(..., from_attributes=True)` does during FastAPI
+    # response serialization) crashes with MissingGreenlet trying to
+    # lazily re-fetch it outside an async context. Every other mutable
+    # timestamp in this codebase (`ActiveAnomaly.last_seen_at`,
+    # `Incident.last_updated_at`) is instead set explicitly in application
+    # code — Phase 6 Step 3 follows that same, already-proven pattern.
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

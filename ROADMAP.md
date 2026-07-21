@@ -143,7 +143,7 @@ The system detects emerging operational risks automatically and clusters them in
 
 ---
 
-# Phase 6 — Root Cause Correlation (In Progress)
+# Phase 6 — Root Cause Correlation (Completed)
 
 ## Goals
 Connect customer complaints with operational failures.
@@ -151,7 +151,7 @@ Connect customer complaints with operational failures.
 ## Deliverables
 - Step 1: Root Cause Rule Engine (Completed)
 - Step 2: Persistence & APIs (Completed)
-- Step 3: Lifecycle & Validation (Active Milestone)
+- Step 3: Lifecycle & Validation (Completed)
 - root_cause_service
 - operational correlation engine
 - dependency mapping
@@ -167,7 +167,7 @@ The system identifies likely operational causes behind customer pain.
 
 ---
 
-# Phase 7 — Business Impact Engine
+# Phase 7 — Business Impact Engine (In Progress)
 
 ## Goals
 Estimate operational and customer risk.

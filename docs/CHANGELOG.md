@@ -9,6 +9,39 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-07-21
 
+## Phase 6 Complete (Root Cause Analysis)
+
+Phase 6 has been fully completed, delivering a deterministic, explainable Root Cause Analysis engine that is now fully integrated into the platform with persistence, REST APIs, and operational lifecycle management.
+
+### Major Capabilities Introduced:
+- **Deterministic Rule Engine:** Specification-pattern rules evaluate Incidents and produce fully explainable RootCauseCandidates.
+- **Persistence & APIs:** Root Cause records are persisted in PostgreSQL with a complete REST API surface.
+- **Lifecycle Management:** Root Causes can be confirmed, rejected, or recalculated via explicit lifecycle transitions enforced by the LifecycleValidator.
+
+---
+
+## Phase 6 – Step 3
+
+### Added
+
+- Lifecycle Validator with deterministic state machine enforcement.
+- Confirm operation (`PATCH /api/v1/root-causes/{id}/confirm`).
+- Reject operation (`PATCH /api/v1/root-causes/{id}/reject`).
+- Refresh/Recalculation operation (`POST /api/v1/root-causes/{id}/refresh`).
+- Terminal state protection (CONFIRMED and REJECTED states are protected from invalid transitions).
+- UNKNOWN result handling on refresh (explicit handling when Rule Engine returns no matching candidate).
+
+### Verified
+
+- Lifecycle transition unit tests passing.
+- Invalid transition rejection tests passing.
+- Integration tests for all three new endpoints.
+- Full repository regression suite passing.
+- End-to-end pipeline validated via Docker and PostgreSQL.
+- Rule Engine confirmed completely unchanged.
+
+---
+
 ## Phase 6 – Step 2
 
 ### Added
@@ -224,9 +257,10 @@ Phase 5 has been fully completed, successfully introducing the platform's core o
 
 The next planned milestone is:
 
-**Phase 5 – Step 2 – Anomaly Detection Engine**
+**Phase 7 – Business Impact Engine**
 
-- Spike detection.
-- Regional monitoring.
-- Issue clustering.
-- Anomaly APIs.
+- Severity scoring.
+- Churn-risk estimation.
+- SLA-risk estimation.
+- Impact prioritization.
+- Operational severity ranking.

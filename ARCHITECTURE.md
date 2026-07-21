@@ -198,12 +198,17 @@ Outputs:
 ## root_cause_service
 
 Responsibilities:
-- correlate complaints with operational signals
-- estimate probable causes
-- identify issue dependencies
+- consume correlated Incidents from the Anomaly Service
+- apply deterministic rule-based inference to identify probable root causes
+- persist Root Cause records with structured evidence and confidence scoring
+- manage Root Cause lifecycle (confirmation, rejection, recalculation)
+- expose REST APIs for Root Cause retrieval and lifecycle management
 
 Outputs:
 - root-cause intelligence
+- structured evidence records
+- explainable confidence scores
+- lifecycle-managed Root Cause resources
 
 ---
 

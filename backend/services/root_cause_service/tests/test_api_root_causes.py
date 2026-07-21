@@ -8,7 +8,10 @@ from backend.services.root_cause_service.app.dependencies.services import get_ro
 from backend.services.root_cause_service.app.main import app
 from backend.services.root_cause_service.app.services.exceptions import (
     IncidentNotFoundError,
+    InvalidLifecycleTransitionError,
+    RefreshNotAllowedError,
     RootCauseAlreadyExistsError,
+    RootCauseNotFoundError,
 )
 from backend.shared.constants.enums.root_cause import RootCause as RootCauseEnum
 from backend.shared.constants.enums.root_cause import RootCauseStatus
@@ -17,6 +20,9 @@ EXISTING_INCIDENT_ID = uuid.uuid4()
 MISSING_INCIDENT_ID = uuid.uuid4()
 CONFLICTING_INCIDENT_ID = uuid.uuid4()
 SAMPLE_ROOT_CAUSE_ID = uuid.uuid4()
+MISSING_ROOT_CAUSE_ID = uuid.uuid4()
+CONFIRMED_ROOT_CAUSE_ID = uuid.uuid4()
+REJECTED_ROOT_CAUSE_ID = uuid.uuid4()
 
 
 class _StubRootCause:
@@ -56,6 +62,37 @@ class MockRootCauseApplicationService:
 
     async def list_root_causes(self):
         return [_StubRootCause(EXISTING_INCIDENT_ID)]
+
+    async def confirm_root_cause(self, root_cause_id):
+        if root_cause_id == MISSING_ROOT_CAUSE_ID:
+            raise RootCauseNotFoundError(root_cause_id)
+        if root_cause_id == REJECTED_ROOT_CAUSE_ID:
+            raise InvalidLifecycleTransitionError(RootCauseStatus.REJECTED, RootCauseStatus.CONFIRMED)
+        stub = _StubRootCause(EXISTING_INCIDENT_ID)
+        stub.id = root_cause_id
+        stub.status = RootCauseStatus.CONFIRMED
+        return stub
+
+    async def reject_root_cause(self, root_cause_id):
+        if root_cause_id == MISSING_ROOT_CAUSE_ID:
+            raise RootCauseNotFoundError(root_cause_id)
+        if root_cause_id == CONFIRMED_ROOT_CAUSE_ID:
+            raise InvalidLifecycleTransitionError(RootCauseStatus.CONFIRMED, RootCauseStatus.REJECTED)
+        stub = _StubRootCause(EXISTING_INCIDENT_ID)
+        stub.id = root_cause_id
+        stub.status = RootCauseStatus.REJECTED
+        return stub
+
+    async def refresh_root_cause(self, root_cause_id):
+        if root_cause_id == MISSING_ROOT_CAUSE_ID:
+            raise RootCauseNotFoundError(root_cause_id)
+        if root_cause_id == CONFIRMED_ROOT_CAUSE_ID:
+            raise RefreshNotAllowedError(RootCauseStatus.CONFIRMED)
+        if root_cause_id == REJECTED_ROOT_CAUSE_ID:
+            raise RefreshNotAllowedError(RootCauseStatus.REJECTED)
+        stub = _StubRootCause(EXISTING_INCIDENT_ID)
+        stub.id = root_cause_id
+        return stub
 
 
 @pytest.fixture
@@ -138,3 +175,89 @@ async def test_get_root_cause_by_incident_404_when_missing(override_dependencies
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.get(f"/api/v1/incidents/{uuid.uuid4()}/root-cause")
         assert response.status_code == 404
+
+
+# ------------------------------------------------------------------
+# Phase 6 Step 3: lifecycle endpoints
+# ------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_confirm_returns_200(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(f"/api/v1/root-causes/{SAMPLE_ROOT_CAUSE_ID}/confirm")
+        assert response.status_code == 200
+        assert response.json()["status"] == "confirmed"
+
+
+@pytest.mark.anyio
+async def test_confirm_returns_404_when_missing(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(f"/api/v1/root-causes/{MISSING_ROOT_CAUSE_ID}/confirm")
+        assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_confirm_returns_409_when_rejected(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(f"/api/v1/root-causes/{REJECTED_ROOT_CAUSE_ID}/confirm")
+        assert response.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_reject_returns_200(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(f"/api/v1/root-causes/{SAMPLE_ROOT_CAUSE_ID}/reject")
+        assert response.status_code == 200
+        assert response.json()["status"] == "rejected"
+
+
+@pytest.mark.anyio
+async def test_reject_returns_404_when_missing(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(f"/api/v1/root-causes/{MISSING_ROOT_CAUSE_ID}/reject")
+        assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_reject_returns_409_when_confirmed(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(f"/api/v1/root-causes/{CONFIRMED_ROOT_CAUSE_ID}/reject")
+        assert response.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_refresh_returns_200(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/api/v1/root-causes/{SAMPLE_ROOT_CAUSE_ID}/refresh")
+        assert response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_refresh_returns_404_when_missing(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/api/v1/root-causes/{MISSING_ROOT_CAUSE_ID}/refresh")
+        assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_refresh_returns_409_when_confirmed(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/api/v1/root-causes/{CONFIRMED_ROOT_CAUSE_ID}/refresh")
+        assert response.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_refresh_returns_409_when_rejected(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/api/v1/root-causes/{REJECTED_ROOT_CAUSE_ID}/refresh")
+        assert response.status_code == 409

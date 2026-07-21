@@ -7,7 +7,10 @@ from backend.services.root_cause_service.app.dependencies.services import get_ro
 from backend.services.root_cause_service.app.schemas.root_cause import CreateRootCauseRequest, RootCauseResponse
 from backend.services.root_cause_service.app.services.exceptions import (
     IncidentNotFoundError,
+    InvalidLifecycleTransitionError,
+    RefreshNotAllowedError,
     RootCauseAlreadyExistsError,
+    RootCauseNotFoundError,
 )
 from backend.services.root_cause_service.app.services.root_cause_application_service import RootCauseApplicationService
 
@@ -57,6 +60,54 @@ async def list_root_causes(
 ):
     """Returns all persisted RootCause records. Filtering is deferred to a later step."""
     return await service.list_root_causes()
+
+
+@router.patch("/{root_cause_id}/confirm", response_model=RootCauseResponse)
+async def confirm_root_cause(
+    root_cause_id: uuid.UUID,
+    service: RootCauseApplicationService = Depends(get_root_cause_application_service),
+):
+    """Confirms a RootCause. Idempotent if already CONFIRMED; 409 if REJECTED (terminal states never cross)."""
+    try:
+        return await service.confirm_root_cause(root_cause_id)
+    except RootCauseNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidLifecycleTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.patch("/{root_cause_id}/reject", response_model=RootCauseResponse)
+async def reject_root_cause(
+    root_cause_id: uuid.UUID,
+    service: RootCauseApplicationService = Depends(get_root_cause_application_service),
+):
+    """Rejects a RootCause. Idempotent if already REJECTED; 409 if CONFIRMED (terminal states never cross)."""
+    try:
+        return await service.reject_root_cause(root_cause_id)
+    except RootCauseNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidLifecycleTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.post("/{root_cause_id}/refresh", response_model=RootCauseResponse)
+async def refresh_root_cause(
+    root_cause_id: uuid.UUID,
+    service: RootCauseApplicationService = Depends(get_root_cause_application_service),
+):
+    """
+    Re-runs Root Cause Analysis for this RootCause's Incident and updates it
+    in place. Only allowed while IDENTIFIED — 409 if CONFIRMED or REJECTED,
+    since those are final human decisions this step must never overwrite.
+    """
+    try:
+        return await service.refresh_root_cause(root_cause_id)
+    except RootCauseNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IncidentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RefreshNotAllowedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @incidents_router.get("/{incident_id}/root-cause", response_model=RootCauseResponse)
