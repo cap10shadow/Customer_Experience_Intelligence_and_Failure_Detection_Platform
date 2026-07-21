@@ -7,6 +7,29 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-07-21
+
+## Phase 6 – Step 1
+
+### Added
+
+- Deterministic Root Cause Rule Engine.
+- Specification Pattern for rule evaluation.
+- `RuleRegistry` and Rule Versioning.
+- `RootCauseCandidate` domain object.
+- Structured Evidence and Confidence scoring models.
+- Five independent deterministic rules (Payment, Logistics, Service Outage, Inventory, Customer Support).
+- Persistence-independent `Incident` domain input model.
+
+### Verified
+
+- 56/56 new unit tests passed.
+- 210/210 full repository tests passed.
+- Smoke tests and Pyflakes checks passed.
+- Pure in-memory domain logic (no SQLAlchemy, ORM, APIs, or dependency injection).
+
+---
+
 # 2026-07-20
 
 ## Phase 5 Complete (Trend, Anomaly & Incident Correlation)

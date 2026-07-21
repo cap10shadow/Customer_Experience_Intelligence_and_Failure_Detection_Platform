@@ -143,7 +143,7 @@ The system detects emerging operational risks automatically and clusters them in
 
 ---
 
-# Phase 6 — Root Cause Correlation
+# Phase 6 — Root Cause Correlation (In Progress)
 
 ## Goals
 Connect customer complaints with operational failures.

@@ -7,13 +7,13 @@
 
 # Last Updated
 
-**Date:** 2026-07-20
+**Date:** 2026-07-21
 
 ---
 
 # Overall Progress
 
-**Estimated Completion:** ~38%
+**Estimated Completion:** ~42%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -23,7 +23,7 @@
 
 **Current Phase:** Phase 6 – Root Cause Correlation
 
-**Current Step:** Step 1
+**Current Step:** Step 2
 
 **Status:** Ready to Begin
 
@@ -46,6 +46,16 @@
 | ⬜ Phase 11 – Observability & Reliability | Pending     |
 | ⬜ Phase 12 – AI Copilot                  | Pending     |
 | ⬜ Phase 13 – Production Hardening        | Pending     |
+
+---
+
+# Phase 6 Progress
+
+| Step               | Status   |
+| ------------------ | -------- |
+| ✅ Step 1 – Root Cause Rule Engine | Complete |
+| 🟡 Step 2 – Persistence & APIs | In Progress |
+| ⬜ Step 3 – Lifecycle & Validation | Pending |
 
 ---
 
@@ -109,21 +119,23 @@
 
 # Current Focus
 
-**Phase 6 Step 1 – Root Cause Engine Foundation**
+**Phase 6 Step 2 – Persistence & APIs**
 
 ---
 
 # Next Milestone
 
-**Phase 6 Step 1 – Root Cause Engine Foundation**
+**Phase 6 Step 2 – Persistence & APIs**
 
 Primary objectives:
 
-- Initial data structures for causation mapping
-- Linking incidents to operational metrics
-- Foundational root cause algorithms
+- RootCause database model
+- Repository and Alembic migration
+- REST APIs
+- Incident ↔ RootCause relationship
+- Integration tests
 
-> Phase 5 (Trend, Anomaly & Incident Correlation) is complete; the Root Cause Service will consume incidents to determine likely causes.
+> Phase 6 Step 1 (Root Cause Rule Engine) is complete. The deterministic rule engine, domain models, and specification pattern have been implemented purely in-memory. Step 2 will focus on database persistence and APIs.
 
 ---
 
