@@ -406,3 +406,200 @@ Introduce a persistence-independent `Incident` domain model (`domain/incident.py
 **Cons**
 - Requires mapping from persisted Incident entities in Step 2 before passing them into the engine.
 - Small duplication of field definitions (Incident attributes exist in both the Phase 5 ORM and Phase 6 Domain).
+
+---
+
+## BI-001 — Business Impact Uses Deterministic Rules
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+### Context
+
+Phase 7 Step 1 must evaluate the business consequences of an Incident and its identified Root Cause. The platform's core principle is explainability-first: every output consumed by the AI Copilot must be fully auditable and reproducible without dependency on probabilistic models.
+
+### Decision
+
+The Business Impact Analysis Engine evaluates all five impact dimensions (Financial, Customer, Operational, SLA, Reputation) using deterministic, threshold-based rules. No machine learning, probabilistic scoring, or AI inference is used.
+
+### Rationale
+
+- **Explainability:** Every impact level can be traced to the exact rule condition and input value that triggered it.
+- **Auditability:** Outputs are fully reproducible for any given set of inputs, enabling reliable regression testing.
+- **Reliability:** Deterministic rules do not degrade over time or require retraining.
+- **AI-Safe:** The AI Copilot downstream can safely consume the output knowing it was produced by auditable, transparent logic.
+
+### Consequences
+
+**Pros**
+- Fully explainable and auditable impact assessments.
+- Predictable, reproducible behavior across all environments.
+- No model training, deployment, or versioning overhead.
+
+**Cons**
+- Rule thresholds require manual review and tuning as business conditions evolve.
+
+---
+
+## BI-002 — Independent ImpactRule Abstraction
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+### Context
+
+The Business Impact Engine must evaluate five distinct business dimensions. Each dimension has independent logic, thresholds, and escalation conditions. Coupling dimension logic within a single class or function would violate the Single Responsibility Principle and make isolated testing impossible.
+
+### Decision
+
+Define an `ImpactRule` abstract base class in the domain layer. Each of the five business dimensions is implemented as an independent, concrete rule class that implements this interface. No rule has knowledge of any other rule.
+
+### Rationale
+
+- **Single Responsibility:** Each rule class owns exactly one dimension's evaluation logic.
+- **Isolated Testing:** Every rule can be unit-tested independently with no dependency on the engine or other rules.
+- **Clarity:** The boundary between evaluation logic (rules) and orchestration logic (engine) is explicit.
+
+### Consequences
+
+**Pros**
+- Independent development and testing of each dimension's rule.
+- Adding a new rule requires no changes to existing rules.
+- Rule logic is self-contained and easily reviewable.
+
+**Cons**
+- Requires a small number of parallel rule class definitions rather than a single conditional block.
+
+---
+
+## BI-003 — BusinessImpactEngine Orchestrates Injected ImpactRule Implementations
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+### Context
+
+The Business Impact Engine needs to coordinate the evaluation of all five business dimensions and assemble the final `BusinessImpactAssessment`. The engine must remain open for extension (new rules) without requiring modification, and must depend on the abstraction rather than concrete rule implementations.
+
+### Decision
+
+`BusinessImpactEngine` accepts a `Sequence[ImpactRule]` at construction time. It iterates over the injected rules, dispatches each evaluation, assembles the `BusinessImpactProfile`, and delegates to `scoring.py`, `weighting.py`, and `explanation.py` for the final assessment. A `default_rules()` factory in the same module provides the standard five-rule configuration.
+
+### Rationale
+
+- **Dependency Inversion:** The engine depends on the `ImpactRule` abstraction, never on concrete rule classes.
+- **Open/Closed:** New rules can be injected without modifying the engine.
+- **Testability:** The engine can be tested with any mock or stub implementation of `ImpactRule`.
+- **Explicit Configuration:** The `default_rules()` factory makes the standard configuration discoverable without hiding it inside the engine constructor.
+
+### Consequences
+
+**Pros**
+- Engine logic is completely decoupled from individual rule implementations.
+- Rule composition is explicit and injectable.
+- Future rule additions require zero engine changes.
+
+**Cons**
+- The caller is responsible for assembling the rule sequence (mitigated by the `default_rules()` factory).
+
+---
+
+## BI-004 — ImpactEvaluation Carries Deterministic Reasoning
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+### Context
+
+The explanation engine must generate deterministic, human-readable explanations for each dimension's impact level. If rules return only an `ImpactLevel` enum value, the explanation engine would need to duplicate rule logic to reconstruct why that level was reached — creating hidden coupling and violating the Single Responsibility Principle.
+
+### Decision
+
+Each `ImpactRule` returns an `ImpactEvaluation` value object containing the dimension, the level, and a pre-computed deterministic reason string. The explanation engine aggregates these reason strings without applying any additional business logic.
+
+### Rationale
+
+- **No Duplicated Logic:** The explanation engine never re-evaluates thresholds or conditions; it only aggregates pre-computed reasons.
+- **Single Responsibility:** Each rule owns both the classification decision and its corresponding explanation.
+- **Auditability:** Every reason string is deterministically generated at the point of rule evaluation, tied directly to the specific condition that fired.
+
+### Consequences
+
+**Pros**
+- Explanation engine is a pure aggregator with no business logic.
+- No hidden coupling between explanation generation and rule evaluation.
+- Explanation output is fully traceable to the rule that produced it.
+
+**Cons**
+- Each rule must produce both a level and a reason string, slightly increasing rule complexity.
+
+---
+
+## BI-005 — BusinessImpactProfile Separates Evaluation from Final Assessment
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+### Context
+
+The Business Impact Engine produces five independent `ImpactEvaluation` results. These evaluations must be aggregated into a weighted business score, an overall severity classification, a priority level, a confidence score, and a final explanation before producing the output domain object. Combining all of this logic into a single step would produce an opaque, untestable transformation.
+
+### Decision
+
+Introduce `BusinessImpactProfile` as an intermediate value object that holds all five named `ImpactEvaluation` fields and provides an `all_evaluations()` helper. The engine passes the profile to `scoring.py`, `weighting.py`, and `explanation.py` independently before assembling the final `BusinessImpactAssessment`.
+
+### Rationale
+
+- **Separation of Responsibilities:** Profile assembly, score computation, and assessment construction are three distinct, independently testable steps.
+- **Clarity:** The profile makes the intermediate state explicit rather than passing five separate arguments through multiple functions.
+- **Testability:** Each transformation step (weighting, scoring, explanation) can be tested against a constructed `BusinessImpactProfile` without invoking the full engine pipeline.
+
+### Consequences
+
+**Pros**
+- Clear intermediate representation of aggregated evaluation results.
+- Independent testability of scoring, weighting, and explanation logic.
+- Reduces argument count across internal engine functions.
+
+**Cons**
+- Introduces one additional domain object that does not appear in the final API output.
+
+---
+
+## BI-006 — Business Impact Service Owns Local Domain Input Models
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+### Context
+
+The Business Impact Engine requires structured input representing an Incident, a Root Cause Summary, Trend Metrics, and Anomaly Metrics. These domain concepts are owned by the Anomaly Service (Phase 5) and the Root Cause Service (Phase 6). Importing ORM models or domain classes from those services into the Business Impact Service would violate DATA-002 (Service-Local Read Models) and create tight cross-service coupling.
+
+### Decision
+
+Introduce four local, persistence-independent value objects within the Business Impact Service: `Incident`, `RootCauseSummary`, `TrendMetrics`, and `AnomalyMetrics`. These are plain, immutable dataclasses containing only the fields required for impact evaluation. They follow the same pattern established by RCA-001 (Persistence-Independent Domain Input Model) in Phase 6.
+
+### Rationale
+
+- **Service Independence:** The Business Impact Engine does not depend on ORM models or domain classes from Phase 5 or Phase 6 services.
+- **No ORM Coupling:** The engine remains a pure, persistence-free domain component with no SQLAlchemy dependencies.
+- **Consistency:** Follows the service-isolation convention already established and proven in Phase 6 (RCA-001).
+- **Testability:** The engine can be fully tested using plain dataclass instances with no database or service dependencies.
+
+### Consequences
+
+**Pros**
+- Fully isolated domain engine.
+- No cross-service Python-level imports.
+- Independent, database-less unit testing.
+- Stable architecture regardless of upstream service schema changes.
+
+**Cons**
+- Requires a mapper in Phase 7 Step 2 to translate persisted ORM records into these plain input value objects before passing them to the engine.
+- Small duplication of field definitions across service boundaries (mitigated by the minimal, purpose-scoped nature of each input model).
