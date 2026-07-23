@@ -22,6 +22,7 @@ from backend.shared.constants.enums.business_impact import (
     ServiceType,
     EscalationPriority
 )
+from backend.shared.constants.enums.business_impact_assessment import BusinessImpactAssessmentStatus
 
 __all__ = [
     "BaseStringEnum",
@@ -46,4 +47,5 @@ __all__ = [
     "OperationalArea",
     "ServiceType",
     "EscalationPriority",
+    "BusinessImpactAssessmentStatus",
 ]

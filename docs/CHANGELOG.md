@@ -7,6 +7,31 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-07-24
+
+## Phase 7 – Step 2 (Business Impact Persistence & APIs)
+
+Phase 7 Step 2 has been fully completed, introducing the persistence layer and REST APIs for the Business Impact Engine, while strictly maintaining the purity of the deterministic domain engine.
+
+### Added
+
+- **BusinessImpactAssessmentEntity** — SQLAlchemy ORM model representing a persisted impact assessment.
+- **Alembic Migration** — database schema changes for `business_impact_assessments`.
+- **Repository Layer** — `BusinessImpactRepository` for CRUD operations, plus `IncidentReadRepository` and `RootCauseReadRepository` utilizing service-local read models (`read_models.py`) to respect DATA-002 constraints.
+- **Mapper Layer** — `BusinessImpactInputMapper` and `BusinessImpactOutputMapper` that enforce the boundary between persisted ORM entities and the pure domain value objects.
+- **Application Service** — `BusinessImpactApplicationService` orchestrating the load -> map -> analyze -> persist -> return workflow without duplicating logic.
+- **REST APIs** — Endpoints in `business_impact.py` for creating assessments from an incident ID (`POST /business-impact`) and retrieving them (`GET /business-impact`, `GET /business-impact/{id}`).
+
+### Verified
+
+- API Contract (`POST /business-impact` accepts ONLY `incident_id`).
+- Mapper layer strictly performs translation with documented deterministic defaults (`sla_breach_count=0`, `negative_sentiment_ratio=0.0`).
+- Repository layer strictly returns persistence/read models.
+- Application Service strictly manages orchestration.
+- Zero architectural drift detected from the approved Phase 7 Step 2 design.
+
+---
+
 # 2026-07-22
 
 ## Phase 7 – Step 1 (Business Impact Analysis Engine)
@@ -295,10 +320,8 @@ Phase 5 has been fully completed, successfully introducing the platform's core o
 
 The next planned milestone is:
 
-**Phase 7 Step 2 – Business Impact Persistence & APIs**
+**Phase 7 Step 3 – Business Impact Lifecycle & Validation**
 
-- ORM model for `BusinessImpactAssessment`.
-- Alembic migration.
-- Repository layer.
-- Mapper from persisted domain records into engine input value objects.
-- REST API endpoints.
+- Validate API endpoints
+- Write integration tests for API layer
+- Document lifecycle states

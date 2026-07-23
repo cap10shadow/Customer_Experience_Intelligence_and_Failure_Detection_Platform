@@ -54,7 +54,7 @@
 | Step                                         | Status      |
 | -------------------------------------------- | ----------- |
 | ✅ Step 1 – Business Impact Analysis Engine | Complete    |
-| ⬜ Step 2 – Persistence & APIs              | Pending     |
+| ✅ Step 2 – Persistence & APIs              | Complete    |
 | ⬜ Step 3 – Lifecycle & Validation          | Pending     |
 
 ---
@@ -163,23 +163,22 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 # Current Focus
 
-**Phase 7 Step 2 – Business Impact Persistence & APIs**
+**Phase 7 Step 3 – Business Impact Lifecycle & Validation**
 
 ---
 
 # Next Milestone
 
-**Phase 7 Step 2 – Business Impact Persistence & APIs**
+**Phase 7 Step 3 – Business Impact Lifecycle & Validation**
 
 Primary objectives:
 
-- ORM model for `BusinessImpactAssessment`
-- Alembic migration
-- Repository layer
-- Mapper from persisted domain records into engine input value objects
-- REST API endpoints
+- Validate API endpoints
+- Write integration tests for API layer
+- Document lifecycle states
 
-> Phase 7 Step 1 (Business Impact Analysis Engine) is complete and frozen. The deterministic domain engine, all five impact rules, weighting, scoring, explanation, and 85 unit tests have been fully implemented, reviewed, and validated.
+> Phase 7 Step 1 (Business Impact Analysis Engine) and Step 2 (Persistence & APIs) are complete and frozen.
+> The Business Impact service now supports persisting impact assessments and exposing them through REST APIs, while fully complying with DATA-002 cross-service isolation constraints.
 
 ---
 
