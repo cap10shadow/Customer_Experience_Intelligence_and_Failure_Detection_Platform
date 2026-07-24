@@ -9,6 +9,28 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-07-24
 
+## Phase 7 – Step 3 (Business Impact Lifecycle & Validation)
+
+Phase 7 Step 3 has been fully completed. This was a validation-only phase: no changes were made to the Business Impact Engine, its rules, the persistence model, or the REST API contract.
+
+### Added
+
+- **`fakes.py`** — shared, in-memory test-support module (Fake repositories + a realistic, hand-computable synthetic Incident/RootCause scenario builder), used across the new lifecycle test suite.
+- **`test_business_impact_lifecycle_e2e.py`** — full lifecycle validation (Incident → Root Cause Summary → Engine → Assessment → Persistence → Repository → DTO), verifying every field against independently hand-computed expectations.
+- **`test_api_business_impact_lifecycle.py`** — deeper API integration tests wiring the real Application Service and real Engine through the real FastAPI routes (only the repository layer is Faked), covering creation, retrieval by assessment id, retrieval by incident id (via the existing list filter), list filtering, enum/timestamp serialization, and every documented error path.
+- **`test_determinism.py`** — proves identical inputs produce an identical `BusinessImpactAssessment` (scores, severity, priority, explanation) across repeated runs at the engine, application-service, and REST API levels.
+- **`test_explainability_contract.py`** — proves the Engine's explanation string is preserved character-for-character through the ORM entity, the response DTO, and full JSON encode/decode, across a quiet, a critical, and a mixed scenario.
+- **`backend/services/business_impact_service/README.md`** rewritten to document the verified lifecycle, the actual REST endpoints, what Step 3 verified, and how downstream services should consume this service's data (via a DATA-002 read model, anchored on Incident per ADR-007).
+
+### Verified
+
+- 42 new tests added; 427 / 427 total repository tests passing (385 pre-existing + 42 new).
+- mypy clean across all new production and test code.
+- Live verification performed against a running PostgreSQL instance (`docker compose up postgres business_impact_service`), using real, already-persisted Incident and Root Cause records from prior pipeline phases: creation, retrieval, list filtering, every documented error path, and determinism across three repeated real requests all confirmed correct. Verification-only rows were removed and containers stopped afterward, leaving the environment as found.
+- Zero architectural drift: the Business Impact Engine, Root Cause logic, persistence model, and API/DTO contracts are byte-for-byte unchanged from Phase 7 Step 2.
+
+---
+
 ## Architecture Review Board — Documentation Alignment
 
 The Architecture Review Board (ARB) reviewed the platform's complete product vision and long-term architecture, independent of current implementation. Eight architectural decisions were approved and the documentation set was aligned to reflect them.
