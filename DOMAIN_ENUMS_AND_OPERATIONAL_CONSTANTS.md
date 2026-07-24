@@ -362,6 +362,21 @@ for all intelligence-producing workflows.
 
 ---
 
+# 20a. CONFIDENCE PHILOSOPHY
+
+Per the Architecture Review Board (ADR-008), confidence is intentionally stage-specific. Each service owns and defines its own confidence concept — this is a deliberate architectural decision, not an inconsistency to be resolved.
+
+Examples of stage-specific confidence already in use:
+
+- NLP enrichment classification/urgency/sentiment confidence — certainty of a classification decision
+- Anomaly severity — a magnitude-based proxy for how far a signal deviates from baseline
+- Root Cause `confidence_score` / `confidence_level` — certainty that the correct deterministic rule fired
+- Business Impact `confidence` — completeness of the available input data, not certainty of correctness
+
+These are not interchangeable, and no future enum or shared scale should attempt to unify them into a single universal "confidence" value. Any confidence value must always be interpreted in the context of the stage that produced it.
+
+---
+
 # 21. ENUM EVOLUTION STRATEGY
 
 Operational vocabulary changes should remain centrally governed.

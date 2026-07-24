@@ -1,6 +1,6 @@
 # Customer Experience Intelligence & Failure Detection Platform
 
-An operational intelligence platform that ingests customer signals, detects anomalies, correlates incidents, identifies root causes, and surfaces actionable recommendations for operational teams.
+A Customer Experience Intelligence & Operational Decision Support Platform (per the Architecture Review Board, `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`, ADR-001) that ingests customer signals, detects anomalies, correlates incidents, identifies root causes, and surfaces actionable recommendations for operational teams. It is NOT merely a complaint analytics dashboard — its purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions.
 
 ---
 
@@ -40,6 +40,10 @@ An operational intelligence platform that ingests customer signals, detects anom
 - **Recommendation Engine**
 - ↓
 - **AI Copilot**
+
+### Long-Term Vision (Post-MVP, Not Currently Scheduled)
+
+Per the Architecture Review Board (ADR-002), the platform's long-term architectural vision extends this pipeline beyond Recommendation Engine and AI Copilot into a complete intelligence lifecycle: **Recommendation → Human Action → Outcome → Organizational Knowledge → Continuous Improvement**. This is a long-term direction only — it does not add phases to the roadmap above or change current MVP scope. See `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md` for details.
 
 ---
 
@@ -116,3 +120,5 @@ docs/                # Architecture, API, workflow documentation
 | [PRD.md](PRD.md) | Product requirements |
 | [ROADMAP.md](ROADMAP.md) | Development roadmap |
 | [PROJECT_BRAIN.md](PROJECT_BRAIN.md) | Engineering context and decisions |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture Decision Records (ADRs) |
+| [docs/ADR_ARCHITECTURE_REVIEW_BOARD.md](docs/ADR_ARCHITECTURE_REVIEW_BOARD.md) | Architecture Review Board session record |

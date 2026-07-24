@@ -195,16 +195,18 @@ Primary responsibility:
 
 ## Responsibility
 
+Per the Architecture Review Board (ADR-007), Incident — produced and owned by `anomaly_service` — is the platform's central lifecycle object. A separate "Case" or generic complaint-event link entity is NOT introduced. Root Cause Service consumes correlated Incidents rather than raw complaints or operational events directly.
+
 Owns:
 
-* complaint-event correlation
-* operational relationship analysis
-* incident propagation analysis
-* temporal correlation modeling
+* consuming correlated Incidents from the Anomaly Service
+* deterministic rule-based root-cause inference
+* structured evidence and confidence scoring for each Root Cause
+* Root Cause lifecycle management (confirmation, rejection, recalculation)
 
 Primary database ownership:
 
-* complaint_event_links
+* root_causes
 
 This service should explain:
 
@@ -212,25 +214,32 @@ This service should explain:
 * how operational failures propagate
 * what operational signals correlate
 
+Confidence produced here (per ADR-008) is this service's own definition — certainty that the correct deterministic rule fired — and is not intended to be unified with confidence definitions owned by other services.
+
 ---
 
 # 9. BUSINESS IMPACT SERVICE
 
 ## Responsibility
 
+Per the Architecture Review Board (ADR-003), the Business Impact Engine remains deterministic, explainable, rule-based, and generic. It always evaluates every dimension for every organization — no dimensions are disabled and no organization-specific scoring logic is introduced — producing one authoritative Business Impact Assessment per Incident.
+
 Owns:
 
-* revenue risk estimation
-* SLA impact estimation
-* churn risk estimation
-* escalation cost modeling
-* operational impact scoring
+* Financial impact evaluation
+* Customer impact evaluation
+* Operational impact evaluation
+* SLA impact evaluation
+* Reputation impact evaluation
+* deterministic weighting of all five dimensions into one authoritative assessment
 
 Primary database ownership:
 
-* business_impacts
+* business_impact_assessments
 
-This service translates operational failures into business consequences.
+This service translates operational failures into business consequences. Per the Architecture Review Board (ADR-004), organization- or persona-specific emphasis on particular dimensions is handled by the Presentation Layer, not by this service — its output does not vary by organization or by viewer.
+
+Confidence produced here (per ADR-008) is this service's own definition — completeness of available input data, not certainty of correctness.
 
 ---
 
@@ -299,7 +308,7 @@ Example:
 - ingestion_service → complaint persistence
 - nlp_service → enrichment fields
 - anomaly_service → anomaly indicators
-- business_impact_service → business risk estimates
+- business_impact_service → business impact assessments
 
 This prevents uncontrolled cross-domain data mutations.
 

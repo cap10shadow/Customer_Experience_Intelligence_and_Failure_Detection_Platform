@@ -6,6 +6,8 @@
 
 # 1. Architecture Philosophy
 
+Per the Architecture Review Board (ADR-001; see `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`), the platform is formally named the **Customer Experience Intelligence & Operational Decision Support Platform**. Its purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions. It is NOT merely a complaint analytics dashboard.
+
 The system is designed as a modular operational intelligence platform that combines:
 - backend services
 - analytics pipelines
@@ -28,6 +30,8 @@ The system should resemble a modern AI-powered SaaS platform rather than a colle
 
 # 2. High-Level System Flow
 
+## Current Flow (MVP and near-term roadmap)
+
 Customer Signals
 → Data Ingestion
 → NLP Intelligence
@@ -37,6 +41,26 @@ Customer Signals
 → Business Impact Analysis
 → Recommendation Generation
 → Executive Dashboard & AI Copilot
+
+## Long-Term Intelligence Lifecycle (Post-MVP Vision)
+
+Per the Architecture Review Board (ADR-002), the platform's long-term architectural vision extends this flow from a one-way pipeline into a complete intelligence lifecycle:
+
+Customer Signals
+→ Data Ingestion
+→ NLP Intelligence
+→ Trend & Anomaly Detection
+→ Incident Correlation
+→ Root Cause Correlation
+→ Business Impact Analysis
+→ Recommendation Generation
+→ Human Action
+→ Outcome
+→ Organizational Knowledge
+→ Continuous Improvement
+→ AI Copilot
+
+This is a long-term vision only. It does not change the MVP scope, any current phase, or any completed engineering work. See §7 for how this maps onto the roadmap, and `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md` for full rationale (ADR-002, ADR-005).
 
 ---
 
@@ -134,6 +158,8 @@ Responsible for:
 - analytics views
 - executive summaries
 
+Per the Architecture Review Board (ADR-004), the Presentation Layer (Dashboard and AI Copilot) is responsible for letting users explore specific Business Impact dimensions, compare dimensions, and request business-specific explanations. The Presentation Layer adapts the **explanation**, never the **engine** — Business Impact calculations (§5, `business_impact_service`) remain identical for every user and every organization; only what is surfaced and how it is narrated differs.
+
 Primary technologies:
 - React
 - TypeScript
@@ -193,6 +219,8 @@ Outputs:
 - trend intelligence
 - incident groups
 
+Per the Architecture Review Board (ADR-007), the Incident this service produces is the platform's central lifecycle object. No separate "Case" entity exists or is planned — Root Cause, Business Impact, Recommendation, and (in the long-term vision) Human Action, Outcome, and Organizational Knowledge all attach to the Incident produced here.
+
 ---
 
 ## root_cause_service
@@ -210,19 +238,28 @@ Outputs:
 - explainable confidence scores
 - lifecycle-managed Root Cause resources
 
+Confidence here (`confidence_score` / `confidence_level`) reflects this service's own definition — certainty that the correct deterministic rule fired. Per the Architecture Review Board (ADR-008), this is intentionally stage-specific and is not meant to be unified with confidence definitions used elsewhere in the platform (see §9).
+
 ---
 
 ## business_impact_service
 
+Per the Architecture Review Board (ADR-003), the Business Impact Engine remains deterministic, explainable, rule-based, and generic. It always evaluates every dimension for every organization — no dimensions are disabled and no organization-specific scoring logic is introduced — and produces one authoritative Business Impact Assessment per Incident.
+
 Responsibilities:
-- estimate churn risk
-- calculate severity scores
-- estimate operational/business impact
-- prioritize incidents
+- evaluate Financial impact
+- evaluate Customer impact
+- evaluate Operational impact
+- evaluate SLA impact
+- evaluate Reputation impact
+- combine all five dimensions into one authoritative, deterministically weighted assessment
 
 Outputs:
-- risk intelligence
-- severity metrics
+- one Business Impact Assessment per Incident, carrying all five dimension evaluations, an overall severity, a business priority, and a deterministic explanation
+
+Organization- or persona-specific emphasis on particular dimensions is a Presentation Layer concern (§4.E, ADR-004), never a `business_impact_service` concern — this service's output does not vary by organization or by viewer.
+
+Confidence here reflects this service's own definition — the completeness of the available input data, not certainty of correctness. Per the Architecture Review Board (ADR-008), this is intentionally stage-specific (see §9).
 
 ---
 
@@ -291,6 +328,8 @@ Core database categories:
 
 # 7. Intelligence Pipeline
 
+## Current Pipeline (MVP and near-term roadmap)
+
 Complaint/Event Ingestion
 → NLP Enrichment
 → Trend Detection
@@ -300,6 +339,24 @@ Complaint/Event Ingestion
 → Business Impact Estimation
 → Recommendation Generation
 → Dashboard & Copilot Delivery
+
+## Long-Term Lifecycle (Post-MVP Vision — ADR-002, ADR-005)
+
+Complaint/Event Ingestion
+→ NLP Enrichment
+→ Trend Detection
+→ Anomaly Analysis
+→ Incident Correlation
+→ Root Cause Correlation
+→ Business Impact Estimation
+→ Recommendation Generation
+→ Human Action
+→ Outcome
+→ Organizational Knowledge
+→ Continuous Improvement
+→ Dashboard & Copilot Delivery
+
+This lifecycle extension is a long-term architectural vision, not an MVP requirement. It does not change the current roadmap (see ROADMAP.md, "Long-Term Intelligence Lifecycle (Post-MVP Vision)").
 
 ---
 
@@ -344,6 +401,14 @@ Examples:
 - supporting complaint clusters
 
 The system should prioritize trustworthy intelligence over flashy AI behavior.
+
+## Evidence Chain (ADR-006)
+
+Per the Architecture Review Board, every intelligence stage contributes evidence, and the platform conceptually maintains a connected evidence chain across Complaint → NLP → Anomaly → Incident → Root Cause → Business Impact → Recommendation. This is a conceptual principle, not an implementation requirement — each service continues to own its own explanation format (NLP enrichment fields, anomaly explanations, Root Cause `Evidence` objects, Business Impact `ImpactEvaluation` reasons); no shared schema or new service is introduced by this decision.
+
+## Confidence (ADR-008)
+
+Confidence is intentionally stage-specific. Each service owns and defines its own confidence concept — NLP classification confidence, anomaly severity (a magnitude-based proxy), Root Cause's `confidence_score`/`confidence_level` (certainty the correct rule fired), and Business Impact's `confidence` (completeness of available input data) are four distinct concepts that share a name but not a meaning. The architecture does not force these into one universal confidence score, and future work should not attempt to unify them.
 
 ---
 

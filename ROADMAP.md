@@ -354,8 +354,29 @@ Potential future capabilities:
 - autonomous remediation workflows
 - enterprise integrations
 - predictive operational risk forecasting
+- human action capture (recording what was done in response to a recommendation)
+- outcome tracking (recording whether an action succeeded)
+- organizational knowledge accumulation from historical incidents and recommendations
+- continuous improvement feedback loops informed by tracked outcomes
 
 These are future evolution paths, not MVP requirements.
+
+---
+
+# 6a. Long-Term Intelligence Lifecycle (Post-MVP Vision)
+
+Per the Architecture Review Board (ADR-002, ADR-005; see `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`), the platform's long-term architectural vision extends the current intelligence pipeline (Phases 3–12 below) from a one-way flow into a complete lifecycle:
+
+**Current flow (Phases 3–12, this roadmap):**
+
+Complaint → NLP → Anomaly → Incident → Root Cause → Business Impact → Recommendation
+
+**Long-term evolution (post-MVP vision, not a phase on this roadmap):**
+
+Complaint → NLP → Anomaly → Incident → Root Cause → Business Impact → Recommendation
+→ Human Action → Outcome → Organizational Knowledge → Continuous Improvement → AI Copilot
+
+This is an architectural vision only. It does **not** add, remove, reorder, or expand any phase or deliverable listed in §3. Incident (Phase 5 Step 3) remains the platform's central lifecycle object per ADR-007 — Human Action, Outcome, and Organizational Knowledge are understood to attach to the Incident they originated from, without requiring a new "Case" entity. No phase in this roadmap is currently scoped to implement Human Action capture, Outcome tracking, or Organizational Knowledge — these remain long-term evolution possibilities (§6) until a future phase is explicitly planned for them.
 
 ---
 

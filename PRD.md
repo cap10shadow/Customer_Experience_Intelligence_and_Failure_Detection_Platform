@@ -18,6 +18,10 @@ The Customer Experience Intelligence \& Failure Detection Platform is an operati
 
 
 
+Per the Architecture Review Board (ADR-001), the platform is formally named the **Customer Experience Intelligence \& Operational Decision Support Platform**. Its purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions — it is NOT merely a complaint analytics dashboard.
+
+
+
 The platform combines:
 
 \- NLP intelligence
@@ -314,6 +318,32 @@ Example:
 
 
 
+\## Workflow 4 — Long-Term Organizational Learning (Future Vision, NOT MVP)
+
+
+
+Per the Architecture Review Board (ADR-002, ADR-005), the platform's long-term vision extends Workflow 1 beyond recommendation generation:
+
+
+
+1\. A recommended action is generated (Workflow 1, step 8)
+
+2\. A human takes an action in response
+
+3\. The outcome of that action is recorded against the originating Incident (per ADR-007, Incident remains the central object this attaches to)
+
+4\. Outcomes accumulate into organizational knowledge
+
+5\. Future intelligence is informed by this accumulated knowledge, enabling continuous improvement
+
+This workflow is a long-term architectural vision only. It introduces no MVP deliverable and does not change Workflows 1–3.
+
+
+
+\---
+
+
+
 \# 5. Core Product Features
 
 
@@ -376,15 +406,21 @@ Capabilities:
 
 \## Business Impact Engine
 
-Capabilities:
+Per the Architecture Review Board (ADR-003), the Business Impact Engine is deterministic, explainable, rule-based, and generic. It always evaluates every Business Impact dimension for every organization — no dimensions are disabled and no organization-specific scoring logic is introduced. It produces one authoritative Business Impact Assessment.
 
-\- churn-risk estimation
+Capabilities (evaluated as five dimensions, per ADR-003):
 
-\- SLA-risk estimation
+\- Financial impact scoring
 
-\- severity scoring
+\- Customer impact scoring
 
-\- revenue-impact estimation
+\- Operational impact scoring
+
+\- SLA impact scoring
+
+\- Reputation impact scoring
+
+Organization- or persona-specific emphasis (e.g. surfacing SLA impact more prominently for one audience, Financial impact for another) is a Presentation Layer concern (ADR-004), not an engine concern — the underlying assessment does not change based on who is viewing it.
 
 
 
@@ -428,6 +464,8 @@ Capabilities:
 
 \- business KPI dashboards
 
+\- exploring and comparing individual Business Impact dimensions (Financial, Customer, Operational, SLA, Reputation) without altering the underlying assessment (per ADR-004)
+
 
 
 \---
@@ -445,6 +483,8 @@ Capabilities:
 \- executive explanations
 
 \- insight generation
+
+\- business-specific explanations that focus on the dimension(s) a user cares about (Financial, Customer, Operational, SLA, Reputation, etc.) while reasoning from the same authoritative Business Impact Assessment for every user (per ADR-004)
 
 
 

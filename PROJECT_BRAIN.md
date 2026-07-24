@@ -94,7 +94,11 @@ This project is positioned as:
 
 
 
-"An operational intelligence platform for customer experience monitoring, failure detection, and business-risk analysis."
+"An operational intelligence platform for customer experience monitoring, failure detection, and business-impact analysis."
+
+
+
+Formally, per the Architecture Review Board (see `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`, ADR-001), the platform's name is the **Customer Experience Intelligence & Operational Decision Support Platform**. Its purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions. It is NOT merely a complaint analytics dashboard.
 
 
 
@@ -292,6 +296,16 @@ Examples:
 
 
 
+\## Incident
+
+Represents a correlated group of related anomalies, grouped by temporal, regional, and categorical proximity. Per the Architecture Review Board (ADR-007), Incident is the platform's central lifecycle object — it is the entity that Root Cause, Business Impact, Recommendation, and (in the long-term vision) Human Action, Outcome, and Organizational Knowledge all attach to. No separate "Case" entity exists or is planned; Incident fills that role.
+
+
+
+\---
+
+
+
 \## Root Cause
 
 Represents the most likely operational reason behind a complaint trend or issue spike.
@@ -318,9 +332,9 @@ Examples:
 
 
 
-\## Business Risk
+\## Business Impact
 
-Represents the estimated business impact caused by operational failures.
+Represents the estimated business impact caused by operational failures. (Formerly referred to as "Business Risk" in early planning; "Business Impact" is the authoritative term used consistently across the architecture, decisions, and implementation.)
 
 
 
@@ -476,7 +490,7 @@ Instead, it should generate operational intelligence by combining:
 
 \- root-cause correlation
 
-\- business-risk estimation
+\- business-impact estimation
 
 \- recommendation generation
 
@@ -507,6 +521,26 @@ Raw Signals
 → Recommendation Generation
 
 → Executive Insights
+
+
+
+\---
+
+
+
+\## Long-Term Intelligence Lifecycle (Post-MVP Vision)
+
+
+
+Per the Architecture Review Board (ADR-002), the pipeline above is the current, in-scope flow. The platform's long-term architectural vision extends it into a complete lifecycle rather than a one-way pipeline:
+
+
+
+Raw Signals → NLP Understanding → Trend Detection → Anomaly Detection → Root Cause Correlation → Business Impact Analysis → Recommendation Generation → Human Action → Outcome → Organizational Knowledge → Continuous Improvement → AI Copilot
+
+
+
+This extension is a long-term vision only. It is NOT part of the MVP and does not change any current phase or deliverable. See `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md` for full rationale.
 
 
 
@@ -689,6 +723,10 @@ Recommendations and root-cause outputs should reference:
 \- anomaly patterns
 
 \- severity metrics
+
+
+
+Per the Architecture Review Board (ADR-006), every intelligence stage contributes evidence, and the platform conceptually maintains a connected evidence chain from Complaint through NLP, Anomaly, Incident, Root Cause, Business Impact, and Recommendation. This is a conceptual principle guiding how each stage's explanation is designed, not a requirement for a shared implementation or a single unified schema — each stage remains free to own its own explanation format.
 
 
 

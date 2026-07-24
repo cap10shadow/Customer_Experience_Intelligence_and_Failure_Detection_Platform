@@ -9,6 +9,37 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-07-24
 
+## Architecture Review Board — Documentation Alignment
+
+The Architecture Review Board (ARB) reviewed the platform's complete product vision and long-term architecture, independent of current implementation. Eight architectural decisions were approved and the documentation set was aligned to reflect them.
+
+### Added
+
+- **`docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`** — full ARB session record: purpose, context, review summary, all eight approved decisions, architectural rationale, and long-term vision.
+- **`docs/DECISIONS.md`** — eight new ADR entries (ARB-001 through ARB-008) recorded in the permanent decision ledger.
+
+### Changed
+
+- **Terminology aligned:** "Business Risk" → "Business Impact" across `PROJECT_BRAIN.md` and `SERVICE_RESPONSIBILITY_AND_PERSISTENCE_ARCHITECTURE.md`.
+- **Platform identity clarified** (ADR-001) in `PROJECT_BRAIN.md`, `PRD.md`, `ARCHITECTURE.md`, and `README.md`.
+- **Long-term intelligence lifecycle vision** (ADR-002, ADR-005) added to `PROJECT_BRAIN.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and `README.md`, explicitly marked as post-MVP and non-binding on the current roadmap.
+- **Business Impact Engine framing corrected** (ADR-003) in `PRD.md` and `SERVICE_RESPONSIBILITY_AND_PERSISTENCE_ARCHITECTURE.md` to reflect the actual five-dimension, generic, deterministic engine rather than legacy scalar risk-score language.
+- **Presentation Layer clarified** (ADR-004) in `ARCHITECTURE.md`, `PRD.md`, and `SERVICE_RESPONSIBILITY_AND_PERSISTENCE_ARCHITECTURE.md`: dashboard/copilot adapt explanation, never the engine.
+- **Evidence chain** named conceptually (ADR-006) in `PROJECT_BRAIN.md` and `ARCHITECTURE.md`.
+- **Incident's role as the central lifecycle object clarified** (ADR-007): `SERVICE_RESPONSIBILITY_AND_PERSISTENCE_ARCHITECTURE.md`'s Root Cause Service section was corrected — it previously described a generic `complaint_event_links` ownership that contradicted Root Cause Service's actual, already-implemented consumption of correlated Incidents. `PROJECT_BRAIN.md` and `ARCHITECTURE.md` now name Incident explicitly as this central object.
+- **Confidence clarified as stage-specific** (ADR-008) in `ARCHITECTURE.md`, `SERVICE_RESPONSIBILITY_AND_PERSISTENCE_ARCHITECTURE.md`, and `DOMAIN_ENUMS_AND_OPERATIONAL_CONSTANTS.md` (new "Confidence Philosophy" section).
+- **`docs/PROJECT_STATUS.md`**: added an Architecture Governance section referencing the ARB; corrected a pre-existing internal inconsistency (top status block still read "Step 2 – Ready to Begin" while the rest of the same document already showed Step 2 complete and Step 3 as current focus).
+
+### Verified
+
+- No MVP scope change.
+- No completed phase changed.
+- No frozen engine (Root Cause Rule Engine, Business Impact Analysis Engine) modified.
+- No new service introduced.
+- Documents outside the eight ADRs' subject matter (`DATA_MODEL.md`, `DATABASE_SCHEMA_ARCHITECTURE.md`, `ENTITY_MODELING_AND_OWNERSHIP.md`, `CORE_ENTITY_SPECIFICATIONS.md`, `MVP_DATASET_SCOPE.md`, `DATASET_AND_INGESTION_STRATEGY.md`, `REPOSITORY_STRUCTURE.md`) were reviewed and intentionally left unchanged — their content is schema/tooling-level and not addressed by this ARB session.
+
+---
+
 ## Phase 7 – Step 2 (Business Impact Persistence & APIs)
 
 Phase 7 Step 2 has been fully completed, introducing the persistence layer and REST APIs for the Business Impact Engine, while strictly maintaining the purity of the deterministic domain engine.

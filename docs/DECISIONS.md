@@ -603,3 +603,239 @@ Introduce four local, persistence-independent value objects within the Business 
 **Cons**
 - Requires a mapper in Phase 7 Step 2 to translate persisted ORM records into these plain input value objects before passing them to the engine.
 - Small duplication of field definitions across service boundaries (mitigated by the minimal, purpose-scoped nature of each input model).
+
+---
+
+## ARB-001 — Platform Identity
+
+**Status:** Accepted
+
+**Date:** 2026-07-24
+
+### Context
+
+The platform's identity was described consistently in spirit across every document but had never been given a single, formal, citable name — leading to informal variation ("operational intelligence platform," "complaint analytics platform") in casual references.
+
+### Decision
+
+The platform is formally named the Customer Experience Intelligence & Operational Decision Support Platform. Its purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions. The platform is NOT merely a complaint analytics dashboard.
+
+### Rationale
+
+- Gives a name to an identity that was already implicit in the product's non-goals and positioning.
+- Prevents future documentation or onboarding material from drifting toward a "dashboard" framing the platform has always explicitly rejected.
+
+### Consequences
+
+**Pros**
+- Consistent, citable identity across all documentation.
+
+**Cons**
+- None — purely a naming/documentation clarification.
+
+---
+
+## ARB-002 — Intelligence Lifecycle
+
+**Status:** Accepted (long-term vision; not an MVP commitment)
+
+**Date:** 2026-07-24
+
+### Context
+
+The documented intelligence pipeline (Complaint → NLP → Anomaly → Incident → Root Cause → Business Impact → Recommendation → Dashboard/Copilot) is a one-way flow. Nothing that happens after a recommendation is delivered ever flows back into the platform's intelligence.
+
+### Decision
+
+The platform's long-term architectural vision extends the pipeline into a complete lifecycle: Complaint → NLP → Anomaly → Incident → Root Cause → Business Impact → Recommendation → Human Action → Outcome → Organizational Knowledge → Continuous Improvement → AI Copilot. This is a long-term vision. It is explicitly NOT part of the MVP and does not change any current phase, deliverable, or roadmap commitment.
+
+### Rationale
+
+- Without capturing what happened after a recommendation, confidence scores and severity bands can never be validated against reality.
+- Naming the destination now allows current phases to be built in a way that does not foreclose it later, without requiring any current work to change.
+
+### Consequences
+
+**Pros**
+- Gives the roadmap an explicit long-term destination.
+- Does not obligate any current phase to change.
+
+**Cons**
+- Introduces conceptual scope (Human Action, Outcome, Organizational Knowledge) that is not yet scheduled on the roadmap.
+
+---
+
+## ARB-003 — Business Impact Engine Remains Generic
+
+**Status:** Accepted
+
+**Date:** 2026-07-24
+
+### Context
+
+The platform is positioned for multiple industries (e-commerce, logistics, fintech, SaaS, telecom, marketplaces, subscription services) that define business impact differently, creating pressure for the Business Impact Engine to branch its scoring logic per organization.
+
+### Decision
+
+The Business Impact Engine remains deterministic, explainable, rule-based, and generic. It always evaluates every Business Impact dimension (Financial, Customer, Operational, SLA, Reputation). No dimensions are disabled. No organization-specific scoring logic is introduced. The engine produces one authoritative Business Impact Assessment. This reaffirms and reinforces BI-001 through BI-006 without altering their content.
+
+### Rationale
+
+- Preserves the engine's determinism, testability, and auditability established in BI-001 through BI-006.
+- Organization-specific emphasis is handled at the Presentation Layer (ARB-004), not inside the engine, keeping the engine reusable and stable across every future industry vertical.
+
+### Consequences
+
+**Pros**
+- The engine remains stable, generic, and reusable across organizations.
+- Prevents scoring logic from fragmenting per customer.
+
+**Cons**
+- Organization-specific prioritization must be solved entirely at the presentation layer for now; a future, explicitly-designed configuration layer would be required if per-organization weighting is ever needed inside the engine itself. No such layer is introduced by this decision.
+
+---
+
+## ARB-004 — Presentation Layer Adapts Explanation, Not the Engine
+
+**Status:** Accepted
+
+**Date:** 2026-07-24
+
+### Context
+
+Different personas (Executive, Business Analyst, Reliability Engineer, Operations Manager) and different organizations legitimately care about different Business Impact dimensions for the same incident.
+
+### Decision
+
+Rather than changing Business Impact calculations, the Presentation Layer (Dashboard and AI Copilot) allows users to explore specific dimensions, compare dimensions, and request business-specific explanations. The Presentation Layer adapts the explanation, not the engine. Business reasoning remains consistent for every organization and every user.
+
+### Rationale
+
+- Keeps the engine (ARB-003) generic and universal while still letting different audiences focus on what matters to them.
+- Ensures the same incident produces the same authoritative assessment regardless of who is viewing it — only the narration and framing differ.
+
+### Consequences
+
+**Pros**
+- Full flexibility of exploration and explanation without compromising engine determinism.
+
+**Cons**
+- Presentation Layer must be designed to filter/compare/re-narrate an already-computed assessment rather than requesting a recomputation — a constraint future dashboard/copilot design must respect.
+
+---
+
+## ARB-005 — Organizational Knowledge
+
+**Status:** Accepted (long-term vision; not an MVP commitment)
+
+**Date:** 2026-07-24
+
+### Context
+
+Every anomaly, root cause, and impact assessment is currently evaluated as if it were the first of its kind; the platform has no memory of recurring patterns or prior responses.
+
+### Decision
+
+The platform should preserve organizational knowledge. Future phases should support learning from Human Actions, Outcomes, Historical Incidents, and Previous Recommendations, enabling continuous organizational learning. This is long-term vision only; no current phase, entity, or persisted schema is affected.
+
+### Rationale
+
+- Provides the substantive content behind the "Organizational Knowledge" and "Continuous Improvement" stages of ARB-002's lifecycle.
+- Names a destination without prescribing implementation, preserving full design freedom for whichever future phase takes this on.
+
+### Consequences
+
+**Pros**
+- Establishes long-term direction for future roadmap planning.
+
+**Cons**
+- No mechanism, schema, or phase is defined yet — intentionally deferred.
+
+---
+
+## ARB-006 — Evidence Chain (Conceptual)
+
+**Status:** Accepted
+
+**Date:** 2026-07-24
+
+### Context
+
+Each intelligence stage already produces its own explainable output (NLP enrichment fields, anomaly explanations, Root Cause `Evidence` objects, Business Impact `ImpactEvaluation` reasons) independently, with no document naming these as segments of one continuous story.
+
+### Decision
+
+Every intelligence stage contributes evidence. The platform should conceptually maintain a connected evidence chain across Complaint → NLP → Anomaly → Incident → Root Cause → Business Impact → Recommendation. This is a conceptual architecture decision, not an implementation requirement.
+
+### Rationale
+
+- Names a principle that already exists in practice, guiding future explainability and AI-copilot work toward treating the chain as one evidentiary narrative.
+- Explicitly does not require a shared schema or new service, preserving every service's autonomy over its own explanation format (consistent with DATA-002).
+
+### Consequences
+
+**Pros**
+- Gives future explainability/RAG work a documented principle to build toward.
+
+**Cons**
+- None — no implementation change is required or introduced.
+
+---
+
+## ARB-007 — Incident as the Central Lifecycle Object
+
+**Status:** Accepted
+
+**Date:** 2026-07-24
+
+### Context
+
+Some documentation (e.g. SERVICE_RESPONSIBILITY_AND_PERSISTENCE_ARCHITECTURE.md, prior to this session) described Root Cause correlation in terms of a generic complaint-event link, distinct from the Incident entity already established by INCIDENT-001 and consumed by Root Cause Analysis per RCA-001. This created a risk of introducing a duplicate "Case"-like concept.
+
+### Decision
+
+A separate "Case" entity will NOT be introduced. Instead, Incident naturally evolves into the central lifecycle object connecting Anomalies → Root Cause → Business Impact → Recommendation → Human Action → Outcome → Organizational Knowledge.
+
+### Rationale
+
+- Incident already plays this role in practice (INCIDENT-001, RCA-001); introducing a parallel "Case" concept would duplicate an existing entity.
+- Gives every future stage (Recommendation, Human Action, Outcome, Organizational Knowledge) a single, existing anchor object to attach to.
+
+### Consequences
+
+**Pros**
+- No duplicate entity; Incident's existing central role is simply made explicit.
+- Every future lifecycle extension has a clear, already-implemented attachment point.
+
+**Cons**
+- Documentation describing Root Cause correlation in terms other than "consumes Incidents" (see this session's documentation alignment) required correction to remove the contradiction.
+
+---
+
+## ARB-008 — Confidence Remains Stage-Specific
+
+**Status:** Accepted
+
+**Date:** 2026-07-24
+
+### Context
+
+"Confidence" is produced by multiple stages (NLP classification, anomaly severity, Root Cause `confidence_score`/`confidence_level`, Business Impact `confidence`) with materially different meanings, previously undocumented as intentional.
+
+### Decision
+
+Confidence remains stage-specific. Each service owns its own confidence definition. The architecture clarifies this explicitly. It does NOT force one universal confidence score.
+
+### Rationale
+
+- Root Cause's confidence measures certainty that the correct deterministic rule fired; Business Impact's confidence measures completeness of available input data. These are not interchangeable and should not be forced onto one scale.
+- Documenting this as intentional prevents a future, well-intentioned "unification" effort from destroying meaningful, stage-specific signal.
+
+### Consequences
+
+**Pros**
+- Prevents loss of meaning from forcing dissimilar concepts onto one scale.
+- Gives future engineers a clear, documented reason not to "fix" this into a single universal score.
+
+**Cons**
+- A future Copilot or dashboard summarizing "confidence" across stages must present it per-stage rather than as one number — an explicit design constraint, not a defect.

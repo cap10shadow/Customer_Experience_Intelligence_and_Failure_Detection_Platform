@@ -23,7 +23,7 @@
 
 **Current Phase:** Phase 7 – Business Impact Engine
 
-**Current Step:** Step 2
+**Current Step:** Step 3
 
 **Status:** Ready to Begin
 
@@ -195,9 +195,20 @@ Primary objectives:
 
 ---
 
+# Architecture Governance
+
+**Architecture Review Board (ARB):** Reviewed and finalized on 2026-07-24.
+
+The platform's long-term product vision and architecture were reviewed end-to-end by the Architecture Review Board. Eight architectural decisions were approved, clarifying platform identity, the long-term intelligence lifecycle vision, Business Impact Engine genericity, the Presentation Layer's role, organizational knowledge, the evidence chain, Incident's role as the central lifecycle object, and stage-specific confidence.
+
+None of these decisions changed the MVP scope, any completed phase, or any frozen engine (Root Cause Rule Engine, Business Impact Analysis Engine). Full record: `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`.
+
+---
+
 # Notes
 
 - This document reflects the current implementation status.
 - Update after every completed phase or significant engineering milestone.
 - Architectural decisions should be recorded in `DECISIONS.md`.
+- The Architecture Review Board's session record is `ADR_ARCHITECTURE_REVIEW_BOARD.md`.
 - Feature history should be recorded in `CHANGELOG.md`.
