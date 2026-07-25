@@ -187,15 +187,14 @@ The system prioritizes operational problems intelligently.
 # Phase 8 — Intelligence Evaluation & Validation
 
 ## Goals
-Validate intelligence quality and recommendation reliability.
+Validate intelligence quality and explainability through an independent, out-of-band Intelligence Assurance Service.
 
 ## Deliverables
-- anomaly detection evaluation
-- root-cause validation metrics
-- recommendation quality analysis
-- false-positive analysis
-- intelligence confidence scoring
-- explainability validation
+- Step 1: Evaluation Engine
+- Step 2: Persistence & APIs (Read-only)
+- Step 3: Lifecycle & Validation
+- Event-driven execution (triggered by Business Impact completion)
+- Immutable Evaluation records with lineage tracking (`evaluationVersion`, `previousEvaluationId`)
 
 ## Example Metrics
 - anomaly precision/recall
@@ -204,7 +203,7 @@ Validate intelligence quality and recommendation reliability.
 - recommendation relevance scoring
 
 ## Outcome
-The system produces measurable and trustworthy operational intelligence.
+The system observes completed intelligence out-of-band without modifying upstream services, producing immutable, measurable, and trustworthy evaluation artifacts.
 
 ---
 

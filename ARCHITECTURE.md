@@ -263,6 +263,23 @@ Confidence here reflects this service's own definition — the completeness of t
 
 ---
 
+## evaluation_service
+
+The Evaluation Service acts as an independent Intelligence Assurance Service. It is NOT part of the operational intelligence pipeline and never modifies upstream services.
+
+Responsibilities:
+- observe completed intelligence via event-driven triggers (e.g., Business Impact completion event)
+- execute a structured internal flow: Validation → Quality Engine || Explainability Engine (parallel) → Confidence Analyzer → Evaluation Builder → Persist Evaluation
+- manage its own persistence for immutable Evaluation records
+- track evaluation lineage via `evaluationVersion` and `previousEvaluationId`
+- expose read-only external APIs for evaluation retrieval
+
+Outputs:
+- immutable Evaluation artifacts
+- independent quality and explainability assessments
+
+---
+
 ## recommendation_service
 
 Responsibilities:
@@ -339,6 +356,8 @@ Complaint/Event Ingestion
 → Business Impact Estimation
 → Recommendation Generation
 → Dashboard & Copilot Delivery
+
+*(Note: The Evaluation Service operates out-of-band as an independent observer triggered by pipeline events. It is deliberately NOT a blocking step in this operational pipeline.)*
 
 ## Long-Term Lifecycle (Post-MVP Vision — ADR-002, ADR-005)
 

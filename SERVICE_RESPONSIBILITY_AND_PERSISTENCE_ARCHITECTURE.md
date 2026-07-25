@@ -82,6 +82,7 @@ This architecture prioritizes:
 | anomaly_service         | anomaly detection                   |
 | root_cause_service      | operational correlation analysis    |
 | business_impact_service | business impact estimation          |
+| evaluation_service      | independent intelligence assurance  |
 | recommendation_service  | operational recommendations         |
 | copilot_service         | future AI assistant workflows       |
 
@@ -243,7 +244,28 @@ Confidence produced here (per ADR-008) is this service's own definition — comp
 
 ---
 
-# 10. RECOMMENDATION SERVICE
+# 10. EVALUATION SERVICE
+
+## Responsibility
+
+The Evaluation Service acts as an independent Intelligence Assurance Service. It is NOT part of the operational intelligence pipeline. It observes completed intelligence out-of-band and never modifies upstream services.
+
+Owns:
+
+* Event-driven observation of upstream completion (e.g., Business Impact completion event)
+* Executing a parallelized internal flow: Validation → [Quality Engine || Explainability Engine] → Confidence Analyzer → Evaluation Builder → Persist Evaluation
+* Maintaining immutable evaluation records with lineage tracking (`evaluationVersion`, `previousEvaluationId`)
+* Exposing read-only external APIs
+
+Primary database ownership:
+
+* evaluations (immutable, append-only)
+
+This service provides an independent audit of intelligence quality and explainability. It never blocks the core pipeline.
+
+---
+
+# 11. RECOMMENDATION SERVICE
 
 ## Responsibility
 
@@ -262,7 +284,7 @@ Avoid opaque autonomous decision systems during MVP scope.
 
 ---
 
-# 11. COPILOT SERVICE
+# 12. COPILOT SERVICE
 
 ## Responsibility
 
@@ -282,7 +304,7 @@ The MVP should prioritize operational intelligence before AI assistance.
 
 ---
 
-# 12. DATABASE OWNERSHIP PRINCIPLES
+# 13. DATABASE OWNERSHIP PRINCIPLES
 
 Each service should primarily manage its own operational domain logic.
 
@@ -314,7 +336,7 @@ This prevents uncontrolled cross-domain data mutations.
 
 ---
 
-# 13. PERSISTENCE FLOW
+# 14. PERSISTENCE FLOW
 
 Primary persistence flow:
 
@@ -336,24 +358,23 @@ This creates a layered operational intelligence pipeline.
 
 ---
 
-# 14. SERVICE COMMUNICATION STRATEGY
+# 15. SERVICE COMMUNICATION STRATEGY
 
 MVP communication pattern:
 
-* synchronous HTTP APIs
+* synchronous HTTP APIs (for core pipeline coordination)
+* event-driven domain events (specifically for out-of-band observation, e.g., Evaluation Service triggers)
 * shared contracts
 * controlled persistence updates
 
 Avoid during MVP:
 
-* event buses
-* Kafka
-* distributed queues
+* enterprise-scale distributed queues (e.g., Kafka) for simple flows
 * service mesh complexity
 
-These should only be introduced if justified by future scaling requirements.
+These should only be introduced if justified by future scaling requirements. Note that the Evaluation Service (Phase 8) introduces targeted event-driven execution to remain non-blocking.
 
-The MVP intentionally prioritizes synchronous communication because:
+The MVP intentionally prioritizes synchronous communication for the core pipeline because:
 
 - operational flows remain easier to debug
 - intelligence pipelines remain explainable
@@ -365,7 +386,7 @@ Complex distributed messaging should only be introduced when operationally neces
 
 ---
 
-# 15. SHARED MODULE RESPONSIBILITIES
+# 16. SHARED MODULE RESPONSIBILITIES
 
 The shared module should contain ONLY:
 
@@ -387,7 +408,7 @@ Business intelligence logic must remain isolated inside domain services.
 
 ---
 
-# 16. REPOSITORY LAYER PHILOSOPHY
+# 17. REPOSITORY LAYER PHILOSOPHY
 
 Each service should later contain:
 
@@ -411,7 +432,7 @@ This improves:
 
 ---
 
-# 17. MVP IMPLEMENTATION PHILOSOPHY
+# 18. MVP IMPLEMENTATION PHILOSOPHY
 
 The MVP architecture intentionally prioritizes:
 
@@ -432,7 +453,7 @@ Complexity should only be introduced when operationally justified.
 
 ---
 
-# 18. FUTURE EVOLUTION PATH
+# 19. FUTURE EVOLUTION PATH
 
 The architecture should later support:
 

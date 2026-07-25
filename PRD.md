@@ -428,6 +428,26 @@ Organization- or persona-specific emphasis (e.g. surfacing SLA impact more promi
 
 
 
+\## Intelligence Assurance Engine (Evaluation Service)
+
+Capabilities:
+
+\- independent evaluation of intelligence quality and explainability
+
+\- event-driven observation (never blocks the core pipeline)
+
+\- parallel execution of quality and explainability assessments
+
+\- immutable evaluation record generation with strict lineage (evaluationVersion, previousEvaluationId)
+
+\- read-only external APIs for confidence and quality metrics
+
+
+
+\---
+
+
+
 \## Recommendation Engine
 
 Capabilities:
