@@ -13,6 +13,7 @@ Every test runs inside a transaction that is always rolled back at the
 end, so no test data is ever actually committed or left behind.
 """
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
@@ -22,6 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from backend.services.evaluation_service.app.domain.evaluation_repository import DuplicateEventError
 from backend.services.evaluation_service.app.infrastructure.persistence.models.evaluation_model import EvaluationModel
 from backend.services.evaluation_service.app.infrastructure.persistence.repositories.postgresql_evaluation_repository import (
     PostgreSQLEvaluationRepository,
@@ -264,6 +266,96 @@ async def test_composite_index_exists_on_incident_id_and_evaluation_version():
             {"name": "ix_evaluations_incident_id_evaluation_version"},
         )
         assert result.first() is not None
+
+
+@pytest.mark.anyio
+async def test_save_with_event_id_persists_it_and_is_retrievable_by_get_by_event_id(make_evaluation):
+    async with _repository_session() as session:
+        repository = PostgreSQLEvaluationRepository(session)
+        event_id = uuid.uuid4()
+
+        saved = await repository.save(make_evaluation(), event_id=event_id)
+
+        assert saved.event_id == event_id
+        fetched = await repository.get_by_event_id(event_id)
+        assert fetched is not None
+        assert fetched.evaluation_id == saved.evaluation_id
+
+
+@pytest.mark.anyio
+async def test_get_by_event_id_returns_none_for_unknown_event_id():
+    async with _repository_session() as session:
+        repository = PostgreSQLEvaluationRepository(session)
+
+        assert await repository.get_by_event_id(uuid.uuid4()) is None
+
+
+@pytest.mark.anyio
+async def test_save_with_a_duplicate_event_id_raises_duplicate_event_error(make_evaluation):
+    """
+    Database UNIQUE constraint behaviour: a second save() reusing an
+    event_id already flushed within the same transaction is rejected
+    immediately by Postgres's own constraint check -- the correctness
+    guarantee beneath EvaluationLifecycleService's faster, application-level
+    idempotency check (tested in isolation, without a database, in
+    test_evaluation_lifecycle_service.py).
+    """
+    async with _repository_session() as session:
+        repository = PostgreSQLEvaluationRepository(session)
+        event_id = uuid.uuid4()
+
+        await repository.save(make_evaluation(), event_id=event_id)
+
+        with pytest.raises(DuplicateEventError):
+            await repository.save(make_evaluation(), event_id=event_id)
+
+
+@pytest.mark.anyio
+async def test_concurrent_saves_with_the_same_event_id_are_mutually_exclusive(make_evaluation):
+    """
+    Genuine concurrency test, using two independent physical connections
+    (NullPool guarantees this) racing to save() with the identical
+    event_id. An in-process idempotency check cannot prevent this by
+    itself -- two concurrent deliveries of the same event could both pass
+    a "does it already exist?" read before either has written anything.
+    Only the database's own UNIQUE constraint, exercised here for real
+    across two genuinely separate transactions, guarantees exactly one of
+    the two ever succeeds.
+    """
+    if not await _is_database_available():
+        pytest.skip("PostgreSQL is not reachable on localhost:5432 -- run `docker compose up postgres` to enable these tests")
+
+    event_id = uuid.uuid4()
+    incident_a = f"INC-{uuid.uuid4().hex[:8]}"
+    incident_b = f"INC-{uuid.uuid4().hex[:8]}"
+
+    async def _attempt(incident_id: str) -> str:
+        async with _test_engine.connect() as conn:
+            await conn.run_sync(lambda sync_conn: EvaluationModel.__table__.create(sync_conn, checkfirst=True))
+            await conn.commit()
+            trans = await conn.begin()
+            session = AsyncSession(bind=conn, expire_on_commit=False)
+            try:
+                repository = PostgreSQLEvaluationRepository(session)
+                try:
+                    await repository.save(make_evaluation(incident_id=incident_id), event_id=event_id)
+                except DuplicateEventError:
+                    await trans.rollback()
+                    return "duplicate"
+                await trans.commit()
+                return "ok"
+            finally:
+                await session.close()
+
+    try:
+        outcomes = await asyncio.gather(_attempt(incident_a), _attempt(incident_b))
+        assert sorted(outcomes) == ["duplicate", "ok"]
+    finally:
+        async with _test_engine.connect() as cleanup_conn:
+            await cleanup_conn.execute(
+                text("DELETE FROM evaluations WHERE event_id = :event_id"), {"event_id": str(event_id)}
+            )
+            await cleanup_conn.commit()
 
 
 def test_repository_exposes_no_update_or_delete_operations():

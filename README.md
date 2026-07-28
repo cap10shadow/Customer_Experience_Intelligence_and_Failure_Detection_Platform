@@ -6,11 +6,13 @@ A Customer Experience Intelligence & Operational Decision Support Platform (per 
 
 ## Current Implementation Status
 
-**Phase 1 through Phase 6 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, incident correlation, and root cause analysis engines are operational.
+**Phase 1 through Phase 8 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, incident correlation, root cause analysis, business impact analysis, and intelligence evaluation engines are all operational.
 
-**Phase 7 (Business Impact Analysis) is the active development phase.**
+**Phase 9 (Recommendation Engine) is the active development phase.**
 
-**Phase 8+ (Intelligence Evaluation, Recommendation Engine, AI Copilot) are PLANNED FUTURE PHASES.**
+**Phase 10+ (Executive Dashboard, Observability & Reliability, AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
+
+The Evaluation Service (Phase 8) is an independent Intelligence Assurance Service, not part of the linear pipeline below: it observes completed intelligence out-of-band, event-driven, and never modifies or blocks any upstream service.
 
 ---
 
@@ -30,14 +32,14 @@ A Customer Experience Intelligence & Operational Decision Support Platform (per 
 - **Incident Correlation** (Grouping Anomalies)
 - ↓
 - **Root Cause Analysis** (Deterministic Rules, Lifecycle & Persistence)
+- ↓
+- **Business Impact Analysis** (Deterministic Rules, Persistence & Lifecycle)
 
 ### In Progress
 - ↓
-- **Business Impact Analysis**
+- **Recommendation Engine**
 
 ### Planned Future Phases
-- ↓
-- **Recommendation Engine**
 - ↓
 - **AI Copilot**
 
@@ -58,9 +60,10 @@ The platform uses a modular, service-based architecture sharing a single reposit
 | nlp_service | 8002 | NLP enrichment pipeline | Implemented |
 | anomaly_service | 8003 | Anomaly detection & Incident Correlation | Implemented |
 | root_cause_service | 8004 | Root cause correlation | Stable |
-| business_impact_service | 8005 | Business impact estimation | Scaffolded / Planned |
+| business_impact_service | 8005 | Business impact estimation | Stable |
 | recommendation_service | 8006 | Recommendation generation | Scaffolded / Planned |
 | copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |
+| evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven) | Stable |
 | frontend | 3000 | Operational dashboard | Scaffolded / Planned |
 
 Each service exposes a `/health` endpoint.

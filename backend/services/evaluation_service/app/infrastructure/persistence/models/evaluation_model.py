@@ -38,11 +38,21 @@ class EvaluationModel(Base):
       rather than a native UUID column because the Domain-layer
       `Evaluation.incident_id` is itself a plain `str` (Phase 8 Step 1,
       frozen) with no UUID-format guarantee enforced at that layer.
-    - `root_cause_id` / `business_impact_id` are nullable and, as of Step 2,
-      always NULL -- there is no upstream event data yet to populate them
-      from (see `EvaluationRecord`'s docstring). `previous_evaluation_id`
+    - `root_cause_id` / `business_impact_id` are nullable -- populated from
+      real upstream identifiers as of Step 3's event-driven lifecycle, but
+      still NULL for any Evaluation persisted outside it (see
+      `EvaluationRecord`'s docstring). `previous_evaluation_id`
       is a plain UUID column (not a `ForeignKey`, same DATA-001/DATA-002
       reasoning) referencing another row's `evaluation_id`.
+    - `event_id` is nullable and UNIQUE: the inbound `BusinessImpactCompleted`
+      event identifier that triggered this Evaluation, when persisted via
+      Step 3's event-driven lifecycle. NULL is permitted (and repeatable --
+      PostgreSQL does not enforce uniqueness across NULLs) for Evaluations
+      persisted without an inbound event. The UNIQUE constraint is the
+      database-backed correctness guarantee behind
+      `EvaluationLifecycleService`'s application-level idempotency check:
+      it is what actually prevents two concurrent deliveries of the same
+      event from ever producing two Evaluations.
     """
 
     __tablename__ = "evaluations"
@@ -52,6 +62,7 @@ class EvaluationModel(Base):
     incident_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     root_cause_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     business_impact_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    event_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
 
     evaluation_version: Mapped[str] = mapped_column(String(20), nullable=False)
     previous_evaluation_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)

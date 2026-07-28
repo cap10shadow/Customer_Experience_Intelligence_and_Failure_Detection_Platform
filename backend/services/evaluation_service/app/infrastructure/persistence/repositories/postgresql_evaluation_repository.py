@@ -2,11 +2,15 @@ import uuid
 from typing import List, Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.evaluation_service.app.domain.evaluation import Evaluation
 from backend.services.evaluation_service.app.domain.evaluation_record import EvaluationRecord
-from backend.services.evaluation_service.app.domain.evaluation_repository import EvaluationRepository
+from backend.services.evaluation_service.app.domain.evaluation_repository import (
+    DuplicateEventError,
+    EvaluationRepository,
+)
 from backend.services.evaluation_service.app.infrastructure.persistence.models.evaluation_model import EvaluationModel
 from backend.services.evaluation_service.app.infrastructure.persistence.repositories.evaluation_model_mapper import (
     EvaluationModelMapper,
@@ -34,27 +38,51 @@ class PostgreSQLEvaluationRepository(EvaluationRepository):
       the current latest record for the same incident before inserting --
       this is persistence/lineage bookkeeping (comparable to a database
       assigning a primary key or a version counter), not a business rule.
-    - `root_cause_id` / `business_impact_id` are always persisted as NULL
-      here: neither is available on the `Evaluation` this repository is
-      handed (see `EvaluationRecord`'s docstring for why).
+    - `root_cause_id` / `business_impact_id` / `event_id` are persisted
+      exactly as supplied by the caller (`EvaluationOrchestrator`, per
+      Step 3) -- this repository never derives or inspects them, it only
+      forwards them to the mapper.
+    - A duplicate `event_id` raises `DuplicateEventError`, translated here
+      from the database's own UNIQUE-constraint violation
+      (`sqlalchemy.exc.IntegrityError`) -- this is the one place Postgres's
+      concrete exception type is known; everything above this repository
+      (`EvaluationLifecycleService`) only ever sees the Domain-level
+      `DuplicateEventError`.
     """
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def save(self, evaluation: Evaluation) -> EvaluationRecord:
+    async def save(
+        self,
+        evaluation: Evaluation,
+        *,
+        event_id: Optional[uuid.UUID] = None,
+        root_cause_id: Optional[uuid.UUID] = None,
+        business_impact_id: Optional[uuid.UUID] = None,
+    ) -> EvaluationRecord:
         latest = await self._get_latest_model(evaluation.incident_id)
         previous_evaluation_id = latest.evaluation_id if latest is not None else None
 
         model = EvaluationModelMapper.to_orm(
             evaluation,
             previous_evaluation_id=previous_evaluation_id,
-            root_cause_id=None,
-            business_impact_id=None,
+            root_cause_id=root_cause_id,
+            business_impact_id=business_impact_id,
+            event_id=event_id,
         )
         self.session.add(model)
-        await self.session.flush()
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            raise DuplicateEventError(f"An Evaluation for event_id={event_id} already exists") from exc
         return EvaluationModelMapper.to_domain(model)
+
+    async def get_by_event_id(self, event_id: uuid.UUID) -> Optional[EvaluationRecord]:
+        stmt = select(EvaluationModel).where(EvaluationModel.event_id == event_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return EvaluationModelMapper.to_domain(model) if model is not None else None
 
     async def get_by_id(self, evaluation_id: uuid.UUID) -> Optional[EvaluationRecord]:
         stmt = select(EvaluationModel).where(EvaluationModel.evaluation_id == evaluation_id)

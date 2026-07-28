@@ -28,12 +28,21 @@ class EvaluationRecord:
       entirely in Domain types -- Infrastructure's `EvaluationModel` (ORM)
       is mapped into this by `EvaluationModelMapper`, and the Domain layer
       never sees the ORM type.
-    - `root_cause_id` and `business_impact_id` are always None as of Step 2:
-      neither `CompletedIntelligence` nor `DomainEvaluationContext` (Step 1)
-      carry these upstream identifiers yet -- there is no source data to
-      populate them from until a future step's event consumer supplies real
-      Root Cause / Business Impact record IDs. This is a documented,
-      deliberate gap, not an oversight (see Step 2 delivery notes).
+    - `root_cause_id` and `business_impact_id` were always None as of Step 2:
+      neither `CompletedIntelligence` nor `DomainEvaluationContext` carried
+      these upstream identifiers yet. Step 3's event consumer closes this
+      gap -- a `BusinessImpactCompleted` event now supplies both real
+      identifiers, which `EvaluationLifecycleService` threads through
+      `EvaluationOrchestrator` to `EvaluationRepository.save()`. Evaluations
+      persisted outside the event-driven lifecycle (or from before Step 3)
+      still leave both fields `None`; this remains a valid, permanent state
+      for this envelope, not a transitional one.
+    - `event_id` is Step 3's addition: the inbound `BusinessImpactCompleted`
+      event identifier that triggered this Evaluation's execution, `None`
+      for any Evaluation persisted without going through the event-driven
+      lifecycle. It is the field a database UNIQUE constraint is enforced
+      on to guarantee at most one Evaluation per inbound event, independent
+      of and stronger than any in-process idempotency check.
     - Immutable and append-only, matching `Evaluation` itself: there is no
       operation anywhere in this service that mutates a persisted
       Evaluation record.
@@ -44,3 +53,4 @@ class EvaluationRecord:
     root_cause_id: Optional[uuid.UUID]
     business_impact_id: Optional[uuid.UUID]
     created_at: datetime
+    event_id: Optional[uuid.UUID] = None

@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 import pytest
 
@@ -164,6 +165,43 @@ async def test_second_evaluation_for_the_same_incident_links_to_the_first(make_c
 
     assert first.evaluation.metadata.previous_evaluation_id is None
     assert second.evaluation.metadata.previous_evaluation_id == str(first.evaluation_id)
+
+
+@pytest.mark.anyio
+async def test_evaluate_forwards_lineage_identifiers_to_the_repository(make_completed_intelligence):
+    """
+    Phase 8 Step 3: event_id/root_cause_id/business_impact_id are threaded
+    through verbatim to EvaluationRepository.save() -- the orchestrator
+    never derives, validates, or interprets them.
+    """
+    repository = FakeEvaluationRepository()
+    orchestrator = _orchestrator(repository)
+    event_id = uuid.uuid4()
+    root_cause_id = uuid.uuid4()
+    business_impact_id = uuid.uuid4()
+
+    result = await orchestrator.evaluate(
+        make_completed_intelligence(),
+        event_id=event_id,
+        root_cause_id=root_cause_id,
+        business_impact_id=business_impact_id,
+    )
+
+    assert isinstance(result, EvaluationRecord)
+    assert result.event_id == event_id
+    assert result.root_cause_id == root_cause_id
+    assert result.business_impact_id == business_impact_id
+
+
+@pytest.mark.anyio
+async def test_evaluate_defaults_lineage_identifiers_to_none(make_completed_intelligence):
+    """Omitting event_id/root_cause_id/business_impact_id preserves Step 2's exact prior behavior."""
+    result = await _orchestrator().evaluate(make_completed_intelligence())
+
+    assert isinstance(result, EvaluationRecord)
+    assert result.event_id is None
+    assert result.root_cause_id is None
+    assert result.business_impact_id is None
 
 
 @pytest.mark.anyio

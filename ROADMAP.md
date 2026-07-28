@@ -167,7 +167,7 @@ The system identifies likely operational causes behind customer pain.
 
 ---
 
-# Phase 7 — Business Impact Engine (In Progress)
+# Phase 7 — Business Impact Engine (Completed)
 
 ## Goals
 Estimate operational and customer risk.
@@ -184,17 +184,17 @@ The system prioritizes operational problems intelligently.
 
 ---
 
-# Phase 8 — Intelligence Evaluation & Validation
+# Phase 8 — Intelligence Evaluation & Validation (Completed)
 
 ## Goals
 Validate intelligence quality and explainability through an independent, out-of-band Intelligence Assurance Service.
 
 ## Deliverables
-- Step 1: Evaluation Engine
-- Step 2: Persistence & APIs (Read-only)
-- Step 3: Lifecycle & Validation
-- Event-driven execution (triggered by Business Impact completion)
-- Immutable Evaluation records with lineage tracking (`evaluationVersion`, `previousEvaluationId`)
+- Step 1: Evaluation Engine (Completed)
+- Step 2: Persistence & APIs (Read-only) (Completed)
+- Step 3: Execution Lifecycle (Completed)
+- Event-driven execution (Consumer/Publisher implemented as in-process Infrastructure adapters behind Application-owned ports, pending a real message broker — see `docs/DECISIONS.md`, EVAL-001)
+- Immutable Evaluation records with lineage tracking (`evaluationVersion`, `previousEvaluationId`), plus inbound `event_id` (database UNIQUE constraint) and upstream `rootCauseId`/`businessImpactId` lineage as of Step 3
 
 ## Example Metrics
 - anomaly precision/recall

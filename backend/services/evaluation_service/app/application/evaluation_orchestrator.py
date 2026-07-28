@@ -1,5 +1,6 @@
 import asyncio
-from typing import Union
+import uuid
+from typing import Optional, Union
 
 from backend.services.evaluation_service.app.application.completed_intelligence import CompletedIntelligence
 from backend.services.evaluation_service.app.application.evaluation_context_mapper import EvaluationContextMapper
@@ -30,6 +31,13 @@ class EvaluationOrchestrator:
     QualityEngine and ExplainabilityEngine in parallel, then
     ConfidenceAnalyzer, then EvaluationBuilder, then persists the resulting
     Evaluation via the injected EvaluationRepository (Phase 8 Step 2).
+
+    `event_id`/`root_cause_id`/`business_impact_id` (Phase 8 Step 3) are
+    optional lineage identifiers forwarded verbatim to
+    `EvaluationRepository.save()` -- this class never derives, validates,
+    or interprets them; it only threads them through. Supplied by
+    `EvaluationLifecycleService`, which itself only ever passes what a
+    `BusinessImpactCompleted` event carried.
 
     Architectural Boundaries:
     - Orchestration only: this class contains no scoring, no thresholds, no
@@ -74,7 +82,14 @@ class EvaluationOrchestrator:
         self._evaluation_builder = evaluation_builder
         self._repository = repository
 
-    async def evaluate(self, completed_intelligence: CompletedIntelligence) -> Union[EvaluationRecord, ValidationSummary]:
+    async def evaluate(
+        self,
+        completed_intelligence: CompletedIntelligence,
+        *,
+        event_id: Optional[uuid.UUID] = None,
+        root_cause_id: Optional[uuid.UUID] = None,
+        business_impact_id: Optional[uuid.UUID] = None,
+    ) -> Union[EvaluationRecord, ValidationSummary]:
         """
         Runs the full Evaluation pipeline for one CompletedIntelligence
         snapshot and persists the result. Returns the failed
@@ -102,7 +117,12 @@ class EvaluationOrchestrator:
             confidence_summary=confidence_summary,
         )
 
-        return await self._repository.save(evaluation)
+        return await self._repository.save(
+            evaluation,
+            event_id=event_id,
+            root_cause_id=root_cause_id,
+            business_impact_id=business_impact_id,
+        )
 
     async def _run_quality_engine(self, context: DomainEvaluationContext) -> QualityAssessment:
         return self._quality_engine.evaluate(context)

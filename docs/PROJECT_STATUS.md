@@ -7,13 +7,13 @@
 
 # Last Updated
 
-**Date:** 2026-07-24
+**Date:** 2026-07-28
 
 ---
 
 # Overall Progress
 
-**Estimated Completion:** ~52%
+**Estimated Completion:** ~58%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -21,7 +21,7 @@
 
 # Current Development Status
 
-**Current Phase:** Phase 7 – Business Impact Engine
+**Current Phase:** Phase 8 – Intelligence Evaluation & Validation
 
 **Current Step:** Step 3
 
@@ -40,12 +40,42 @@
 | ✅ Phase 5 – Trend, Anomaly & Incident Correlation | Complete |
 | ✅ Phase 6 – Root Cause Correlation       | Complete |
 | ✅ Phase 7 – Business Impact Engine       | Complete |
-| ⬜ Phase 8 – Intelligence Evaluation      | Pending     |
+| ✅ Phase 8 – Intelligence Evaluation      | Complete    |
 | ⬜ Phase 9 – Recommendation Engine        | Pending     |
 | ⬜ Phase 10 – Executive Dashboard         | Pending     |
 | ⬜ Phase 11 – Observability & Reliability | Pending     |
 | ⬜ Phase 12 – AI Copilot                  | Pending     |
 | ⬜ Phase 13 – Production Hardening        | Pending     |
+
+---
+
+# Phase 8 Progress
+
+| Step                                      | Status      |
+| ------------------------------------------ | ----------- |
+| ✅ Step 1 – Evaluation Engine             | Complete    |
+| ✅ Step 2 – Persistence & APIs            | Complete    |
+| ✅ Step 3 – Execution Lifecycle           | Complete    |
+
+---
+
+# Phase 8 Step 3 – Completion Summary
+
+**Execution Lifecycle — Event-Driven, Idempotent, Fully Verified**
+
+### Verified
+
+- Full execution pipeline implemented and verified end to end: `BusinessImpactCompleted` → Event Consumer → `EvaluationLifecycleService` → repository read (idempotency) → `EvaluationOrchestrator` → Domain engines → repository write → commit → `EventPublisher` → `EvaluationCompleted`.
+- Idempotency verified at both levels the frozen design requires: the fast application-level duplicate check, and the database-level UNIQUE constraint on the inbound event identifier — proven under a genuine two-connection concurrent-write race against real PostgreSQL, not simulated.
+- Transaction behavior verified: commit occurs only after successful persistence; rollback occurs on every failure path (duplicate, validation rejection, execution failure); publishing occurs only after a successful commit and never blocks or reverses it.
+- No message broker exists yet anywhere in this platform; the Event Consumer/Publisher are implemented as in-process Infrastructure adapters behind Application-owned ports, so a real broker can be introduced later as a pure Infrastructure-layer change (see `docs/DECISIONS.md`, EVAL-001).
+- 123 tests passing in `evaluation_service` (up from 87 after Step 2); full `backend` suite (550 tests) passing with no regressions.
+- Independent architecture-compliance review performed against the frozen Step 3 design: no architectural drift found; one narrow, non-behavioral Clean Architecture finding identified for follow-up (Application-layer code referencing a concrete SQLAlchemy type rather than an abstract session protocol).
+- Zero changes to the Evaluation Engines (Step 1) or the existing read-only REST API contract (Step 2).
+
+### Outcome
+
+Phase 8 (Intelligence Evaluation & Validation) is now complete across all three steps: the domain engine (Step 1), persistence and read-only REST APIs (Step 2), and the event-driven execution lifecycle with idempotent, transactional, at-most-once execution (Step 3). The Evaluation Service is ready to observe real `BusinessImpactCompleted` events once a real message broker is introduced.
 
 ---
 
@@ -169,6 +199,7 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 | Anomaly Service         | Stable              |
 | Root Cause Service      | Stable              |
 | Business Impact Service | Stable              |
+| Evaluation Service      | Stable              |
 | Recommendation Service  | Scaffolded          |
 | Copilot Service         | Scaffolded          |
 
@@ -184,15 +215,15 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 # Current Focus
 
-**Phase 8 – Intelligence Evaluation & Validation**
+**Phase 9 – Recommendation Engine**
 
 ---
 
 # Next Milestone
 
-**Phase 8 – Intelligence Evaluation & Validation**
+**Phase 9 – Recommendation Engine**
 
-> Phase 7 (Business Impact Engine) is complete across all three steps: the domain engine (Step 1), persistence & REST APIs (Step 2), and full lifecycle, determinism, and explainability validation (Step 3). The Business Impact Service is stable and ready to be consumed by future phases.
+> Phase 8 (Intelligence Evaluation & Validation) is complete across all three steps: the domain engine (Step 1), persistence & read-only REST APIs (Step 2), and the event-driven execution lifecycle with idempotent, transactional execution (Step 3). The Evaluation Service is stable and ready to be consumed by future phases.
 
 ---
 

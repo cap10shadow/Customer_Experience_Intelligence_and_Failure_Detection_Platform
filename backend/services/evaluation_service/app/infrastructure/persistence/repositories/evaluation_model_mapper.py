@@ -35,6 +35,7 @@ class EvaluationModelMapper:
         previous_evaluation_id: Optional[uuid.UUID] = None,
         root_cause_id: Optional[uuid.UUID] = None,
         business_impact_id: Optional[uuid.UUID] = None,
+        event_id: Optional[uuid.UUID] = None,
     ) -> EvaluationModel:
         """
         Builds a brand-new EvaluationModel row for an Evaluation being
@@ -48,6 +49,7 @@ class EvaluationModelMapper:
             incident_id=evaluation.incident_id,
             root_cause_id=root_cause_id,
             business_impact_id=business_impact_id,
+            event_id=event_id,
             evaluation_version=evaluation.metadata.evaluation_version,
             previous_evaluation_id=previous_evaluation_id,
             validation_summary=EvaluationModelMapper._validation_summary_to_json(evaluation.validation_summary),
@@ -79,6 +81,7 @@ class EvaluationModelMapper:
             root_cause_id=model.root_cause_id,
             business_impact_id=model.business_impact_id,
             created_at=model.created_at,
+            event_id=model.event_id,
         )
 
     # ------------------------------------------------------------------

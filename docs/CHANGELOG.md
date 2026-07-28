@@ -7,6 +7,70 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-07-28
+
+## Phase 8 – Step 3 (Execution Lifecycle)
+
+Phase 8 Step 3 has been fully completed, introducing the event-driven execution lifecycle around the frozen Step 1/Step 2 engine and persistence layer. No changes were made to the Evaluation engines, `Evaluation` aggregate, or the existing read-only REST API contract.
+
+### Added
+
+- **`EvaluationLifecycleService`** (`application/lifecycle/`) — coordinates the complete execution lifecycle for one inbound `BusinessImpactCompleted` event: execution eligibility, the fast application-level idempotency check, transaction ownership (commit only after successful persistence, rollback on every failure path), invoking `EvaluationOrchestrator`, and publishing `EvaluationCompleted` only after a successful commit.
+- **`BusinessImpactCompletedConsumer`** (`infrastructure/messaging/consumers/`) — deserializes the inbound event payload and translates it into the Application-owned `EvaluationExecutionRequest`; performs no validation, repository access, or computation of its own.
+- **`InProcessEventPublisher`** (`infrastructure/messaging/publishers/`) — the current, broker-less implementation of the `EventPublisher` port. No message broker (RabbitMQ/Kafka/Redis) exists anywhere in this repository yet; publishing is implemented as a logged, in-process operation behind the same port a real broker adapter would implement later, with zero impact on `EvaluationLifecycleService` or anything above it.
+- **`event_id` column on `evaluations`** (new Alembic migration, `a2f5c8e1d3b7`) — nullable, UNIQUE. This is the database-backed correctness guarantee behind the idempotency check: verified under a genuine two-connection concurrent-write test against real PostgreSQL, not just asserted.
+- **`EvaluationRepository.save()`** extended (backward-compatible, additive) to accept optional `event_id`/`root_cause_id`/`business_impact_id`, and a new `get_by_event_id()` read operation — closing the lineage gap Step 2 documented as deliberately deferred (`root_cause_id`/`business_impact_id` were always `None` until a future step's event consumer supplied them).
+- **`POST /internal/events/business-impact-completed`** — a thin, unversioned internal route standing in for a real broker subscription, exposing the Consumer over HTTP so it is genuinely invocable today.
+
+### Verified
+
+- 123 tests in `evaluation_service` (up from 87), all passing against real PostgreSQL: consumer (success/malformed payload/retryable infrastructure exception/deterministic rejection), lifecycle service (success/duplicate event/validation rejection/orchestrator failure/publisher failure/rollback/unreachable database), orchestrator lineage passthrough, repository UNIQUE-constraint and real concurrent-duplicate protection, and HTTP integration tests for the happy path and every failure scenario.
+- Full `backend` test suite: 550 passed, no regressions in any other service.
+- Independent architecture-compliance review performed: every layer's Must/Must-Not responsibilities verified by direct code inspection against the frozen Step 3 architecture, with one Clean Architecture finding (Application-layer code referencing a concrete SQLAlchemy type) identified for follow-up.
+
+### Deviations (explicitly reviewed, not silent)
+
+- No message broker exists anywhere in this repository (confirmed by inspection before implementation began: no broker in `docker-compose.yml`, no client library in any service's `requirements.txt`, no shared event-schema module). The Consumer/Publisher are therefore in-process Infrastructure adapters behind Application-owned ports rather than real broker clients — see `docs/DECISIONS.md` (EVAL-001).
+- `EvaluationOrchestrator` was extended in place rather than relocated to a new `application/orchestration/` package: it already existed, was already correctly scoped to the frozen Step 3 responsibilities, and relocating it would only churn imports across the existing test suite with no behavioral benefit.
+
+---
+
+# 2026-07-26 / 2026-07-27
+
+## Phase 8 – Step 2 (Persistence & APIs)
+
+Phase 8 Step 2 introduced persistence and read-only REST APIs around the frozen Step 1 Evaluation Engine.
+
+### Added
+
+- `EvaluationRecord` (Domain envelope giving the identity-less Step 1 `Evaluation` aggregate a persisted identity), `EvaluationRepository` port, `PostgreSQLEvaluationRepository`, `EvaluationModel` (JSONB-backed ORM model, `clock_timestamp()`-based ordering, composite index on `incident_id`/`evaluation_version`), and `EvaluationModelMapper`.
+- Read-only REST API: `GET /evaluations`, `/evaluations/statistics`, `/evaluations/latest/{incident_id}`, `/evaluations/history/{incident_id}`, `/evaluations/{evaluation_id}` — no write endpoints exist (verified: POST/PUT/PATCH/DELETE all return 405).
+- `EvaluationStatisticsService` (Application-layer aggregation, per the frozen decision not to add a repository-level `list_statistics()` method).
+- Alembic migration `1185033beadf` (`evaluations` table).
+
+### Verified
+
+- 87 tests passing (added a dedicated multi-page pagination test for `EvaluationStatisticsService.compute()`'s internal scan loop on 2026-07-27, closing the one test-coverage gap identified during engineering review).
+- Independent principal-engineer-level implementation review performed: no blocking issues found; DDD/Clean Architecture/Repository Pattern boundaries confirmed correctly held.
+
+---
+
+## Phase 8 – Step 1 (Evaluation Engine)
+
+Phase 8 Step 1 introduced the deterministic Evaluation Engine as a pure, persistence-independent Domain component.
+
+### Added
+
+- `ValidationEngine`, `QualityEngine`, `ExplainabilityEngine`, `ConfidenceAnalyzer`, `EvaluationBuilder`, and the immutable `Evaluation` aggregate (identity-less by design — identity assignment is deliberately a Step 2 persistence-layer concern).
+- `EvaluationOrchestrator` (Application layer) coordinating Validation → [Quality Engine ‖ Explainability Engine] → Confidence Analyzer → Evaluation Builder, running the two independent engines concurrently via `asyncio.gather`.
+- `CompletedIntelligence` / `DomainEvaluationContext` — plain, persistence-independent input DTOs, deliberately not importing the Root Cause or Business Impact services' own domain/ORM types (DATA-002).
+
+### Verified
+
+- New unit test suite covering every engine and the orchestrator, all passing. Pure in-memory domain logic — no SQLAlchemy, ORM, or persistence involved at this step.
+
+---
+
 # 2026-07-24
 
 ## Phase 7 – Step 3 (Business Impact Lifecycle & Validation)

@@ -18,7 +18,10 @@ from typing import Dict, List, Optional
 
 from backend.services.evaluation_service.app.domain.evaluation import Evaluation
 from backend.services.evaluation_service.app.domain.evaluation_record import EvaluationRecord
-from backend.services.evaluation_service.app.domain.evaluation_repository import EvaluationRepository
+from backend.services.evaluation_service.app.domain.evaluation_repository import (
+    DuplicateEventError,
+    EvaluationRepository,
+)
 
 
 class FakeEvaluationRepository(EvaluationRepository):
@@ -26,8 +29,19 @@ class FakeEvaluationRepository(EvaluationRepository):
 
     def __init__(self) -> None:
         self.by_id: Dict[uuid.UUID, EvaluationRecord] = {}
+        self.by_event_id: Dict[uuid.UUID, uuid.UUID] = {}
 
-    async def save(self, evaluation: Evaluation) -> EvaluationRecord:
+    async def save(
+        self,
+        evaluation: Evaluation,
+        *,
+        event_id: Optional[uuid.UUID] = None,
+        root_cause_id: Optional[uuid.UUID] = None,
+        business_impact_id: Optional[uuid.UUID] = None,
+    ) -> EvaluationRecord:
+        if event_id is not None and event_id in self.by_event_id:
+            raise DuplicateEventError(f"An Evaluation for event_id={event_id} already exists")
+
         latest = await self.get_latest(evaluation.incident_id)
         previous_evaluation_id = str(latest.evaluation_id) if latest is not None else None
         evaluation_with_lineage = replace(
@@ -37,12 +51,19 @@ class FakeEvaluationRepository(EvaluationRepository):
         record = EvaluationRecord(
             evaluation_id=uuid.uuid4(),
             evaluation=evaluation_with_lineage,
-            root_cause_id=None,
-            business_impact_id=None,
+            root_cause_id=root_cause_id,
+            business_impact_id=business_impact_id,
             created_at=datetime.now(timezone.utc),
+            event_id=event_id,
         )
         self.by_id[record.evaluation_id] = record
+        if event_id is not None:
+            self.by_event_id[event_id] = record.evaluation_id
         return record
+
+    async def get_by_event_id(self, event_id: uuid.UUID) -> Optional[EvaluationRecord]:
+        evaluation_id = self.by_event_id.get(event_id)
+        return self.by_id.get(evaluation_id) if evaluation_id is not None else None
 
     async def get_by_id(self, evaluation_id: uuid.UUID) -> Optional[EvaluationRecord]:
         return self.by_id.get(evaluation_id)

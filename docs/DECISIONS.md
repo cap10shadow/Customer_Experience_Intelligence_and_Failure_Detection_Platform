@@ -839,3 +839,35 @@ Confidence remains stage-specific. Each service owns its own confidence definiti
 
 **Cons**
 - A future Copilot or dashboard summarizing "confidence" across stages must present it per-stage rather than as one number — an explicit design constraint, not a defect.
+
+---
+
+## EVAL-001 — In-Process Event Consumer/Publisher Pending a Real Message Broker
+
+**Status:** Accepted
+
+**Date:** 2026-07-28
+
+### Context
+
+Phase 8 Step 3's frozen architecture requires an Infrastructure Event Consumer receiving `BusinessImpactCompleted` events and an Infrastructure Event Publisher emitting `EvaluationCompleted` events. Before implementation began, the platform was inspected for existing messaging infrastructure: no message broker (RabbitMQ, Kafka, Redis, or otherwise) exists anywhere in this repository — not in `docker-compose.yml`, not in any service's `requirements.txt`, not in `backend/shared/`. No service publishes any event today; `business_impact_service`'s own `create_assessment()` flow ends at its repository's `save()` with no event emission. The frozen architecture specifies consumer/publisher *responsibilities* but never mandates a specific transport technology, and introducing one (a broker, new `docker-compose` service, cross-service wiring into `business_impact_service`) would be a scope decision beyond implementing the frozen design, and would require modifying an already-completed, out-of-scope service.
+
+### Decision
+
+Implement the Event Consumer (`BusinessImpactCompletedConsumer`) and Event Publisher (`InProcessEventPublisher`) as Infrastructure adapters behind Application-owned ports (`EventPublisher`), backed by an in-process implementation: the Consumer is exposed via a thin internal HTTP route (`POST /internal/events/business-impact-completed`) rather than a real broker subscription, and the Publisher records outbound events via the standard logger rather than a real broker client. `EvaluationLifecycleService` and everything above it depends only on the abstract `EventPublisher` port and never on a concrete transport.
+
+### Rationale
+
+- The frozen architecture's own Publisher Behaviour section already treats this platform as prototype-stage (explicitly rejecting the Outbox Pattern for the same reason), making an in-process stand-in a consistent, not exceptional, choice.
+- Keeping the Consumer/Publisher behind Application-owned ports (the same Dependency Inversion pattern already established for `EvaluationRepository`) means introducing a real broker later is a pure Infrastructure-layer change — a new adapter implementing the same `EventPublisher` port, wired in at the same composition root (`presentation/dependencies.py`) — with zero impact on `EvaluationLifecycleService`, `EvaluationOrchestrator`, or the Domain.
+- Avoids silently introducing new platform-wide infrastructure (a broker choice, new deployment dependency, new service-to-service wiring) as a side effect of implementing one service's execution lifecycle.
+
+### Consequences
+
+**Pros**
+- Phase 8 Step 3 is fully implementable and independently verifiable today, with no dependency on infrastructure that doesn't yet exist.
+- The eventual real-broker migration is isolated to Infrastructure: no Application/Domain code changes required.
+
+**Cons**
+- `business_impact_service` does not yet actually emit a `BusinessImpactCompleted` event — nothing in the platform will invoke this pipeline in production until a real event source and transport exist. The internal HTTP route is a deliberate, documented stand-in, not a production trigger.
+- Whichever broker technology is eventually chosen (and the accompanying `business_impact_service` change to actually publish) remains an open decision for a future phase.
