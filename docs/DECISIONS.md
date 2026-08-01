@@ -907,3 +907,35 @@ Keep the current one-rule-per-category design. Each `RecommendationRule` owns ex
 **Cons**
 - Minor duplication of threshold tuples (e.g. `("high", "critical")`) across a handful of rule files that each independently check a different `BusinessImpactSummary` dimension — flagged as a non-blocking, low-value "Can Improve Later" item in the Phase 9 Step 1 final review, not a consequence of this decision specifically.
 - If a future category genuinely requires reasoning that cannot be decomposed per-category without real logic duplication (not just a repeated constant), this decision should be revisited then — not preemptively redesigned now against a hypothetical.
+
+---
+
+## REC-002 — Persistence of Recommendation Action Field
+
+**Status:** Accepted
+
+**Date:** 2026-08-01
+
+### Context
+
+During Phase 9 Step 2 implementation, an omission in the frozen architecture was discovered. The frozen persistence specification omitted the `action` field from both relational and JSONB column definitions. However, `action` is a mandatory domain field enforced by the `Recommendation` aggregate's `__post_init__` method.
+
+### Decision
+
+Introduce `action` as a relational column in the `RecommendationEntity` ORM model.
+
+### Rationale
+
+- **Aggregate Integrity:** To satisfy the repository pattern's contract, whatever goes into `save_many()` must be perfectly restorable by `list_by_incident()`. Dropping `action` violates this contract, as the aggregate cannot be reconstructed without it.
+- **Clean Architecture:** Adding the column to the ORM model aligns the Infrastructure layer with the Domain layer's reality. It does not leak persistence into the domain; rather, it ensures persistence faithfully serves the domain.
+- **Relational vs JSONB:** Adding it as a relational column (rather than burying it in the `supporting_evidence` JSONB) is the correct implementation choice because `action` is a core operational routing field (e.g., "Restart Service") that consumers will likely want to filter or group by in future dashboard queries, much like `category`.
+
+### Consequences
+
+**Pros**
+- Fully preserves `Recommendation` aggregate integrity.
+- Resolves a documentation omission without breaking any tests or frozen domain engines.
+- Facilitates future dashboarding capabilities.
+
+**Cons**
+- None. This corrects an incomplete wording in the original specification.

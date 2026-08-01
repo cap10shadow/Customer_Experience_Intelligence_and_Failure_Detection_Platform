@@ -61,7 +61,7 @@ The platform uses a modular, service-based architecture sharing a single reposit
 | anomaly_service | 8003 | Anomaly detection & Incident Correlation | Implemented |
 | root_cause_service | 8004 | Root cause correlation | Stable |
 | business_impact_service | 8005 | Business impact estimation | Stable |
-| recommendation_service | 8006 | Recommendation generation | Domain Engine Complete (Phase 9 Step 1) |
+| recommendation_service | 8006 | Recommendation generation | Persistence & APIs Complete (Phase 9 Step 2) |
 | copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |
 | evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven) | Stable |
 | frontend | 3000 | Operational dashboard | Scaffolded / Planned |

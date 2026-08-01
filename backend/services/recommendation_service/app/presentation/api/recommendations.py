@@ -1,0 +1,119 @@
+import uuid
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from backend.services.recommendation_service.app.application.recommendation_statistics_service import (
+    RecommendationStatisticsService,
+)
+from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
+from backend.services.recommendation_service.app.domain.recommendation_repository import RecommendationRepository
+from backend.services.recommendation_service.app.presentation.api.schemas import (
+    RecommendationDetailResponse,
+    RecommendationStatisticsResponse,
+    RecommendationSummaryResponse,
+)
+from backend.services.recommendation_service.app.presentation.dependencies import (
+    get_recommendation_repository,
+    get_recommendation_statistics_service,
+)
+
+router = APIRouter(tags=["recommendations"])
+
+DEFAULT_LIMIT = 20
+MAX_LIMIT = 100
+
+# NOTE: route order matters -- literal-path routes (`/recommendations/statistics`,
+# `/recommendations/generations/{generation_id}`) must be registered before
+# the catch-all `/recommendations/{recommendation_id}` route, or FastAPI
+# would try to parse "statistics" as a UUID. `/recommendations/generations/{id}`
+# has one extra path segment versus `/recommendations/{recommendation_id}`,
+# so it never actually collides with the catch-all regardless of order --
+# only `/recommendations/statistics` does.
+
+
+@router.get("/recommendations", response_model=List[RecommendationSummaryResponse])
+async def list_recommendations(
+    category: Optional[RecommendationCategory] = Query(default=None, description="Optional filter to one category."),
+    priority: Optional[RecommendationPriority] = Query(default=None, description="Optional filter to one priority."),
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    repository: RecommendationRepository = Depends(get_recommendation_repository),
+):
+    """
+    Lists persisted Recommendations, most recent first. Read-only: this
+    never executes the Recommendation Engine. `category` and `priority`
+    are alternative filters -- if both are supplied, `category` takes
+    precedence; if neither is supplied, Recommendations across every
+    incident are listed.
+    """
+    if category is not None:
+        records = await repository.list_by_category(category, limit=limit, offset=offset)
+    elif priority is not None:
+        records = await repository.list_by_priority(priority, limit=limit, offset=offset)
+    else:
+        records = await repository.list_by_incident(None, limit=limit, offset=offset)
+    return [RecommendationSummaryResponse.from_record(record) for record in records]
+
+
+@router.get("/recommendations/statistics", response_model=RecommendationStatisticsResponse)
+async def get_recommendation_statistics(
+    statistics_service: RecommendationStatisticsService = Depends(get_recommendation_statistics_service),
+):
+    """Returns aggregate statistics computed across all persisted Recommendations."""
+    statistics = await statistics_service.compute()
+    return RecommendationStatisticsResponse(
+        total_count=statistics.total_count,
+        category_counts=statistics.category_counts,
+        priority_counts=statistics.priority_counts,
+        average_score=statistics.average_score,
+    )
+
+
+@router.get("/recommendations/generations/{generation_id}", response_model=List[RecommendationSummaryResponse])
+async def get_recommendations_by_generation(
+    generation_id: uuid.UUID,
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    repository: RecommendationRepository = Depends(get_recommendation_repository),
+):
+    """Lists every Recommendation produced by one engine execution (one RecommendationGeneration)."""
+    records = await repository.list_by_generation(generation_id, limit=limit, offset=offset)
+    return [RecommendationSummaryResponse.from_record(record) for record in records]
+
+
+@router.get("/recommendations/{recommendation_id}", response_model=RecommendationDetailResponse)
+async def get_recommendation(
+    recommendation_id: uuid.UUID,
+    repository: RecommendationRepository = Depends(get_recommendation_repository),
+):
+    """Returns a single Recommendation, in full detail, by its own id."""
+    record = await repository.get_by_id(recommendation_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+    return RecommendationDetailResponse.from_record(record)
+
+
+@router.get("/incidents/{incident_id}/recommendations", response_model=List[RecommendationSummaryResponse])
+async def list_recommendations_for_incident(
+    incident_id: str,
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    repository: RecommendationRepository = Depends(get_recommendation_repository),
+):
+    """Lists every Recommendation ever produced for one incident, across every generation, most recent first."""
+    records = await repository.list_by_incident(incident_id, limit=limit, offset=offset)
+    return [RecommendationSummaryResponse.from_record(record) for record in records]
+
+
+@router.get("/incidents/{incident_id}/recommendations/latest", response_model=List[RecommendationSummaryResponse])
+async def list_latest_recommendations_for_incident(
+    incident_id: str,
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    repository: RecommendationRepository = Depends(get_recommendation_repository),
+):
+    """Lists the Recommendations belonging to the most recent engine execution (RecommendationGeneration) for one incident."""
+    records = await repository.get_latest_by_incident(incident_id, limit=limit, offset=offset)
+    return [RecommendationSummaryResponse.from_record(record) for record in records]

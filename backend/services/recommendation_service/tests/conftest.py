@@ -2,10 +2,15 @@ import pytest
 
 from backend.services.recommendation_service.app.domain.anomaly_intelligence import AnomalyIntelligence
 from backend.services.recommendation_service.app.domain.business_impact_summary import BusinessImpactSummary
+from backend.services.recommendation_service.app.domain.evidence_source import EvidenceSource
 from backend.services.recommendation_service.app.domain.incident import Incident
 from backend.services.recommendation_service.app.domain.intelligence_context import IntelligenceContext
 from backend.services.recommendation_service.app.domain.nlp_intelligence import NLPIntelligence
+from backend.services.recommendation_service.app.domain.recommendation import Recommendation
+from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.domain.root_cause_summary import RootCauseSummary
+from backend.services.recommendation_service.app.domain.supporting_evidence import SupportingEvidence
 from backend.shared.constants.enums.anomaly import AnomalySeverity
 from backend.shared.constants.enums.complaint import IssueCategory, SentimentLabel, UrgencyLabel
 from backend.shared.constants.enums.root_cause import RootCause
@@ -167,3 +172,44 @@ def make_anomaly_intelligence():
 @pytest.fixture
 def make_intelligence_context():
     return _make_intelligence_context
+
+
+def _make_recommendation(
+    *,
+    incident_id="INC-TEST0001",
+    category=RecommendationCategory.MONITOR,
+    action="Continue monitoring the incident for escalation; no immediate action required.",
+    priority=RecommendationPriority.LOW,
+    score=30,
+    rationale="Business impact severity is low or absent; no active response is currently warranted.",
+    priority_rationale="Low-signal incidents warrant the lowest urgency tier.",
+    supporting_evidence=None,
+) -> Recommendation:
+    """
+    Builds a plain, directly-constructed, in-memory Recommendation for
+    Step 2 persistence/API-layer unit tests. Direct construction (not the
+    real Engine/Rules/Consolidator pipeline) is appropriate here: unlike
+    Evaluation (Step 8), Recommendation has no construction-time gate
+    equivalent to EvaluationBuilder's "only from a successful
+    ValidationSummary" invariant -- Step 1's own test suite already builds
+    Recommendations this same direct way. The real engine pipeline is used
+    separately, in the integration tests, to prove the true end-to-end path.
+    """
+    evidence = supporting_evidence if supporting_evidence is not None else (
+        SupportingEvidence(source=EvidenceSource.BUSINESS_IMPACT, description="Business impact overall severity is low", weight=5),
+    )
+    return Recommendation(
+        incident_id=incident_id,
+        category=category,
+        action=action,
+        priority=priority,
+        score=score,
+        rationale=rationale,
+        priority_rationale=priority_rationale,
+        supporting_evidence=evidence,
+    )
+
+
+@pytest.fixture
+def make_recommendation():
+    return _make_recommendation

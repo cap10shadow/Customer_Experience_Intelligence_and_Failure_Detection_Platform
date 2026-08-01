@@ -9,6 +9,28 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-08-01
 
+## Phase 9 – Step 2 (Persistence & APIs)
+
+Phase 9 Step 2 has been fully completed, successfully introducing PostgreSQL persistence, read-only REST APIs, and application-level statistics around the frozen Recommendation Domain Engine. The concept of `RecommendationGeneration` was introduced strictly as an execution-grouping and historical auditing persistence mechanism, preventing persistence concerns from polluting the domain.
+
+### Added
+
+- **`RecommendationEntity` & `RecommendationGenerationEntity`** — SQLAlchemy models providing a hybrid relational/JSONB persistence model. Relational columns support rapid filtering/sorting, while JSONB holds unstructured explainability data. Added `action` as a relational column to correct an omission in the frozen architecture and preserve aggregate integrity.
+- **`RecommendationRepository`** — cleanly separated repository implementation including atomic `save_many()` operations that commit a full Generation alongside its Recommendations.
+- **REST APIs** — strictly read-only endpoints covering `/recommendations`, `/recommendations/latest`, and generation-level lookups. Creation remains explicitly deferred to Step 3.
+- **Lightweight DTOs (Summary vs. Full)** — addressed payload bloat by projecting a `RecommendationSummaryResponse` (omitting heavy JSONB) for list views, and a `RecommendationFullResponse` for singular item lookups.
+- **`RecommendationStatisticsService`** — application-layer service dynamically aggregating generation-level statistics.
+- **Alembic Migration** — automatically tracked database migration for the new tables.
+
+### Verified
+
+- Comprehensive unit, repository, API, and integration testing for all read flows and atomic persistence.
+- Verified Full DTO vs. Summary DTO projections correctly strip heavy payloads.
+- Verified composite database indexing properly supports the "latest" generation queries.
+- Independent principal-engineer-level engineering review performed: the implementation cleanly separates domain logic from infrastructure, handles idempotency modeling well, and strictly follows the frozen architecture (with the documented exception of the `action` column).
+
+---
+
 ## Phase 9 – Step 1 (Recommendation Decision Engine)
 
 Phase 9 Step 1 has been fully completed: a pure, deterministic, in-memory domain engine converting completed operational intelligence into explainable Recommendations. No database, repository, REST API, messaging, lifecycle, transaction, or dependency-injection code was introduced -- those are explicitly scoped to Step 2 and Step 3. No existing service was modified.

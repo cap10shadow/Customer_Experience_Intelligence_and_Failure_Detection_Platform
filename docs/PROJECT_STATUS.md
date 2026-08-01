@@ -54,7 +54,7 @@
 | Step                                          | Status      |
 | ---------------------------------------------- | ----------- |
 | ✅ Step 1 – Recommendation Decision Engine    | Complete    |
-| ⬜ Step 2 – Persistence & APIs                | Pending     |
+| ✅ Step 2 – Persistence & APIs                | Complete    |
 | ⬜ Step 3 – Execution Lifecycle               | Pending     |
 
 ---
@@ -255,15 +255,15 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 # Current Focus
 
-**Phase 9 – Recommendation Engine, Step 2 (Persistence & APIs)**
+**Phase 9 – Recommendation Engine, Step 3 (Execution Lifecycle)**
 
 ---
 
 # Next Milestone
 
-**Phase 9 – Recommendation Engine, Step 2 (Persistence & APIs)**
+**Phase 9 – Recommendation Engine, Step 3 (Execution Lifecycle)**
 
-> Phase 9 Step 1 (Recommendation Decision Engine) is complete: a pure, deterministic, fully-tested domain engine with no persistence, API, or infrastructure dependencies. Step 2 will introduce the persistence layer, ORM models, mappers, and REST APIs around it, without modifying the engine itself.
+> Phase 9 Step 2 (Persistence & APIs) is complete: introduced PostgreSQL persistence, read-only REST APIs, and application-level statistics around the frozen Recommendation domain engine. Step 3 will introduce event-driven execution, transactions, and idempotency logic.
 
 ---
 

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
+from backend.services.recommendation_service.app.presentation.api.recommendations import router as recommendations_router
 
 
 @asynccontextmanager
@@ -15,6 +16,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Recommendation Service", lifespan=lifespan)
+
+app.include_router(recommendations_router, prefix="/api/v1")
 
 
 @app.get("/health")
