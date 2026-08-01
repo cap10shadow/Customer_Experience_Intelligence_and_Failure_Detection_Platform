@@ -2,13 +2,17 @@ import uuid
 from typing import List, Optional, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.recommendation_service.app.domain.recommendation import Recommendation
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.domain.recommendation_record import RecommendationRecord
-from backend.services.recommendation_service.app.domain.recommendation_repository import RecommendationRepository
+from backend.services.recommendation_service.app.domain.recommendation_repository import (
+    DuplicateGenerationEventError,
+    RecommendationRepository,
+)
 from backend.services.recommendation_service.app.infrastructure.persistence.models.recommendation_generation_model import (
     RecommendationGenerationModel,
 )
@@ -44,6 +48,12 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
       generation row is still written, preserving the audit trail that an
       engine execution happened for this incident even when it produced
       zero Recommendations.
+    - A duplicate `event_id` raises `DuplicateGenerationEventError`,
+      translated here from the database's own UNIQUE-constraint violation
+      (`sqlalchemy.exc.IntegrityError`) -- this is the one place Postgres's
+      concrete exception type is known; everything above this repository
+      (`RecommendationLifecycleService`) only ever sees the Domain-level
+      `DuplicateGenerationEventError`.
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -55,8 +65,11 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
         *,
         incident_id: str,
         generation_id: uuid.UUID,
+        event_id: Optional[uuid.UUID] = None,
     ) -> List[RecommendationRecord]:
-        generation_model = RecommendationGenerationModel(generation_id=generation_id, incident_id=incident_id)
+        generation_model = RecommendationGenerationModel(
+            generation_id=generation_id, incident_id=incident_id, event_id=event_id
+        )
         self.session.add(generation_model)
 
         models = [
@@ -64,9 +77,21 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
             for recommendation in recommendations
         ]
         self.session.add_all(models)
-        await self.session.flush()
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            raise DuplicateGenerationEventError(
+                f"A RecommendationGeneration for event_id={event_id} already exists"
+            ) from exc
 
         return [RecommendationModelMapper.to_domain(model) for model in models]
+
+    async def get_generation_by_event_id(self, event_id: uuid.UUID) -> Optional[uuid.UUID]:
+        stmt = select(RecommendationGenerationModel.generation_id).where(
+            RecommendationGenerationModel.event_id == event_id
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_by_id(self, recommendation_id: uuid.UUID) -> Optional[RecommendationRecord]:
         stmt = select(RecommendationModel).where(RecommendationModel.recommendation_id == recommendation_id)

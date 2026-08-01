@@ -11,6 +11,7 @@ Every test runs inside a transaction that is always rolled back at the
 end, so no test data is ever actually committed or left behind.
 """
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_repository import DuplicateGenerationEventError
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.infrastructure.persistence.models.recommendation_generation_model import (
     RecommendationGenerationModel,
@@ -316,6 +318,111 @@ async def test_generation_incident_created_at_index_exists():
             {"name": "ix_recommendation_generations_incident_id_created_at"},
         )
         assert result.first() is not None
+
+
+@pytest.mark.anyio
+async def test_save_many_with_event_id_persists_it_and_is_retrievable_by_get_generation_by_event_id(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        event_id = uuid.uuid4()
+        generation_id = uuid.uuid4()
+
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-TEST0001", generation_id=generation_id, event_id=event_id
+        )
+
+        assert len(saved) == 1
+        found_generation_id = await repository.get_generation_by_event_id(event_id)
+        assert found_generation_id == generation_id
+
+
+@pytest.mark.anyio
+async def test_get_generation_by_event_id_returns_none_for_unknown_event_id():
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+
+        assert await repository.get_generation_by_event_id(uuid.uuid4()) is None
+
+
+@pytest.mark.anyio
+async def test_save_many_with_a_duplicate_event_id_raises_duplicate_generation_event_error(make_recommendation):
+    """
+    Database UNIQUE constraint behaviour: a second save_many() reusing an
+    event_id already flushed within the same transaction is rejected
+    immediately by Postgres's own constraint check -- the correctness
+    guarantee beneath RecommendationLifecycleService's faster,
+    application-level idempotency check (tested in isolation, without a
+    database, in test_recommendation_lifecycle_service.py).
+    """
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        event_id = uuid.uuid4()
+
+        await repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4(), event_id=event_id)
+
+        with pytest.raises(DuplicateGenerationEventError):
+            await repository.save_many(
+                [make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4(), event_id=event_id
+            )
+
+
+@pytest.mark.anyio
+async def test_concurrent_save_many_with_the_same_event_id_are_mutually_exclusive(make_recommendation):
+    """
+    Genuine concurrency test, using two independent physical connections
+    (NullPool guarantees this) racing to save_many() with the identical
+    event_id. An in-process idempotency check cannot prevent this by
+    itself -- two concurrent deliveries of the same event could both pass
+    a "does it already exist?" read before either has written anything.
+    Only the database's own UNIQUE constraint, exercised here for real
+    across two genuinely separate transactions, guarantees exactly one of
+    the two ever succeeds -- exactly one RecommendationGeneration.
+    """
+    if not await _is_database_available():
+        pytest.skip("PostgreSQL is not reachable on localhost:5432 -- run `docker compose up postgres` to enable these tests")
+
+    event_id = uuid.uuid4()
+    incident_a = f"INC-{uuid.uuid4().hex[:8]}"
+    incident_b = f"INC-{uuid.uuid4().hex[:8]}"
+
+    async def _attempt(incident_id: str) -> str:
+        async with _test_engine.connect() as conn:
+            await conn.run_sync(lambda sync_conn: RecommendationGenerationModel.__table__.create(sync_conn, checkfirst=True))  # type: ignore[attr-defined]
+            await conn.run_sync(lambda sync_conn: RecommendationModel.__table__.create(sync_conn, checkfirst=True))  # type: ignore[attr-defined]
+            await conn.commit()
+            trans = await conn.begin()
+            session = AsyncSession(bind=conn, expire_on_commit=False)
+            try:
+                repository = PostgreSQLRecommendationRepository(session)
+                try:
+                    await repository.save_many(
+                        [make_recommendation(incident_id=incident_id)],
+                        incident_id=incident_id,
+                        generation_id=uuid.uuid4(),
+                        event_id=event_id,
+                    )
+                except DuplicateGenerationEventError:
+                    await trans.rollback()
+                    return "duplicate"
+                await trans.commit()
+                return "ok"
+            finally:
+                await session.close()
+
+    try:
+        outcomes = await asyncio.gather(_attempt(incident_a), _attempt(incident_b))
+        assert sorted(outcomes) == ["duplicate", "ok"]
+    finally:
+        async with _test_engine.connect() as cleanup_conn:
+            await cleanup_conn.execute(
+                text("DELETE FROM recommendations WHERE generation_id IN "
+                     "(SELECT generation_id FROM recommendation_generations WHERE event_id = :event_id)"),
+                {"event_id": str(event_id)},
+            )
+            await cleanup_conn.execute(
+                text("DELETE FROM recommendation_generations WHERE event_id = :event_id"), {"event_id": str(event_id)}
+            )
+            await cleanup_conn.commit()
 
 
 def test_repository_exposes_no_update_or_delete_operations():

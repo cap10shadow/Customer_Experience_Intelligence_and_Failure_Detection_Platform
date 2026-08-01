@@ -9,6 +9,28 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-08-01
 
+## Phase 9 – Step 3 (Execution Lifecycle)
+
+Phase 9 Step 3 has been fully completed, successfully introducing the event-driven execution lifecycle around the frozen Recommendation Domain Engine and persistence layer. The Recommendation Engine itself remains pure and unchanged.
+
+### Added
+
+- **`RecommendationLifecycleService`** — Application service that coordinates the complete execution lifecycle. It validates eligibility, performs the fast application-level idempotency check, creates the `generation_id`, owns the transaction boundary (commit/rollback), invokes the orchestrator, and publishes the `RecommendationsGenerated` event.
+- **`RecommendationOrchestrator`** — Application service that invokes the Domain Engine and coordinates persistence via the Repository. It does not handle lifecycle validation or events.
+- **Database-Backed Idempotency** — Relies on a `UNIQUE(event_id)` database constraint and catching `DuplicateGenerationEventError` to guarantee safety against concurrent duplicate events.
+- **`BusinessImpactCompleted` Consumer** — Infrastructure event consumer that deserializes the inbound event and translates it into an Application request.
+- **`RecommendationsGenerated` Publisher** — Infrastructure event publisher. Emits a lightweight event containing generation metadata and recommendation summaries (category, priority, action, short rationale) but excludes heavy JSONB evidence payloads to avoid bloat.
+- **Zero Recommendation Execution** — Properly modeled: if the engine returns zero recommendations, a generation is still persisted and published as a meaningful audit event.
+
+### Verified
+
+- Clean Architecture: Layers and boundaries are strictly preserved.
+- DDD: The Domain Engine remained untouched and pure.
+- Transaction Design: Commit only happens on success, and events are only published after a successful commit.
+- Concurrency: Database-backed uniqueness guarantees idempotency.
+
+---
+
 ## Phase 9 – Step 2 (Persistence & APIs)
 
 Phase 9 Step 2 has been fully completed, successfully introducing PostgreSQL persistence, read-only REST APIs, and application-level statistics around the frozen Recommendation Domain Engine. The concept of `RecommendationGeneration` was introduced strictly as an execution-grouping and historical auditing persistence mechanism, preventing persistence concerns from polluting the domain.

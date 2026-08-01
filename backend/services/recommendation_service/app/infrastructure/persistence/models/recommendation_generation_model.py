@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import DateTime, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -36,12 +37,26 @@ class RecommendationGenerationModel(Base):
       non-deterministic for ties.
     - Not a Domain Aggregate: `RecommendationEngine`, the Rules, and
       `RecommendationConsolidator` never import or reference this class.
+    - `event_id` (Step 3) is nullable and UNIQUE: the inbound
+      `BusinessImpactCompleted` event identifier that triggered this
+      execution. NULL is permitted (and repeatable -- PostgreSQL does not
+      enforce uniqueness across NULLs) for generations persisted outside
+      the event-driven lifecycle (e.g. every Step 2 test/usage). The
+      UNIQUE constraint is the database-backed correctness guarantee
+      behind `RecommendationLifecycleService`'s application-level
+      idempotency check: it is what actually prevents two concurrent
+      deliveries of the same event from ever producing two
+      RecommendationGenerations. `event_id` is a distinct concept from
+      `generation_id`: `event_id` identifies the inbound
+      `BusinessImpactCompleted` event; `generation_id` identifies this
+      Recommendation execution itself.
     """
 
     __tablename__ = "recommendation_generations"
 
     generation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     incident_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )

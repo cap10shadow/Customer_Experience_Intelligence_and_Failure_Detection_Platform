@@ -8,6 +8,23 @@ from backend.services.recommendation_service.app.domain.recommendation_priority 
 from backend.services.recommendation_service.app.domain.recommendation_record import RecommendationRecord
 
 
+class DuplicateGenerationEventError(Exception):
+    """
+    Raised by `RecommendationRepository.save_many()` when the supplied
+    `event_id` has already been persisted on a prior `RecommendationGeneration`.
+
+    Part of the Repository port's contract, not "lifecycle" vocabulary --
+    it expresses a Repository-level invariant (one RecommendationGeneration
+    per inbound event identifier, enforced by a database UNIQUE constraint
+    as the correctness guarantee), the exact same role
+    `evaluation_service`'s `DuplicateEventError` plays for `Evaluation`.
+    Callers -- Application's `RecommendationLifecycleService` -- catch this
+    to distinguish "this event was already processed" (a normal, expected
+    outcome under concurrent duplicate delivery) from a genuine persistence
+    failure.
+    """
+
+
 class RecommendationRepository(ABC):
     """
     Recommendation Repository (Domain-owned port)
@@ -52,6 +69,21 @@ class RecommendationRepository(ABC):
       aggregate statistics are an Application-layer concern
       (`RecommendationStatisticsService`), computed from the same read
       operations exposed here -- not a repository responsibility.
+    - `event_id` (Step 3) is optional on `save_many()` -- omitting it (its
+      Step 2 default) preserves every Step 2 caller's exact prior
+      behavior. Supplying a duplicate `event_id` raises
+      `DuplicateGenerationEventError`, backed by a database UNIQUE
+      constraint on `recommendation_generations.event_id` -- the
+      correctness guarantee beneath `RecommendationLifecycleService`'s
+      own faster, application-level idempotency check.
+    - `get_generation_by_event_id()` is this port's one Step 3 "lifecycle
+      query" addition: `RecommendationLifecycleService`'s fast idempotency
+      check reads through it before ever invoking the Orchestrator. It
+      returns a bare `generation_id`, not a `RecommendationGeneration`
+      Domain Aggregate -- per the frozen architecture,
+      RecommendationGeneration is not a Domain Aggregate at all, so this
+      port never introduces one just to answer "does a generation already
+      exist for this event, and if so, which one."
     """
 
     @abstractmethod
@@ -61,12 +93,20 @@ class RecommendationRepository(ABC):
         *,
         incident_id: str,
         generation_id: uuid.UUID,
+        event_id: Optional[uuid.UUID] = None,
     ) -> List[RecommendationRecord]:
         """
         Persists the `RecommendationGeneration` row for this engine
         execution and every `Recommendation` it produced (zero or more),
-        returning each with its assigned identity.
+        returning each with its assigned identity. Raises
+        `DuplicateGenerationEventError` if `event_id` is supplied and
+        already belongs to a previously persisted `RecommendationGeneration`.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_generation_by_event_id(self, event_id: uuid.UUID) -> Optional[uuid.UUID]:
+        """Retrieves the `generation_id` previously persisted for the given inbound event identifier, if any."""
         raise NotImplementedError
 
     @abstractmethod
