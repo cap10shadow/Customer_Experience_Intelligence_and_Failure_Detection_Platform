@@ -871,3 +871,39 @@ Implement the Event Consumer (`BusinessImpactCompletedConsumer`) and Event Publi
 **Cons**
 - `business_impact_service` does not yet actually emit a `BusinessImpactCompleted` event — nothing in the platform will invoke this pipeline in production until a real event source and transport exist. The internal HTTP route is a deliberate, documented stand-in, not a production trigger.
 - Whichever broker technology is eventually chosen (and the accompanying `business_impact_service` change to actually publish) remains an open decision for a future phase.
+
+---
+
+## REC-001 — Recommendation Rules Are Organized One Rule Per Recommendation Category
+
+**Status:** Accepted
+
+**Date:** 2026-08-01
+
+### Context
+
+During Phase 9 Step 1's final engineering review, an alternative rule-organization scheme was raised: instead of one `RecommendationRule` per `RecommendationCategory` (e.g. `EscalationRule` producing only `ESCALATE`), organize rules around business policies (e.g. a single `SLAProtectionRule` internally deciding to emit `ESCALATE`, `CUSTOMER_COMMUNICATION`, and increased monitoring together, whenever SLA risk is detected). The question was whether this Business-Policy shape would better reflect how a stakeholder actually describes the domain ("our SLA policy is to escalate, notify the customer, and monitor more closely").
+
+### Decision
+
+Keep the current one-rule-per-category design. Each `RecommendationRule` owns exactly one `RecommendationCategory` and never emits any other. When one underlying business signal genuinely warrants multiple categories of response, that emerges from multiple independent rules each firing on their own criteria against the same shared `IntelligenceContext` — not from one rule internally bundling several categories together.
+
+### Rationale
+
+- **The "one signal, multiple actions" need is already met** by the existing pipeline (`IntelligenceContext -> independent rules -> raw Recommendations -> Consolidator`), without a Business-Policy rule shape: if SLA risk is severe enough, `SLAProtectionRule` fires for `SLA_PROTECTION`, and if the same underlying severity also crosses `EscalationRule`'s and `CustomerCommunicationRule`'s own independent thresholds, they fire too — the "cascade" a Business Policy would hand-code is instead an emergent property of several small, focused rules sharing one input. The question's own example is achievable today without any code change.
+- **Open/Closed Principle**: category-per-rule is strictly more open/closed. Adding a brand-new, independent category is a pure addition (one new file, one new enum value, one new line in `default_rules()`) with zero modification to any existing rule. Under a Business-Policy scheme, making an existing policy also cover a new category requires modifying that policy's internal branching — a direct OCP violation the current design avoids by construction.
+- **Clean separation of pipeline stages**: the frozen architecture deliberately splits "detection" (Rules) from "cross-cutting resolution" (`RecommendationConsolidator` — dedup, merge, conflict resolution, ordering). A policy rule that internally decides "these categories belong together" would be making a consolidation-level decision inside a rule, blurring a boundary the architecture drew on purpose.
+- **DDD consistency across the platform**: this repeats the exact decomposition principle already used by `root_cause_service` (one `Rule` per `RootCause`) and `business_impact_service` (one `ImpactRule` per `ImpactDimension`) — the service's primary Domain classification enum is always the unit of rule decomposition. `RecommendationCategory` is explicitly a Domain Enum in the frozen architecture; treating it with the same seriousness maintains a platform-wide convention, not just local consistency.
+- **Human Action phase compatibility** (ADR-002's long-term `Recommendation -> Human Action -> Outcome` lifecycle): each `Recommendation` already carries exactly one category and is independently addressable. A future Human Action tracker will want to record disposition (actioned / dismissed / pending) per Recommendation. Category-per-rule naturally produces independently-actionable records; a policy rule bundling several categories into "one response" would still need to emit them as separate `Recommendation` objects to support this — at which point it is functionally identical to several independent category-rules, just relocated into fewer, larger files.
+- **Maintainability**: eight small (~60-90 line), independently testable rule files versus fewer, larger policy files with more internal branching and more test-case combinations per file — directly serving the frozen architecture's own instruction to "prefer small composable classes over monolithic implementations."
+
+### Consequences
+
+**Pros**
+- Every category is independently addable, testable, and (later) actionable without touching existing rules.
+- Matches the platform-wide precedent (Root Cause, Business Impact) of decomposing rules by the service's primary Domain enum.
+- Keeps rule-level detection and Consolidator-level resolution as two genuinely distinct responsibilities.
+
+**Cons**
+- Minor duplication of threshold tuples (e.g. `("high", "critical")`) across a handful of rule files that each independently check a different `BusinessImpactSummary` dimension — flagged as a non-blocking, low-value "Can Improve Later" item in the Phase 9 Step 1 final review, not a consequence of this decision specifically.
+- If a future category genuinely requires reasoning that cannot be decomposed per-category without real logic duplication (not just a repeated constant), this decision should be revisited then — not preemptively redesigned now against a hypothetical.

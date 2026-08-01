@@ -7,13 +7,13 @@
 
 # Last Updated
 
-**Date:** 2026-07-28
+**Date:** 2026-08-01
 
 ---
 
 # Overall Progress
 
-**Estimated Completion:** ~58%
+**Estimated Completion:** ~60%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -21,9 +21,9 @@
 
 # Current Development Status
 
-**Current Phase:** Phase 8 – Intelligence Evaluation & Validation
+**Current Phase:** Phase 9 – Recommendation Engine
 
-**Current Step:** Step 3
+**Current Step:** Step 1
 
 **Status:** Complete
 
@@ -46,6 +46,46 @@
 | ⬜ Phase 11 – Observability & Reliability | Pending     |
 | ⬜ Phase 12 – AI Copilot                  | Pending     |
 | ⬜ Phase 13 – Production Hardening        | Pending     |
+
+---
+
+# Phase 9 Progress
+
+| Step                                          | Status      |
+| ---------------------------------------------- | ----------- |
+| ✅ Step 1 – Recommendation Decision Engine    | Complete    |
+| ⬜ Step 2 – Persistence & APIs                | Pending     |
+| ⬜ Step 3 – Execution Lifecycle               | Pending     |
+
+---
+
+# Phase 9 Step 1 – Completion Summary
+
+**Recommendation Decision Engine — Pure Domain Engine, Fully Implemented**
+
+### Components Completed
+
+- `IntelligenceContext` — the engine's single immutable input Domain Value Object, aggregating local, persistence-independent views of Incident, BusinessImpactSummary, RootCauseSummary (optional), NLPIntelligence (optional), and AnomalyIntelligence (optional).
+- `Recommendation` — the immutable aggregate (category, action, priority, score, rationale, priority rationale, supporting evidence), with every domain invariant enforced in `__post_init__` (no Recommendation may exist without explainability).
+- `RecommendationCategory` and `RecommendationPriority` — Domain Enums (8 categories, 4 priority tiers), preventing free-text classification.
+- `SupportingEvidence` / `EvidenceSource` — structured, weighted, explainable evidence, the same discipline Root Cause Service's `Evidence` already established.
+- `scoring.py` — the single, shared Recommendation Scoring Policy every rule calls into; no rule computes its own score arithmetic, and no post-processing normalizer exists, per the ARB's explicit mitigation for cross-rule score inconsistency.
+- `precedence.py` — the shared Category/Priority precedence policy used only by the Consolidator's ordering step.
+- Eight independent `RecommendationRule` implementations, one per category (`EscalationRule`, `MitigationRule`, `SLAProtectionRule`, `InfrastructureActionRule`, `OperationalActionRule`, `CustomerCommunicationRule`, `InvestigateRule`, `MonitorRule`) — stateless, deterministic, never calling each other.
+- `RecommendationConsolidator` — the dedicated Domain Service that removes exact duplicates, merges equivalent recommendations (same category + action, score recomputed via the shared scoring policy from the union of evidence), resolves the one defined conflict (MONITOR vs. a genuinely more urgent category), and applies the frozen deterministic ordering (Priority → Category Precedence → Score → Rule Evaluation Order).
+- `RecommendationEngine` — orchestrates `IntelligenceContext → rules → raw Recommendations → Consolidator → final collection`, entirely in-memory.
+
+### Verification
+
+- 126 new unit tests written and passing; full `backend` suite (660 tests) passing with no regressions.
+- Determinism verified directly: every rule, the scoring policy, the precedence policy, the Consolidator, and the engine each have a dedicated test asserting identical input produces identical output across repeated calls.
+- Immutability verified directly: every value object and the `Recommendation` aggregate have a dedicated frozen-dataclass test; the engine has a dedicated test confirming `IntelligenceContext` is never mutated.
+- Zero modified files — no existing service, file, or test was touched; the entire engine is new, additive code.
+- Independent final engineering review performed: architecture, DDD, Open/Closed, and maintainability compliance confirmed; no implementation changes required. One architectural question (Rules organized by Category vs. by Business Policy) was raised and resolved in favor of the current one-rule-per-category design — see `docs/DECISIONS.md` (REC-001).
+
+### Readiness for Phase 9 Step 2
+
+The Recommendation Decision Engine is a pure, persistence-independent domain engine. It accepts a plain `IntelligenceContext` and produces an immutable collection of `Recommendation`s. Phase 9 Step 2 will introduce the persistence layer, ORM models, mappers, and REST APIs without requiring any changes to the domain engine.
 
 ---
 
@@ -200,7 +240,7 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 | Root Cause Service      | Stable              |
 | Business Impact Service | Stable              |
 | Evaluation Service      | Stable              |
-| Recommendation Service  | Scaffolded          |
+| Recommendation Service  | Domain Engine Complete (Phase 9 Step 1) |
 | Copilot Service         | Scaffolded          |
 
 ---
@@ -215,15 +255,15 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 # Current Focus
 
-**Phase 9 – Recommendation Engine**
+**Phase 9 – Recommendation Engine, Step 2 (Persistence & APIs)**
 
 ---
 
 # Next Milestone
 
-**Phase 9 – Recommendation Engine**
+**Phase 9 – Recommendation Engine, Step 2 (Persistence & APIs)**
 
-> Phase 8 (Intelligence Evaluation & Validation) is complete across all three steps: the domain engine (Step 1), persistence & read-only REST APIs (Step 2), and the event-driven execution lifecycle with idempotent, transactional execution (Step 3). The Evaluation Service is stable and ready to be consumed by future phases.
+> Phase 9 Step 1 (Recommendation Decision Engine) is complete: a pure, deterministic, fully-tested domain engine with no persistence, API, or infrastructure dependencies. Step 2 will introduce the persistence layer, ORM models, mappers, and REST APIs around it, without modifying the engine itself.
 
 ---
 

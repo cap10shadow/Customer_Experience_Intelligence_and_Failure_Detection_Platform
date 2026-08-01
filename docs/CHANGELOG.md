@@ -7,6 +7,36 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-01
+
+## Phase 9 – Step 1 (Recommendation Decision Engine)
+
+Phase 9 Step 1 has been fully completed: a pure, deterministic, in-memory domain engine converting completed operational intelligence into explainable Recommendations. No database, repository, REST API, messaging, lifecycle, transaction, or dependency-injection code was introduced -- those are explicitly scoped to Step 2 and Step 3. No existing service was modified.
+
+### Added
+
+- **`IntelligenceContext`** — the engine's single immutable input Domain Value Object, aggregating local, persistence-independent views of Incident, BusinessImpactSummary, RootCauseSummary (optional), NLPIntelligence (optional), and AnomalyIntelligence (optional). `incident`/`business_impact` are required, per the frozen invariant that a Recommendation cannot exist without them.
+- **`Recommendation`** — the immutable aggregate (category, action, priority, score, rationale, priority rationale, supporting evidence), with every domain invariant enforced in `__post_init__`.
+- **`RecommendationCategory`** (8 values) and **`RecommendationPriority`** (4 tiers) — Domain Enums, preventing free-text classification.
+- **`SupportingEvidence`** / **`EvidenceSource`** — structured, weighted, explainable evidence, mirroring Root Cause Service's own `Evidence` pattern.
+- **`scoring.py`** — the single, shared Recommendation Scoring Policy every rule and the Consolidator's merge path call into; deliberately no post-processing normalizer, per the ARB's mitigation for cross-rule score inconsistency.
+- **`precedence.py`** — the shared Category/Priority precedence policy backing the Consolidator's deterministic ordering (Priority → Category Precedence → Score → Rule Evaluation Order).
+- **Eight `RecommendationRule` implementations**, one per category (`EscalationRule`, `MitigationRule`, `SLAProtectionRule`, `InfrastructureActionRule`, `OperationalActionRule`, `CustomerCommunicationRule`, `InvestigateRule`, `MonitorRule`) — independent, deterministic, never calling each other.
+- **`RecommendationConsolidator`** — the dedicated Domain Service that deduplicates, merges equivalent recommendations, resolves the one defined conflict (MONITOR vs. a genuinely more urgent category), and applies deterministic ordering. Never fabricates a Recommendation of its own.
+- **`RecommendationEngine`** — orchestrates `IntelligenceContext → rules → raw Recommendations → Consolidator → final collection`, entirely in-memory.
+
+### Verified
+
+- 126 new tests added; full `backend` suite (660 tests) passing, no regressions.
+- Determinism and immutability verified directly, per component, not just at the engine level.
+- Final engineering review performed: no architectural drift, no implementation changes required. One architectural question -- Rules organized by Category vs. by Business Policy -- was raised and resolved in favor of the current design; see `docs/DECISIONS.md` (REC-001).
+
+### Architectural note (reported, not silently resolved)
+
+`root_cause_service` and `business_impact_service` place their rule engines under `app/services/`; `evaluation_service` (and now `recommendation_service`) place theirs under `app/domain/`, per the frozen architecture's explicit Domain-layer vocabulary for every in-scope component. No existing service was modified to reconcile this; the inconsistency between the two older services and the two newer ones is documented here rather than silently copied forward.
+
+---
+
 # 2026-07-28
 
 ## Phase 8 – Step 3 (Execution Lifecycle)
