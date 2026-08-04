@@ -1,0 +1,153 @@
+/*
+ * Color & Theme Tokens
+ * --------------------
+ * Semantic color tokens only -- never referenced by raw hex value outside
+ * this file. Every component consumes `var(--color-*)`, never a literal
+ * color, so a future rebrand or organization-specific theme is a token
+ * change here, not a component rewrite.
+ *
+ * Deliberately NOT a finished visual identity: these are neutral,
+ * accessible placeholder values (a calm, low-saturation gray scale plus a
+ * single functional accent) sized correctly for contrast, not chosen for
+ * brand expression. Swap the values, never the variable names.
+ *
+ * Theme resolution order (highest precedence last):
+ *   1. `:root`                         -- light theme (default)
+ *   2. `@media (prefers-color-scheme)` -- OS/browser preference
+ *   3. `:root[data-theme="..."]`       -- explicit user/app override,
+ *      always wins over the media query since it is applied later and is
+ *      more specific. `ThemeProvider` (app/theme/ThemeProvider.tsx) is the
+ *      only code that ever sets `data-theme` on `<html>`.
+ */
+
+:root {
+  /* Surfaces */
+  --color-surface-canvas: #f5f6f8;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #eef0f3;
+  --color-surface-overlay: #ffffff;
+
+  /* Borders */
+  --color-border-subtle: #e2e4e9;
+  --color-border-default: #d0d3da;
+  --color-border-strong: #aeb2bd;
+
+  /* Text */
+  --color-text-primary: #14161a;
+  --color-text-secondary: #4b4f58;
+  --color-text-tertiary: #6f7480;
+  --color-text-disabled: #a2a6b0;
+  --color-text-inverse: #ffffff;
+  --color-text-link: var(--color-accent-text);
+
+  /* Functional accent (interactive elements, focus, current-navigation) */
+  --color-accent: #3457d5;
+  --color-accent-strong: #253f9e;
+  --color-accent-subtle: #e8edfc;
+  --color-accent-text: #2b47b8;
+
+  /* Operational status -- used only by StatusIndicator/Badge, never as
+     free-standing decoration, and always paired with a text label or
+     icon shape (never color as the sole signal -- see accessibility
+     notes in StatusIndicator). */
+  --color-status-critical: #b3261e;
+  --color-status-critical-subtle: #fbe9e8;
+  --color-status-warning: #8a5a00;
+  --color-status-warning-subtle: #fdf1dc;
+  --color-status-success: #256b3a;
+  --color-status-success-subtle: #e6f4ea;
+  --color-status-info: #2b57a3;
+  --color-status-info-subtle: #e8f0fb;
+  --color-status-neutral: #565a63;
+  --color-status-neutral-subtle: #eceef1;
+
+  /* Focus ring -- always visible, never suppressed (see reset.css) */
+  --color-focus-ring: #3457d5;
+
+  /* Overlay scrim behind modals/dialogs (future use) */
+  --color-scrim: rgb(15 17 21 / 48%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface-canvas: #101114;
+    --color-surface-raised: #17181c;
+    --color-surface-sunken: #0a0b0d;
+    --color-surface-overlay: #1d1f24;
+
+    --color-border-subtle: #26282e;
+    --color-border-default: #34363e;
+    --color-border-strong: #4a4d57;
+
+    --color-text-primary: #f2f3f5;
+    --color-text-secondary: #c2c5cc;
+    --color-text-tertiary: #93979f;
+    --color-text-disabled: #5c5f68;
+    --color-text-inverse: #14161a;
+
+    --color-accent: #7c95f0;
+    --color-accent-strong: #a6b6f5;
+    --color-accent-subtle: #202b52;
+    --color-accent-text: #a6b6f5;
+
+    --color-status-critical: #f2938c;
+    --color-status-critical-subtle: #3a1f1e;
+    --color-status-warning: #e2b354;
+    --color-status-warning-subtle: #3a2f14;
+    --color-status-success: #8fd4a4;
+    --color-status-success-subtle: #163425;
+    --color-status-info: #93b7ef;
+    --color-status-info-subtle: #182a44;
+    --color-status-neutral: #b7bac1;
+    --color-status-neutral-subtle: #24262b;
+
+    --color-focus-ring: #7c95f0;
+    --color-scrim: rgb(0 0 0 / 60%);
+  }
+}
+
+/* Explicit override -- set by ThemeProvider via `document.documentElement.dataset.theme`.
+   Wins over both the default :root values and the prefers-color-scheme
+   query in both directions (light forced on a dark OS, and vice versa). */
+:root[data-theme='dark'] {
+  --color-surface-canvas: #101114;
+  --color-surface-raised: #17181c;
+  --color-surface-sunken: #0a0b0d;
+  --color-surface-overlay: #1d1f24;
+
+  --color-border-subtle: #26282e;
+  --color-border-default: #34363e;
+  --color-border-strong: #4a4d57;
+
+  --color-text-primary: #f2f3f5;
+  --color-text-secondary: #c2c5cc;
+  --color-text-tertiary: #93979f;
+  --color-text-disabled: #5c5f68;
+  --color-text-inverse: #14161a;
+
+  --color-accent: #7c95f0;
+  --color-accent-strong: #a6b6f5;
+  --color-accent-subtle: #202b52;
+  --color-accent-text: #a6b6f5;
+
+  --color-status-critical: #f2938c;
+  --color-status-critical-subtle: #3a1f1e;
+  --color-status-warning: #e2b354;
+  --color-status-warning-subtle: #3a2f14;
+  --color-status-success: #8fd4a4;
+  --color-status-success-subtle: #163425;
+  --color-status-info: #93b7ef;
+  --color-status-info-subtle: #182a44;
+  --color-status-neutral: #b7bac1;
+  --color-status-neutral-subtle: #24262b;
+
+  --color-focus-ring: #7c95f0;
+  --color-scrim: rgb(0 0 0 / 60%);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}

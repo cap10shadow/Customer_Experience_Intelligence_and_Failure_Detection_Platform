@@ -1,0 +1,40 @@
+.entryLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-surface-raised);
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-easing),
+    background-color var(--motion-duration-fast) var(--motion-easing);
+}
+
+.entryLink:hover {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-sunken);
+}
+
+.entryIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  flex-shrink: 0;
+}
+
+.entryLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.entryDescription {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

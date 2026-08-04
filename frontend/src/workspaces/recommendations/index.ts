@@ -1,0 +1,1 @@
+export { RecommendationsWorkspace } from './RecommendationsWorkspace'

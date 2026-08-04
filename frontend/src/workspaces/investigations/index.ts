@@ -1,0 +1,1 @@
+export { InvestigationsWorkspace } from './InvestigationsWorkspace'

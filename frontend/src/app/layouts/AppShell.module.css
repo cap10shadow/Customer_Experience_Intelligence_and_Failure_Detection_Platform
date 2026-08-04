@@ -1,0 +1,34 @@
+.shell {
+  display: flex;
+  min-height: 100svh;
+  width: 100%;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.main {
+  flex: 1;
+}
+
+.skipLink {
+  position: fixed;
+  top: -100%;
+  left: var(--space-4);
+  z-index: var(--z-index-toast);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--color-accent);
+  color: var(--color-text-inverse);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: top var(--motion-duration-fast) var(--motion-easing);
+}
+
+.skipLink:focus {
+  top: var(--space-4);
+}

@@ -1,0 +1,8 @@
+/*
+ * Theme entry point -- imported exactly once, in main.tsx.
+ * Order matters: tokens/foundations must be defined before reset (and
+ * everything else) consumes them.
+ */
+@import './tokens.css';
+@import './foundations.css';
+@import './reset.css';

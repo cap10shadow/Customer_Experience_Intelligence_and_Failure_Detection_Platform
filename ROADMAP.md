@@ -232,6 +232,8 @@ The system evolves from analytics to decision-support intelligence.
 Visualize operational intelligence.
 
 ## Deliverables
+- Step 1: Product Workspace Architecture (Completed)
+- Step 2: Dashboard Information Architecture (Active)
 - complaint dashboards
 - anomaly heatmaps
 - regional analytics

@@ -1,0 +1,23 @@
+.skeleton {
+  display: block;
+  background-color: var(--color-text-primary);
+  opacity: var(--opacity-skeleton);
+  border-radius: var(--radius-sm);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: var(--opacity-skeleton);
+  }
+  50% {
+    opacity: calc(var(--opacity-skeleton) * 1.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
