@@ -1,0 +1,13 @@
+.drillDown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent-text);
+  transition: gap var(--motion-duration-fast) var(--motion-easing);
+}
+
+.drillDown:hover {
+  gap: var(--space-2);
+}

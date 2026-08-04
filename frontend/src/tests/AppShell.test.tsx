@@ -56,7 +56,7 @@ describe('AppShell', () => {
   it('navigates to another workspace via the sidebar', async () => {
     const user = userEvent.setup()
     renderApp('/')
-    await screen.findByRole('heading', { name: 'Operational Brief' })
+    await screen.findByRole('heading', { name: /Operational brief/i })
 
     const analyticsLink = screen.getByRole('link', { name: /Analytics/ })
     await user.click(analyticsLink)

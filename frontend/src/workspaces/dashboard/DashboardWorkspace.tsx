@@ -1,29 +1,54 @@
-import { Stack } from '@/shared/components/layout'
+import { Divider, Stack } from '@/shared/components/layout'
+import { ErrorBoundary } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
-import { DecisionSummarySection } from './components/DecisionSummarySection'
-import { InvestigationEntryPointsSection } from './components/InvestigationEntryPointsSection'
-import { OperationalAnalyticsSection } from './components/OperationalAnalyticsSection'
-import { OperationalBriefSection } from './components/OperationalBriefSection'
+import { DashboardContextProvider } from './context'
+import { DecisionSummary } from './components/DecisionSummary'
+import { InvestigationEntryPoints } from './components/InvestigationEntryPoints'
+import { OperationalBrief } from './components/OperationalBrief'
+import { SupportingEvidence } from './components/SupportingEvidence'
 
 /**
  * Operational Intelligence Dashboard -- the application home. Not a KPI
- * dashboard: it answers "what changed, why does it matter, what needs
- * attention, and where do I go next" before any supporting analytics,
- * via four architectural sections rendered in that fixed order.
+ * dashboard: it exists to reduce the time between operational awareness
+ * and confident operational action, through one continuous journey --
+ * Operational Brief → Decision Summary → Investigation Entry Points →
+ * Supporting Evidence -- rather than four unrelated widgets. Each
+ * section is individually error-isolated, so a failure in one never
+ * blanks the sections around it; all four share one Global Dashboard
+ * Context so they can never disagree about scope.
  */
 export function DashboardWorkspace() {
   return (
-    <WorkspaceContainer
-      title="Operational Intelligence Dashboard"
-      description="Immediate operational awareness -- what changed, why it matters, and where to go next."
-    >
-      <Stack gap={10}>
-        <OperationalBriefSection />
-        <DecisionSummarySection />
-        <InvestigationEntryPointsSection />
-        <OperationalAnalyticsSection />
-      </Stack>
-    </WorkspaceContainer>
+    <DashboardContextProvider>
+      <WorkspaceContainer
+        title="Operational Intelligence Dashboard"
+        description="Immediate operational awareness -- what changed, why it matters, and where to go next."
+      >
+        <Stack gap={10}>
+          <ErrorBoundary boundaryLabel="the Operational Brief">
+            <OperationalBrief />
+          </ErrorBoundary>
+
+          <Divider />
+
+          <ErrorBoundary boundaryLabel="the Decision Summary">
+            <DecisionSummary />
+          </ErrorBoundary>
+
+          <Divider />
+
+          <ErrorBoundary boundaryLabel="the Investigation Entry Points">
+            <InvestigationEntryPoints />
+          </ErrorBoundary>
+
+          <Divider />
+
+          <ErrorBoundary boundaryLabel="the Supporting Evidence">
+            <SupportingEvidence />
+          </ErrorBoundary>
+        </Stack>
+      </WorkspaceContainer>
+    </DashboardContextProvider>
   )
 }

@@ -1,0 +1,30 @@
+.card {
+  height: 100%;
+}
+
+.headline {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.situation {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.significance,
+.direction {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.fieldLabel {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+}
+
+.context {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}

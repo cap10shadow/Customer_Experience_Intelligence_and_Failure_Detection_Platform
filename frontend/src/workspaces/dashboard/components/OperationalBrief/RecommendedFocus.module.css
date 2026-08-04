@@ -1,0 +1,17 @@
+.item {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-accent);
+  background-color: var(--color-accent-subtle);
+}
+
+.headline {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent-text);
+}
+
+.reason {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

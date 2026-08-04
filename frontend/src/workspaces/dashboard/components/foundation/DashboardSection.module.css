@@ -1,0 +1,5 @@
+.whyItMatters {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  max-width: 68ch;
+}

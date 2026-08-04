@@ -114,6 +114,19 @@ export const ICONS = {
       <path d="M6 10v10h12V10" />
     </>
   ),
+  trendUp: (
+    <>
+      <path d="m3 17 6-6 4 4 8-8" />
+      <path d="M15 7h6v6" />
+    </>
+  ),
+  trendDown: (
+    <>
+      <path d="m3 7 6 6 4-4 8 8" />
+      <path d="M15 17h6v-6" />
+    </>
+  ),
+  trendFlat: <path d="M3 12h18" />,
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof ICONS

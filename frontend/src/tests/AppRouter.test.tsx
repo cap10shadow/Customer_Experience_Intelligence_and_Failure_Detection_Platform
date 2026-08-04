@@ -19,6 +19,6 @@ describe('AppRouter (real lazy-loaded route tree)', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Operational Intelligence Dashboard' }),
     ).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { name: 'Operational Brief' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Operational brief/i })).toBeInTheDocument()
   })
 })
