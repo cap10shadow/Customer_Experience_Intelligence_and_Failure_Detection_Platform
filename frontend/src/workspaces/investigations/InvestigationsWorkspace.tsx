@@ -1,41 +1,59 @@
-import { SectionContainer, Stack } from '@/shared/components/layout'
-import { PlaceholderCard } from '@/shared/components/feedback'
+import { ErrorBoundary } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
-const INVESTIGATION_STAGES = [
-  'Complaint',
-  'Incident',
-  'Timeline',
-  'Root Cause',
-  'Business Impact',
-  'Evidence',
-  'Recommendations',
-]
+import { BusinessImpact } from './components/BusinessImpact'
+import { Evidence } from './components/Evidence'
+import { InvestigationContent, InvestigationLayout } from './components/layout'
+import { Observation } from './components/Observation'
+import { RecommendedNextStep } from './components/RecommendedNextStep'
+import { RootCauseAnalysis } from './components/RootCauseAnalysis'
+import { InvestigationContextProvider } from './context'
 
 /**
- * Investigations -- understanding operational problems, from a raw
- * complaint through to the recommendations that address it.
- * Recommendations appear contextually inside an investigation here (a
- * future step); users are never sent to the Recommendations workspace
- * just to see recommendations related to what they're investigating.
+ * Investigation Workspace -- NOT a new domain entity or a list of
+ * "investigations." This workspace is the structured presentation of a
+ * single Incident, the platform's existing central lifecycle object
+ * (ARB-007). It exists to transform operational signals into
+ * explainable operational understanding through evidence-driven
+ * analysis: Observation → Evidence → Root Cause Analysis → Business
+ * Impact → Recommended Next Step, read as one structured document, not
+ * a wizard -- `InvestigationNavigator` stays visible throughout and
+ * every section remains directly reachable. Each section is
+ * individually error-isolated, exactly like the Dashboard's sections
+ * (Phase 10 Step 2), so a failure in one never blanks the rest of the
+ * investigation.
  */
 export function InvestigationsWorkspace() {
   return (
-    <WorkspaceContainer
-      title="Investigations"
-      description="Understand operational problems from complaint through to recommendation."
-    >
-      <SectionContainer
-        title="Investigation flow"
-        description={`Every investigation follows the same path: ${INVESTIGATION_STAGES.join(' → ')}.`}
+    <InvestigationContextProvider>
+      <WorkspaceContainer
+        title="Investigations"
+        description="The structured investigation of an operational incident -- evidence-driven analysis from observation through to a recommended next step."
       >
-        <Stack>
-          <PlaceholderCard
-            title="Investigation list"
-            description="A future step will list active and historical investigations here, each drilling into its own Complaint → Recommendations flow."
-          />
-        </Stack>
-      </SectionContainer>
-    </WorkspaceContainer>
+        <InvestigationLayout>
+          <InvestigationContent>
+            <ErrorBoundary boundaryLabel="the Observation">
+              <Observation />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Evidence">
+              <Evidence />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Root Cause Analysis">
+              <RootCauseAnalysis />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Business Impact">
+              <BusinessImpact />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Recommended Next Step">
+              <RecommendedNextStep />
+            </ErrorBoundary>
+          </InvestigationContent>
+        </InvestigationLayout>
+      </WorkspaceContainer>
+    </InvestigationContextProvider>
   )
 }

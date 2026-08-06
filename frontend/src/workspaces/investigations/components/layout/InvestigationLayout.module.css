@@ -1,0 +1,24 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.navigatorColumn {
+  order: -1;
+}
+
+.contentColumn {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: 220px 1fr;
+  }
+
+  .navigatorColumn {
+    order: 0;
+  }
+}

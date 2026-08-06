@@ -9,6 +9,33 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-08-05
 
+## Phase 10 – Step 3 (Investigation Workspace Architecture)
+
+Phase 10 Step 3 has been fully completed and reviewed, establishing the Investigation Workspace's architecture. No business logic, backend integration, or real Incident data was introduced — this step establishes structure and presentation model only.
+
+### Added
+
+- **Investigation Mission** — the Investigation Workspace exists to transform operational signals into explainable operational understanding through evidence-driven analysis, enabling confident human decisions. Investigation is explicitly not a new domain entity: it is the structured presentation of a single Incident, the platform's existing central lifecycle object.
+- **Evidence Before Conclusions** — the workspace's guiding principle, enforced structurally: Evidence is always presented before Root Cause Analysis, and no section states a conclusion without supporting evidence already on the page above it.
+- **Narrative-First Navigation** — a persistent `InvestigationNavigator` keeps every section directly and independently reachable at all times; the workspace behaves as a structured investigation document, never a wizard.
+- **Five Investigation Sections** — Observation ("what happened?"), Evidence ("why should I believe this?"), Root Cause Analysis ("why did this happen?"), Business Impact ("why should the organization care?"), and Recommended Next Step ("what should happen next?"), each with a single, non-overlapping responsibility.
+- **Investigation Context** — architectural presentation state only: an Incident reference, active section, expanded sections, and selected evidence. No backend state, no business state.
+- **Business Impact Taxonomy** — Business Impact consistently presents the platform's approved five dimensions (Financial, Customer, Operational, SLA, Reputation), matching the Business Impact Engine's own frozen model exactly.
+- **Stage-Specific Confidence Presentation** — Root Cause Analysis and Business Impact each present confidence through one shared visual language that always states what it measures, keeping the two values legible as distinct, non-comparable measurements rather than one unified score.
+- **Context-Preserving Recommendation Handoff** — the Recommended Next Step's transition into Recommendations already carries the originating recommendation's identity, so a future step can open Recommendations pre-scoped to it rather than a generic queue.
+- **Accessibility** — correct heading hierarchy, a real keyboard- and screen-reader-navigable section navigator, and color-independent confidence and status presentation throughout.
+- **Responsiveness** — the navigator and reading column adapt from a side-by-side desktop/laptop layout to a stacked tablet/mobile layout; narrative order never changes, only the layout.
+- **Loading Architecture** — skeleton-first loading flowing through the real section-and-card component hierarchy, consistent with the discipline established in Phase 10 Step 2.
+- **Error Isolation** — each of the five Investigation sections independently error-isolated, so a failure in one section can never blank the rest of the investigation.
+
+### Verified
+
+- Independent Product Architecture Review performed before implementation began, evaluating the proposed Investigation architecture against the Product Experience Guide and the platform's existing ADRs (ARB-006 Evidence Chain, ARB-007 Incident as the central lifecycle object, ARB-008 stage-specific confidence, BI-002 the five-dimension taxonomy).
+- All four clarifications the review required before implementation are directly encoded in the implementation, not left as documentation-only intent.
+- Full verification suite (typecheck, lint, build, automated test suite) passing with no regressions to Phase 10 Steps 1–2.
+
+---
+
 ## Phase 10 – Product Architecture Refinement (Workspace Consolidation)
 
 Following a Product Architecture Review conducted before Phase 10 Step 3 scoping began, the frozen six-workspace architecture was refined to five workspaces. This is a navigation and ownership refinement, not a redesign: Dashboard, Investigations, Recommendations, Analytics, and Administration were not altered beyond updated ownership language, and no business functionality was added.

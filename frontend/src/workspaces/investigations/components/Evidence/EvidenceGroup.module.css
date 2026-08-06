@@ -1,0 +1,10 @@
+.expandToggle {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent-text);
+}
+
+.expandToggle:hover {
+  text-decoration: underline;
+}

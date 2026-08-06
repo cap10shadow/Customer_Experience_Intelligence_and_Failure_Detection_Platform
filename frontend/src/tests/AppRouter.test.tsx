@@ -15,9 +15,12 @@ describe('AppRouter (real lazy-loaded route tree)', () => {
 
     // Before the lazy chunk resolves, WorkspaceLayout's Suspense fallback
     // (LoadingContainer) is what's on screen -- this is the same
-    // mechanism route-level code splitting relies on in production.
+    // mechanism route-level code splitting relies on in production. The
+    // extended timeout accounts for real dynamic `import()` resolution
+    // across the full (now six-workspace) module graph in the test
+    // environment, not production load time.
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Operational Intelligence Dashboard' }),
+      await screen.findByRole('heading', { level: 1, name: 'Operational Intelligence Dashboard' }, { timeout: 5000 }),
     ).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: /Operational brief/i })).toBeInTheDocument()
   })

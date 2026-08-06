@@ -13,7 +13,7 @@
 
 # Overall Progress
 
-**Estimated Completion:** ~72%
+**Estimated Completion:** ~74%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -23,7 +23,7 @@
 
 **Current Phase:** Phase 10 – Executive Dashboard
 
-**Current Step:** Step 3
+**Current Step:** Step 4
 
 **Status:** Active — scope not yet defined
 
@@ -55,7 +55,32 @@
 | ------------------------------------------ | ----------- |
 | ✅ Step 1 – Product Workspace Architecture | Complete    |
 | ✅ Step 2 – Dashboard Information Architecture | Complete |
-| 🔄 Step 3 – (scope not yet defined)       | Active      |
+| ✅ Step 3 – Investigation Workspace Architecture | Complete |
+| 🔄 Step 4 – (scope not yet defined)       | Active      |
+
+---
+
+# Phase 10 Step 3 – Completion Summary
+
+**Investigation Workspace Architecture — Fully Implemented and Verified**
+
+### Verified
+
+- Investigation implemented as the structured, evidence-first presentation of a single Incident — not a new domain entity, not an investigation list or record. Incident remains the platform's central lifecycle object (ARB-007); Investigation only ever holds a reference to one.
+- Five narrative sections in fixed reading order: Observation ("what happened?"), Evidence ("why should I believe this?"), Root Cause Analysis ("why did this happen?"), Business Impact ("why should the organization care?"), and Recommended Next Step ("what should happen next?").
+- Evidence Before Conclusions honored structurally: Evidence is always presented before Root Cause Analysis; no section states a conclusion without supporting evidence already on the page above it.
+- Narrative-first navigation: a persistent `InvestigationNavigator` keeps every section directly and independently reachable at all times — a structured document, never a wizard.
+- Investigation Context established as architectural presentation state only (active section, expanded sections, selected evidence, and an Incident reference) — no backend state, no business logic.
+- Business Impact presents the platform's approved five-dimension taxonomy (Financial, Customer, Operational, SLA, Reputation) consistently, matching BI-002/ARB-003/PRD.md exactly — never an invented or partial set.
+- Confidence presentation kept explicitly stage-specific per ARB-008: Root Cause Analysis's and Business Impact's confidence values are never rendered without stating what each one measures, and are never implied to share one scale.
+- The Recommendation handoff preserves context: Recommended Next Step's transition link already carries the originating recommendation's identity as a deep-link parameter, ahead of Recommendations consuming it in a future step.
+- Section-level error isolation, skeleton-first loading, and confident, explanatory empty states implemented and verified through the real component hierarchy, following the same discipline established and rectified in Phase 10 Step 2.
+- Independent Product Architecture Review performed against the frozen Dashboard/workspace architecture, the Product Experience Guide, and the platform's existing ADRs before implementation began; implementation directly encodes all four resulting clarifications (Incident-not-entity, stage-specific confidence, five-dimension taxonomy, context-preserving handoff).
+- Full verification suite (typecheck, lint, build, automated test suite — 66 tests, 14 files) passing with no regressions to Phase 10 Steps 1–2.
+
+### Outcome
+
+Phase 10 Step 3 is complete and approved. The Investigation Workspace's architecture is fully established; real Incident data, real evidence, real Root Cause/Business Impact computation, and real navigation into a scoped Recommendation remain explicitly deferred to future phases.
 
 ---
 
@@ -334,23 +359,24 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 - Project structure established
 - Workspace Architecture established (Phase 10 Step 1 Complete)
 - Dashboard Information Architecture established (Phase 10 Step 2 Complete)
+- Investigation Workspace Architecture established (Phase 10 Step 3 Complete)
 - Five-workspace architecture (Dashboard, Investigations, Recommendations, Analytics, Administration) following the Action Center consolidation refinement — see `docs/DECISIONS.md` (FE-001)
 
 ---
 
 # Current Focus
 
-**Phase 10 Step 3**
+**Phase 10 Step 4**
 
-> Scope not yet defined. Phase 10 Steps 1 and 2 (Product Workspace Architecture and Dashboard Information Architecture) are complete; the remaining Phase 10 deliverables (see `ROADMAP.md`) — real dashboard widgets, analytics, and recommendation panels backed by live data — are expected to be scoped into Step 3 in a future planning step.
+> Scope not yet defined. Phase 10 Steps 1–3 (Product Workspace Architecture, Dashboard Information Architecture, and Investigation Workspace Architecture) are complete; the remaining Phase 10 deliverables (see `ROADMAP.md`) — real dashboard/investigation data, analytics, and recommendation panels backed by live data — are expected to be scoped into Step 4 in a future planning step.
 
 ---
 
 # Next Milestone
 
-**Phase 10 Step 3**
+**Phase 10 Step 4**
 
-> Phase 10 Step 2 (Dashboard Information Architecture) is complete and approved. The next step will scope and implement the business-facing functionality the Step 1/Step 2 architecture was deliberately built to support without redesign.
+> Phase 10 Step 3 (Investigation Workspace Architecture) is complete and approved. The next step will scope and implement the business-facing functionality the Step 1–3 architecture was deliberately built to support without redesign.
 
 ---
 
