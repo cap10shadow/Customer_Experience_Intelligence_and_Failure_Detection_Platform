@@ -1,0 +1,42 @@
+.list {
+  border-left: 2px solid var(--color-border-default);
+  padding-left: var(--space-5);
+}
+
+.stage {
+  position: relative;
+  padding-bottom: var(--space-4);
+}
+
+.stage:last-child {
+  padding-bottom: 0;
+}
+
+.marker {
+  position: absolute;
+  left: calc(var(--space-5) * -1 - 5px);
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-border-strong);
+}
+
+.current .marker {
+  background-color: var(--color-accent);
+}
+
+.stageLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.current .stageLabel {
+  color: var(--color-accent-text);
+}
+
+.stageStatus {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}

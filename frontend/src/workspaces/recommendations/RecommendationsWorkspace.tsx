@@ -1,42 +1,76 @@
-import { Grid, SectionContainer, Stack } from '@/shared/components/layout'
-import { PlaceholderCard } from '@/shared/components/feedback'
+import { ErrorBoundary } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
+import { AlternativeOptions } from './components/AlternativeOptions'
+import { Decision } from './components/Decision'
+import { ExpectedOutcome } from './components/ExpectedOutcome'
+import { RecommendationContent, RecommendationLayout } from './components/layout'
+import { RecommendationOverview } from './components/Overview'
+import { RecommendationRationale } from './components/Rationale'
+import { RecommendationLifecycle } from './components/RecommendationLifecycle'
+import { RiskAssessment } from './components/RiskAssessment'
+import { RecommendationContextProvider } from './context'
+import type { DecisionRecord } from './types'
+
+const DECISION: DecisionRecord = {
+  status: 'pending-review',
+  note: 'Awaiting review. No action has been taken yet.',
+}
+
 /**
- * Recommendations -- the complete operational decision and action
- * lifecycle. Recommendations are discovered inside the Dashboard and
- * Investigations; this workspace owns everything that happens to one
- * from that point forward: review, approval, rejection, implementation
- * status, monitoring, and completed actions. Per the approved workspace
- * refinement, this absorbed the standalone Action Center workspace's
- * decision-and-action responsibility -- Action Center no longer exists
- * as a separate workspace. Architectural structure only; every section
- * below is wired to real operational data in a future step.
+ * Recommendation Workspace -- transforms operational understanding into
+ * an explainable, governed operational decision while preserving human
+ * oversight. The platform recommends; humans decide. This workspace
+ * represents that decision and, once it exists, the recommendation's
+ * lifecycle -- it never automates the decision itself. Read as one
+ * single-column memo (Recommendation Overview → Rationale → Alternative
+ * Options → Expected Outcome → Risk Assessment → Decision →
+ * Recommendation Lifecycle), with the persistent `RecommendationNavigator`
+ * (reusing Investigation's navigation model) keeping every section
+ * directly reachable and a calm, persistent reference to the current
+ * decision always visible. Each section is individually error-isolated,
+ * exactly like Dashboard and Investigation's sections, so a failure in
+ * one never blanks the rest of the memo.
  */
 export function RecommendationsWorkspace() {
   return (
-    <WorkspaceContainer
-      title="Recommendations"
-      description="The complete recommendation decision and action lifecycle -- review, approval, implementation, and outcome."
-    >
-      <Stack gap={8}>
-        <SectionContainer title="Recommendation queue" description="Open, in-progress, and historical recommendations across every incident.">
-          <Grid minColumnWidth={240}>
-            <PlaceholderCard title="Open recommendations" />
-            <PlaceholderCard title="Recommendation history" />
-            <PlaceholderCard title="Status overview" />
-          </Grid>
-        </SectionContainer>
+    <RecommendationContextProvider recommendationId="illustrative-recommendation-id" incidentId="illustrative-incident-id">
+      <WorkspaceContainer
+        title="Recommendations"
+        description="An explainable, governed operational decision -- the platform recommends, you decide."
+      >
+        <RecommendationLayout decision={DECISION}>
+          <RecommendationContent>
+            <ErrorBoundary boundaryLabel="the Recommendation Overview">
+              <RecommendationOverview />
+            </ErrorBoundary>
 
-        <SectionContainer title="Decision & action" description="Review, approve, reject, and track recommendations through to completion.">
-          <Grid minColumnWidth={240}>
-            <PlaceholderCard title="Pending review" />
-            <PlaceholderCard title="Approvals & rejections" />
-            <PlaceholderCard title="Implementation status" />
-            <PlaceholderCard title="Completed actions" />
-          </Grid>
-        </SectionContainer>
-      </Stack>
-    </WorkspaceContainer>
+            <ErrorBoundary boundaryLabel="the Recommendation Rationale">
+              <RecommendationRationale />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Alternative Options">
+              <AlternativeOptions />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Expected Outcome">
+              <ExpectedOutcome />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Risk Assessment">
+              <RiskAssessment />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Decision">
+              <Decision decision={DECISION} />
+            </ErrorBoundary>
+
+            <ErrorBoundary boundaryLabel="the Recommendation Lifecycle">
+              <RecommendationLifecycle decision={DECISION} />
+            </ErrorBoundary>
+          </RecommendationContent>
+        </RecommendationLayout>
+      </WorkspaceContainer>
+    </RecommendationContextProvider>
   )
 }
