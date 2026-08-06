@@ -36,8 +36,8 @@ export interface DecisionSummaryProps {
 /**
  * Judgment Support: "where does my judgment matter most?" Deliberately
  * not a work queue or alert list -- every card here represents a
- * decision only a person can make, not routine operational work that
- * merely needs monitoring (that belongs to Action Center).
+ * decision only a person can make, not routine operational monitoring
+ * that requires no immediate judgment.
  */
 export function DecisionSummary({ opportunities = DEFAULT_DECISION_OPPORTUNITIES, isLoading = false }: DecisionSummaryProps) {
   const { timeRange } = useDashboardContext()

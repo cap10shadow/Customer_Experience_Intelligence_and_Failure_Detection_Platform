@@ -939,3 +939,52 @@ Introduce `action` as a relational column in the `RecommendationEntity` ORM mode
 
 **Cons**
 - None. This corrects an incomplete wording in the original specification.
+
+---
+
+## FE-001 — Action Center Retired; Recommendations Owns the Decision & Action Lifecycle
+
+**Status:** Accepted
+
+**Date:** 2026-08-05
+
+### Context
+
+Phase 10 Step 1 froze a six-workspace frontend architecture: Dashboard, Action Center, Investigations, Recommendations, Analytics, Administration. Action Center was scoped as "an operational work queue" surfacing active incidents, complaint spikes, SLA risks, and active investigations — everything "currently requiring operational attention."
+
+A Product Architecture Review conducted before Phase 10 Step 3 scoping began found that Action Center's responsibility did not hold up as an independent workspace once examined against what it actually contained. Every item on its queue was, in substance, either: (a) something Investigations already owns the narrative for (active incidents, complaint spikes — both are Operational Story material), or (b) something Recommendations already owns the lifecycle for once a response exists (SLA risk mitigation, active-investigation follow-through). Action Center was not adding a distinct responsibility; it was re-surfacing other workspaces' content under a different label, which is exactly the "unrelated widgets on one page" pattern both the Dashboard architecture and the Product Experience Guide's workspace philosophy explicitly warn against (Section 2.2 — a workspace should be "a complete operational context," not a duplicate view).
+
+The review also found that Action Center left a real gap unaddressed: nothing in the frozen six-workspace architecture explicitly owned what happens *after* a recommendation exists — approval, rejection, implementation tracking, and completed-action history. That gap was implicitly assumed to belong somewhere, but no workspace claimed it.
+
+### Decision
+
+Retire Action Center as a standalone workspace. Its route, navigation entry, workspace component, and dedicated icon are removed. Its "requires operational attention" framing is replaced by giving Recommendations explicit, complete ownership of the operational decision-and-action lifecycle: recommendation review, approval, rejection, implementation status, monitoring, and completed actions — the gap Action Center never actually closed.
+
+Refined workspace architecture: **Dashboard → Investigations → Recommendations → Analytics → Administration.**
+
+This is a navigation and ownership refinement, not a redesign. Dashboard, Investigations, Analytics, and Administration are unchanged. Recommendations' existing structure (queue, history, status) is extended, not rebuilt. No business functionality (real approval/rejection workflows, real monitoring data) was implemented as part of this refinement — only the architectural placeholder structure was updated to reflect the new ownership, per the same "structure only" discipline every prior Phase 10 step has followed.
+
+### Rationale
+
+- **Why Action Center was removed**: it duplicated content rather than owning a distinct responsibility — a direct violation of the frozen architecture's own rule that "responsibilities must never overlap" between workspaces (Phase 10 Dashboard architecture) and the Product Experience Guide's insistence that a workspace represent "a complete operational context rather than an isolated software module" (Section 2.2).
+- **Why Recommendations became the Decision & Action workspace**: it already owned "lifecycle management, history, and status" for recommendations — the natural, and only unclaimed, owner of what happens after a recommendation is made. Extending an existing owner's responsibility is lower-risk and more coherent than inventing a new home for orphaned functionality.
+- **Why this better aligns with the product mission**: the Product Experience Guide's Principle 1 is that the platform exists to help users make and act on operational decisions, and "reduce cognitive effort" (Principle 4) by avoiding duplicate information across screens. A single workspace that carries a recommendation from discovery through to a completed action is a shorter, more coherent path than routing a user through a separate Action Center queue that re-lists the same items.
+- **Why the refinement occurred before additional workspace implementation**: Phase 10 Step 3 is about to implement real, business-facing dashboard functionality. Correcting a structural overlap now costs one workspace removal and a handful of reference updates; correcting it after Step 3 builds real data-fetching, filtering, and interaction logic against Action Center would multiply the cost and risk regressions in shipped functionality. This is the same "smallest-impact solution preserving architectural correctness" principle every prior phase in this project has applied to genuine architecture conflicts.
+
+### Migration Impact
+
+- **Low risk.** Action Center held no real business logic or data-fetching (Phase 10 Step 1/Step 2 explicitly forbade implementing it) — every reference removed was structural (a route, a nav entry, a lazy import, an icon, a handful of doc-comment examples), not behavioral.
+- Verified by direct repository search: every file referencing Action Center (13 files, all frontend) was located and either removed (the workspace itself) or updated (route table, navigation config, workspace type union, icon registry, and five doc-comment cross-references in shared components).
+- Full verification suite (typecheck, lint, build, complete automated test suite) passes with no regressions. No test hardcoded a reference to Action Center or a fixed workspace count, so no test required updating for the removal itself.
+- No backend service, API contract, or persisted data was affected — this is a frontend-only, presentation-layer refinement.
+
+### Consequences
+
+**Pros**
+- Removes a workspace that duplicated content instead of owning a distinct responsibility, restoring "responsibilities must never overlap" as an actually-true property of the architecture, not just a stated intent.
+- Closes the previously-unclaimed decision-and-action ownership gap explicitly, before Step 3 has to work around its absence.
+- Fewer workspaces to keep in sync as Phase 10 Step 3 and beyond add real functionality — one fewer navigation entry, route, and workspace shell to maintain.
+- Sets a precedent: workspace responsibilities are revisited and corrected when a genuine overlap is found, rather than carried forward indefinitely once frozen.
+
+**Cons**
+- None identified. Action Center had zero implemented business functionality to migrate, and no other phase or document depended on its existence (verified: it was never named in PRD.md, ARCHITECTURE.md, ROADMAP.md, or PRODUCT_EXPERIENCE_GUIDE.md).

@@ -12,10 +12,10 @@ export interface WorkspaceContainerProps extends WorkspaceHeaderProps {
 /**
  * The top-level composition every workspace root component renders:
  * width-capped content, the workspace's one `<h1>` (via WorkspaceHeader),
- * and its sections stacked below. Every one of the six workspaces
- * (Dashboard, Action Center, Investigations, Recommendations, Analytics,
- * Administration) starts from this same component -- new workspaces in
- * future phases extend it rather than reinventing page structure.
+ * and its sections stacked below. Every one of the five workspaces
+ * (Dashboard, Investigations, Recommendations, Analytics, Administration)
+ * starts from this same component -- new workspaces in future phases
+ * extend it rather than reinventing page structure.
  */
 export function WorkspaceContainer({ title, description, actions, children }: WorkspaceContainerProps) {
   return (

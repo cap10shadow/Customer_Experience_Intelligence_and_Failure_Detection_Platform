@@ -20,13 +20,6 @@ export const PRIMARY_NAVIGATION: NavigationItemConfig[] = [
     description: 'Immediate operational awareness -- what changed, why it matters, and where to go next.',
   },
   {
-    id: 'action-center',
-    label: 'Action Center',
-    path: ROUTE_PATHS.actionCenter,
-    icon: 'actionCenter',
-    description: 'Everything currently requiring operational attention.',
-  },
-  {
     id: 'investigations',
     label: 'Investigations',
     path: ROUTE_PATHS.investigations,
@@ -38,7 +31,7 @@ export const PRIMARY_NAVIGATION: NavigationItemConfig[] = [
     label: 'Recommendations',
     path: ROUTE_PATHS.recommendations,
     icon: 'recommendations',
-    description: 'Recommendation lifecycle management, history, and status.',
+    description: 'The complete recommendation decision and action lifecycle -- review, approval, implementation, and outcome.',
   },
   {
     id: 'analytics',

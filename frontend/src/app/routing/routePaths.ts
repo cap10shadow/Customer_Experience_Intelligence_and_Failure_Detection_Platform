@@ -6,7 +6,6 @@
  */
 export const ROUTE_PATHS = {
   dashboard: '/',
-  actionCenter: '/action-center',
   investigations: '/investigations',
   recommendations: '/recommendations',
   analytics: '/analytics',

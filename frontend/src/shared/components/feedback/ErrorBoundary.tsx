@@ -6,7 +6,7 @@ import styles from './ErrorBoundary.module.css'
 
 export interface ErrorBoundaryProps {
   children: ReactNode
-  /** What failed, in user terms (e.g. "the Action Center queue") -- used in the fallback's heading so the failure is legible, not a stack trace. */
+  /** What failed, in user terms (e.g. "the Recommendations queue") -- used in the fallback's heading so the failure is legible, not a stack trace. */
   boundaryLabel: string
   onError?: (error: Error, info: ErrorInfo) => void
 }

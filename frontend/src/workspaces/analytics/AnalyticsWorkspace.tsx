@@ -5,7 +5,7 @@ import { WorkspaceContainer } from '@/shared/components/page'
 /**
  * Analytics -- historical and strategic operational intelligence.
  * Supports understanding; it does not replace the operational workflows
- * Dashboard/Action Center/Investigations own.
+ * Dashboard/Investigations/Recommendations own.
  */
 export function AnalyticsWorkspace() {
   return (

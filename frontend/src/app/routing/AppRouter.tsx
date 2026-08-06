@@ -13,9 +13,6 @@ import { ROUTE_PATHS } from './routePaths'
 const DashboardWorkspace = lazy(() =>
   import('@/workspaces/dashboard').then((module) => ({ default: module.DashboardWorkspace })),
 )
-const ActionCenterWorkspace = lazy(() =>
-  import('@/workspaces/action-center').then((module) => ({ default: module.ActionCenterWorkspace })),
-)
 const InvestigationsWorkspace = lazy(() =>
   import('@/workspaces/investigations').then((module) => ({ default: module.InvestigationsWorkspace })),
 )
@@ -40,7 +37,6 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <DashboardWorkspace /> },
-      { path: ROUTE_PATHS.actionCenter, element: <ActionCenterWorkspace /> },
       { path: ROUTE_PATHS.investigations, element: <InvestigationsWorkspace /> },
       { path: ROUTE_PATHS.recommendations, element: <RecommendationsWorkspace /> },
       { path: ROUTE_PATHS.analytics, element: <AnalyticsWorkspace /> },

@@ -9,6 +9,25 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 # 2026-08-05
 
+## Phase 10 – Product Architecture Refinement (Workspace Consolidation)
+
+Following a Product Architecture Review conducted before Phase 10 Step 3 scoping began, the frozen six-workspace architecture was refined to five workspaces. This is a navigation and ownership refinement, not a redesign: Dashboard, Investigations, Recommendations, Analytics, and Administration were not altered beyond updated ownership language, and no business functionality was added.
+
+### Changed
+
+- **Action Center retired as a standalone workspace.** Its route, navigation entry, workspace component, and dedicated icon were removed.
+- **Recommendations now owns the complete operational decision and action lifecycle** — recommendation review, approval, rejection, implementation status, monitoring, and completed actions — absorbing Action Center's decision-and-action responsibility. Structure only; no approval/rejection workflow was implemented.
+- **Navigation** updated so Dashboard flows directly into Investigations; the sidebar, breadcrumbs, and router all derive from the same single navigation configuration, so no other component required a corresponding change.
+- **Architecture Decision Record FE-001** added to `docs/DECISIONS.md`, recording the rationale, migration impact, and long-term benefit of the consolidation.
+
+### Verified
+
+- Every reference to Action Center (route, navigation entry, workspace registration, exports, icon, and documentation cross-references) was located and removed or updated; none remain.
+- Full verification suite passing (typecheck, lint, build, automated test suite) with no regressions.
+- No architectural drift: Dashboard, Investigations, Analytics, and Administration are unchanged; Recommendations' existing implementation was extended, not rebuilt.
+
+---
+
 ## Phase 10 – Step 2 (Dashboard Information Architecture)
 
 Phase 10 Step 2 has been fully completed, reviewed, and rectified, establishing the Dashboard's complete information architecture within the Step 1 application shell. No business intelligence, backend integration, or real analytics were introduced — this step establishes structure and presentation model only.

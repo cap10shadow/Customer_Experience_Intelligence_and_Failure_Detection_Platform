@@ -20,12 +20,6 @@ export const ICONS = {
       <rect x="3" y="13" width="8" height="8" rx="1.5" />
     </>
   ),
-  actionCenter: (
-    <>
-      <path d="M12 3v9l4 2" />
-      <circle cx="12" cy="12" r="9" />
-    </>
-  ),
   investigations: (
     <>
       <circle cx="10.5" cy="10.5" r="6.5" />

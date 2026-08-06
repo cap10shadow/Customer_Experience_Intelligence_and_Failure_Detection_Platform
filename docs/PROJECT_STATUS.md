@@ -59,6 +59,18 @@
 
 ---
 
+# Product Architecture Refinement — Workspace Consolidation
+
+**Action Center retired as a standalone workspace; Recommendations now owns the complete operational decision and action lifecycle**
+
+Following a Product Architecture Review conducted before Phase 10 Step 3 began, the frozen workspace architecture was refined from six workspaces to five. Action Center's responsibility (everything requiring operational attention) was judged to overlap with, rather than complement, Investigations and Recommendations, and was folded into the Recommendation Workspace, which now explicitly owns recommendation review, approval, rejection, implementation status, monitoring, and completed actions. See `docs/DECISIONS.md` (FE-001) for the full rationale.
+
+**Refined workspace architecture:** Dashboard → Investigations → Recommendations → Analytics → Administration.
+
+This is a navigation and ownership refinement only. Dashboard, Investigations, Recommendations, Analytics, and Administration were not redesigned; no business functionality was added. The refinement was implemented, verified (typecheck, lint, build, full test suite — no regressions), and documented before Phase 10 Step 3 scoping begins.
+
+---
+
 # Phase 10 Step 2 – Completion Summary
 
 **Dashboard Information Architecture — Fully Implemented, Reviewed, and Rectified**
@@ -322,6 +334,7 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 - Project structure established
 - Workspace Architecture established (Phase 10 Step 1 Complete)
 - Dashboard Information Architecture established (Phase 10 Step 2 Complete)
+- Five-workspace architecture (Dashboard, Investigations, Recommendations, Analytics, Administration) following the Action Center consolidation refinement — see `docs/DECISIONS.md` (FE-001)
 
 ---
 

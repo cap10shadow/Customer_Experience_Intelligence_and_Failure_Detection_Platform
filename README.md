@@ -8,7 +8,7 @@ A Customer Experience Intelligence & Operational Decision Support Platform (per 
 
 **Phase 1 through Phase 9 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, incident correlation, root cause analysis, business impact analysis, intelligence evaluation engines, and the recommendation engine are all operational.
 
-**Phase 10 (Executive Dashboard) is the active development phase.** Phase 10 Step 1 (Product Workspace Architecture) and Step 2 (Dashboard Information Architecture) are now complete. Phase 10 Step 3 is next; its scope is not yet defined.
+**Phase 10 (Executive Dashboard) is the active development phase.** Phase 10 Step 1 (Product Workspace Architecture) and Step 2 (Dashboard Information Architecture) are now complete. Following a Product Architecture Review, the frontend workspace architecture was refined from six workspaces to five: Action Center was retired as a standalone workspace and its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001). Phase 10 Step 3 is next; its scope is not yet defined.
 
 **Phase 11+ (Observability & Reliability, AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
 

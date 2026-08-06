@@ -18,7 +18,7 @@ export interface SectionContainerProps {
 
 /**
  * The architectural unit every workspace section (Operational Brief,
- * Decision Summary, a future Action Center queue, ...) is built from: a
+ * Decision Summary, a future Recommendations queue, ...) is built from: a
  * labelled `<section>` landmark with a real, correctly-leveled heading.
  * This is what "proper heading hierarchy" and "accessible landmarks"
  * mean in practice at the component level.
