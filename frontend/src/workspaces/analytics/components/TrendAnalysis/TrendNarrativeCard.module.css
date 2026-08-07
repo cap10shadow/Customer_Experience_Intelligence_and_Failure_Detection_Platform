@@ -1,0 +1,35 @@
+.trend {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.narrative {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  max-width: 68ch;
+}
+
+.evidence {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.chartArea {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border-default);
+  color: var(--color-text-tertiary);
+  background-color: var(--color-surface-sunken);
+}
+
+.evidenceText {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}

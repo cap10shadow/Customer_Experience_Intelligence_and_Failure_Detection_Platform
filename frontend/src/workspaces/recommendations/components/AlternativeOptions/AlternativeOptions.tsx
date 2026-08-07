@@ -1,4 +1,6 @@
-import { FutureCapabilityPlaceholder, RecommendationSection } from '../foundation'
+import { FutureCapabilityPlaceholder } from '@/shared/components/feedback'
+
+import { RecommendationSection } from '../foundation'
 
 export interface AlternativeOptionsProps {
   isLoading?: boolean
@@ -24,6 +26,7 @@ export function AlternativeOptions({ isLoading = false }: AlternativeOptionsProp
         title="Alternative option comparison is a future capability"
         description="Comparing this recommendation against other options the platform considered will appear here once the recommendation engine begins preserving that comparison."
         isLoading={isLoading}
+        loadingLabel="Loading alternative options"
       />
     </RecommendationSection>
   )

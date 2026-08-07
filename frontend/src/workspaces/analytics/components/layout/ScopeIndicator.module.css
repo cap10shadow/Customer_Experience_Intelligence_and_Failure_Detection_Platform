@@ -1,0 +1,20 @@
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.value {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
