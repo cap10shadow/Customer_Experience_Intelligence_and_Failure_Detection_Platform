@@ -8,7 +8,7 @@ A Customer Experience Intelligence & Operational Decision Support Platform (per 
 
 **Phase 1 through Phase 9 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, incident correlation, root cause analysis, business impact analysis, intelligence evaluation engines, and the recommendation engine are all operational.
 
-**Phase 10 (Executive Dashboard) is the active development phase.** Phase 10 Step 1 (Product Workspace Architecture), Step 2 (Dashboard Information Architecture), Step 3 (Investigation Workspace Architecture), and Step 4 (Recommendation Workspace Architecture) are now complete. Following a Product Architecture Review, the frontend workspace architecture was refined from six workspaces to five: Action Center was retired as a standalone workspace and its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001). Phase 10 Step 5 is next; its scope is not yet defined.
+**Phase 10 (Executive Dashboard) is the active development phase.** Phase 10 Step 1 (Product Workspace Architecture), Step 2 (Dashboard Information Architecture), Step 3 (Investigation Workspace Architecture), Step 4 (Recommendation Workspace Architecture), Step 5 (Analytics Workspace Architecture), and Step 6 (Administration Workspace Architecture) are now complete. Following a Product Architecture Review, the frontend workspace architecture was refined from six workspaces to five: Action Center was retired as a standalone workspace and its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001). Phase 10 Step 7 is next; its scope is not yet defined.
 
 **Phase 11+ (Observability & Reliability, AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
 
@@ -39,7 +39,7 @@ The Evaluation Service (Phase 8) is an independent Intelligence Assurance Servic
 
 ### In Progress
 - ↓
-- **Executive Dashboard** (Steps 1–4 Complete)
+- **Executive Dashboard** (Steps 1–6 Complete)
 
 ### Planned Future Phases
 - ↓
@@ -66,7 +66,7 @@ The platform uses a modular, service-based architecture sharing a single reposit
 | recommendation_service | 8006 | Recommendation generation | Stable |
 | copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |
 | evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven) | Stable |
-| frontend | 3000 | Operational dashboard | Dashboard, Investigation & Recommendation Workspace Architecture Complete |
+| frontend | 3000 | Operational dashboard | Dashboard, Investigation, Recommendation, Analytics & Administration Workspace Architecture Complete |
 
 Each service exposes a `/health` endpoint.
 

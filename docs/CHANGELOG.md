@@ -7,6 +7,58 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-07
+
+## Phase 10 – Step 6 (Administration Workspace Architecture)
+
+Phase 10 Step 6 has been fully completed, reviewed, and rectified, establishing the Administration Workspace as the platform's Enterprise Control Center. No business logic, backend integration, or real administrative data was introduced — this step establishes structure and presentation model only.
+
+### Added
+
+- **Administration Workspace** — governs the platform itself (configuration, access management, integrations, and auditability) and has no relationship to the operational intelligence pipeline Dashboard, Investigations, Recommendations, and Analytics each participate in.
+- **Six-Section Governance Architecture** — Platform Overview, User & Access Management, Data Sources & Integrations, Intelligence Configuration, Platform Governance, and Audit & Change History, each with a single, non-overlapping responsibility in a fixed reading order.
+- **State / Configuration / Record Presentation Model** — a subtle, presentation-only rhythm distinguishing scanned reference sections (Platform Overview, User & Access Management, Data Sources & Integrations) from the one deliberate, consequence-aware configuration section (Intelligence Configuration) and the two historical, read-only record sections (Platform Governance, Audit & Change History) — never expressed as grouped navigation, tabs, or a wizard.
+- **Explanation Before Control** — every Intelligence Configuration item presents what it is, what downstream behavior it governs, and its current value before any editing affordance is reachable; inspection is always the default state, editing is never automatic, and no configuration change is persisted anywhere in this step.
+- **Calm Policy Narrative vs. Immutable Ledger** — Platform Governance presents organizational policy as calm, explanatory prose; Audit & Change History presents a permanent, read-only administrative record that deliberately excludes every activity-feed, notification, or live-updating convention.
+- **Connected Services vs. Connected Systems** — platform infrastructure dependencies (Platform Overview) and external business system integrations (Data Sources & Integrations) kept visually and semantically distinct throughout, never collapsed into one undifferentiated list.
+- **Administration Context** — architectural presentation state only (active section, expanded sections, and the currently-selected configuration item); no users, roles, permissions, integrations, policies, audit history, or platform status.
+- **Accessibility** — correct heading hierarchy, a persistent keyboard- and screen-reader-navigable section navigator reusing the same navigator family as Investigation, Recommendation, and Analytics, and a semantic, chronologically legible audit ledger.
+- **Responsiveness** — the navigator and reading column adapt from a side-by-side desktop/laptop layout to a stacked tablet/mobile layout; section order never changes, only the layout.
+- **Loading** — skeleton-first loading flowing through the real section-and-card component hierarchy for every section, consistent with the discipline established in Phase 10 Steps 2–5.
+- **Error Handling** — each of the six Administration sections independently error-isolated, so a failure in one section can never blank the rest of the control center.
+
+### Verified
+
+- Independent engineering review performed against the frozen architecture and the frozen UX specification (State/Configuration/Record rhythm, Explanation Before Control, the calm-policy-vs-ledger distinction, and the Connected Services/Connected Systems distinction).
+- Full verification suite (typecheck, lint, build, automated test suite) passing with no regressions to Phase 10 Steps 1–5.
+
+---
+
+## Phase 10 – Step 5 (Analytics Workspace Architecture)
+
+Phase 10 Step 5 has been fully completed and reviewed, establishing the Analytics Workspace's architecture as organizational learning drawn from operational history. No business intelligence, backend integration, or real analytics data was introduced — this step establishes structure and presentation model only.
+
+### Added
+
+- **Analytics Workspace** — transforms operational history into organizational learning, answering "What has the organization learned over time?" Where Dashboard owns the present at breadth and Investigation/Recommendation each own one instance in depth, Analytics owns history at breadth, the previously unclaimed quadrant.
+- **Six Analytics Sections** — Executive Overview, Trend Analysis, Pattern Discovery, Recommendation Effectiveness, Organizational Insights, and Strategic Opportunities, each with a single, non-overlapping responsibility in a fixed reading order.
+- **Narrative Before Charts** — Trend Analysis and Pattern Discovery each present Trend/Pattern → Narrative → Supporting Evidence; any chart remains a small, de-emphasized extension point supporting the narrative, never the section's primary content.
+- **Recommendation Effectiveness** — a future-capability placeholder explaining that organizational outcome tracking does not yet exist anywhere in the platform, never a generic "No Data" or "Empty" state.
+- **Shared Scope Indicator** — a single analysis-period and filter scope lives once in the persistent Analytics Navigator; no individual section restates it.
+- **Strategic Opportunities** — identifies organization-level opportunities only; it never approves actions, assigns work, or manages a lifecycle, preserving Recommendation Workspace as the platform's only Decision Workspace.
+- **Analytics Context** — architectural presentation state only (selected analysis period, active section, expanded sections, and selected insight); no metrics, trend data, or recommendation outcomes.
+- **Accessibility** — correct heading hierarchy, a persistent keyboard- and screen-reader-navigable section navigator, and color-independent presentation throughout.
+- **Responsiveness** — the navigator and reading column adapt from a side-by-side desktop/laptop layout to a stacked tablet/mobile layout; narrative order never changes, only the layout.
+- **Loading** — skeleton-first loading flowing through the real section-and-card component hierarchy, driven by a real workspace-level loading transition, consistent with the discipline established in Phase 10 Steps 2–4.
+- **Error Handling** — each of the six Analytics sections independently error-isolated, so a failure in one section can never blank the rest of the workspace.
+
+### Verified
+
+- Independent review performed against the frozen architecture and the frozen UX specification (narrative-before-charts, the future-capability placeholder, the shared Scope Indicator, and Organizational Insights' distinct-but-neutral rhythm).
+- Full verification suite (typecheck, lint, build, automated test suite) passing with no regressions to Phase 10 Steps 1–4.
+
+---
+
 # 2026-08-05
 
 ## Phase 10 – Step 4 (Recommendation Workspace Architecture)

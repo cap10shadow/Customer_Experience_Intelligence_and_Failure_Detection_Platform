@@ -237,7 +237,9 @@ Visualize operational intelligence.
 - Workspace architecture refined to five workspaces (Dashboard, Investigations, Recommendations, Analytics, Administration); Action Center retired as a standalone workspace, its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001)
 - Step 3: Investigation Workspace Architecture (Completed)
 - Step 4: Recommendation Workspace Architecture (Completed)
-- Step 5: (Active — scope not yet defined)
+- Step 5: Analytics Workspace Architecture (Completed)
+- Step 6: Administration Workspace Architecture (Completed)
+- Step 7: (Active — scope not yet defined)
 - complaint dashboards
 - anomaly heatmaps
 - regional analytics

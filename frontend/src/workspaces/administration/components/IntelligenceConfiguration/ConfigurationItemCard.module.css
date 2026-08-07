@@ -1,0 +1,75 @@
+.item {
+  border-left: 2px solid var(--color-border-default);
+}
+
+.name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.whatItIs {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  max-width: 68ch;
+}
+
+.governs {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  max-width: 68ch;
+}
+
+.governsLabel {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.valueRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.valueLabel {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.valueInput {
+  width: 100%;
+  max-width: 32ch;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.valueInputEditing {
+  background-color: var(--color-surface-raised);
+  border-color: var(--color-accent);
+}
+
+.editButton {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.editButton[aria-pressed='true'] {
+  background-color: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}

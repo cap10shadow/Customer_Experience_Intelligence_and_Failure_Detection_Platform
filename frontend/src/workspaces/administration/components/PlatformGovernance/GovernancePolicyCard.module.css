@@ -1,0 +1,23 @@
+/* Journal-like, spacious vertical rhythm -- the same calm narrative texture Analytics' InsightCard established for Organizational Insights (UX-006), never a grid, never a selectable/pressed state. */
+.item {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.headline {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.statement {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  max-width: 68ch;
+}

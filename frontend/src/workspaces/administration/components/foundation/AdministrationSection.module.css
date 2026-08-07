@@ -1,0 +1,26 @@
+/*
+ * ADM-005: subtle rhythm reinforcing the three presentation registers
+ * (State / Configuration / Record). `AdministrationContent`'s Stack
+ * already provides a uniform gap between every section; these rules add
+ * a small additional pause only at the two register transitions
+ * (State -> Configuration, Configuration -> Record), never at the
+ * State-register sections themselves (Platform Overview, User & Access
+ * Management, Data Sources & Integrations sit flush against the default
+ * rhythm). Presentation only -- no new landmark, no grouped navigation.
+ */
+
+.section {
+  scroll-margin-top: var(--space-4);
+}
+
+.state {
+  margin-top: 0;
+}
+
+.configuration {
+  margin-top: var(--space-6);
+}
+
+.record {
+  margin-top: var(--space-6);
+}

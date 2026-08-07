@@ -1,0 +1,14 @@
+/*
+ * ADM-004: the one place in this workspace that carries deliberately
+ * heavier presentation weight than its surroundings -- a quieter
+ * background and more generous internal spacing, mirroring exactly the
+ * neutral treatment Recommendation's Risk Assessment container already
+ * established for UX-002 (RiskAssessment.module.css). Never a stronger
+ * color, never a warning/alarm tone -- weight comes from spacing and
+ * pacing only.
+ */
+.container {
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-sunken);
+}
