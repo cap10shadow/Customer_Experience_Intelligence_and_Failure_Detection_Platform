@@ -8,7 +8,11 @@ A Customer Experience Intelligence & Operational Decision Support Platform (per 
 
 **Phase 1 through Phase 9 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, incident correlation, root cause analysis, business impact analysis, intelligence evaluation engines, and the recommendation engine are all operational.
 
-**Phase 10 (Executive Dashboard) is COMPLETE across all seven steps.** Steps 1–6 established the five-workspace frontend architecture (Dashboard, Investigations, Recommendations, Analytics, Administration); following a Product Architecture Review, Action Center was retired as a standalone workspace and its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001). Step 7 connected that architecture to real backend intelligence through a centralized Gateway: Dashboard, Investigation, Recommendation (read), and Analytics (trends) now render real data end to end, and Business Impact assessments publish a `BusinessImpactCompleted` event consumed independently by Recommendation and Evaluation. Administration remains presentation-only by design — it has no backend yet. Recommendation Decision/Lifecycle, Recommendation Effectiveness, Analytics Pattern Discovery/Organizational Insights/Strategic Opportunities, and the Administration backend are explicitly **not** implemented — see `ROADMAP.md` §6/6a and `docs/DECISIONS.md` for what remains deferred. Event delivery today is single-attempt/best-effort (no message broker, Outbox, or durable retry yet), and there is no authentication/RBAC yet.
+**Phase 10 (Executive Dashboard) is COMPLETE across all seven steps, followed by an intermediate capability-completion step (Step 7.X, COMPLETE).** Steps 1–6 established the five-workspace frontend architecture (Dashboard, Investigations, Recommendations, Analytics, Administration); following a Product Architecture Review, Action Center was retired as a standalone workspace and its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001). Step 7 connected that architecture to real backend intelligence through a centralized Gateway: Dashboard, Investigation, Recommendation (read), and Analytics (trends) render real data end to end, and Business Impact assessments publish a `BusinessImpactCompleted` event consumed independently by Recommendation and Evaluation.
+
+Step 7.X then closed the gap between Step 7's real-data integration and a small set of genuinely missing or dishonestly-presented capabilities identified in a follow-up audit: Dashboard Supporting Evidence and the partial-failure `warnings` signal are now real; Business Impact carries its own ARB-008-compliant confidence classification; Investigation's Evidence section can surface a real, dimension-scoped NLP aggregate; Analytics' Executive Overview and its three narrative sections (Pattern Discovery, Organizational Insights, Strategic Opportunities) are now honest — either a real rollup or an explicit future-capability placeholder, never fabricated narrative; Administration's Platform Overview shows real service health; **Recommendation Decision is now a real, persisted capability** (approve/reject/defer/pending plus an optional note, no decision-owner/actor — see `docs/DECISIONS.md`, REC-003); and **Administration's Intelligence Configuration now displays real, read-only Business Impact engine values** (weights, point values, severity bands) sourced live from `business_impact_service`, with no edit/save/mutation control anywhere.
+
+Still explicitly deferred: Root Cause confirm/reject/refresh (a write capability), `RecommendationStatisticsService` surfacing, full Dashboard dimensional filtering (region/business unit/product/user), Administration User & Access Management, Administration Audit & Change History persistence, editable/persisted Intelligence Configuration, Recommendation Effectiveness/outcome tracking, and an Evaluation Service UI (explicitly decided against — see `docs/architecture/phase-10/STEP_7X_SCOPE_FREEZE.md`). Event delivery remains single-attempt/best-effort (no message broker, Outbox, or durable retry), and there is no authentication/RBAC anywhere in the platform yet — the new `PATCH` decision endpoint is exactly as unauthenticated as every other Gateway route today. See `ROADMAP.md` and `docs/DECISIONS.md` for the full list of what remains deferred.
 
 **Phase 11+ (Observability & Reliability, AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
 
@@ -37,7 +41,7 @@ The Evaluation Service (Phase 8) is an independent Intelligence Assurance Servic
 - ↓
 - **Recommendation Engine** (Deterministic Rules, Persistence & Lifecycle)
 - ↓
-- **Executive Dashboard** (Steps 1–7 Complete — Gateway/API integration, real workspace data, BusinessImpactCompleted event fan-out)
+- **Executive Dashboard** (Steps 1–7 Complete — Gateway/API integration, real workspace data, BusinessImpactCompleted event fan-out; Step 7.X Complete — Recommendation Decision persistence, read-only Intelligence Configuration, and further real-data/honesty completions)
 
 ### Planned Future Phases
 - ↓
@@ -64,7 +68,7 @@ The platform uses a modular, service-based architecture sharing a single reposit
 | recommendation_service | 8006 | Recommendation generation; consumes `BusinessImpactCompleted` | Stable |
 | copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |
 | evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven); consumes `BusinessImpactCompleted` | Stable |
-| frontend | 3000 | Operational dashboard | Dashboard, Investigation, Recommendation (read), and Analytics (trends) integrated with real Gateway data; Administration remains presentation-only |
+| frontend | 3000 | Operational dashboard | Dashboard, Investigation, Recommendation (read + decision persistence), and Analytics (trends) integrated with real Gateway data; Administration integrated for Platform Overview and read-only Intelligence Configuration, otherwise presentation-only |
 
 Each service exposes a `/health` endpoint.
 
@@ -76,7 +80,7 @@ Each service exposes a `/health` endpoint.
 - **Database:** PostgreSQL, SQLAlchemy 2.x, Alembic
 - **Infrastructure:** Docker, Docker Compose
 - **Intelligence:** Deterministic rules, Scikit-learn (planned), LangGraph (planned)
-- **Frontend:** React, TypeScript, React Router — application shell, five-workspace architecture, and centralized Gateway API client, integrated with real backend data for Dashboard, Investigation, Recommendation (read), and Analytics (trends)
+- **Frontend:** React, TypeScript, React Router — application shell, five-workspace architecture, and centralized Gateway API client, integrated with real backend data for Dashboard, Investigation, Recommendation (read + decision persistence), Analytics (trends), and Administration (Platform Overview + read-only Intelligence Configuration)
 
 ---
 

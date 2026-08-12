@@ -7,6 +7,32 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-13
+
+## Phase 10 – Step 7.X (Intermediate Capability Completion)
+
+Step 7.X closed a bounded, audited set of gaps left after Phase 10 Step 7: real backend data that existed but was unwired, small honestly-missing capabilities, UX-honesty corrections where illustrative content was presented with the same visual confidence as real data, and two capabilities that required an explicit architectural decision before implementation. Scoped and designed by a dedicated three-document audit trail (`docs/architecture/phase-10/STEP_7X_CAPABILITY_GAP_INVENTORY.md`, `STEP_7X_SCOPE_FREEZE.md`, `STEP_7X_IMPLEMENTATION_ARCHITECTURE.md`), delivered across six implementation batches and this closing verification/cleanup batch. This step does not begin, and is not a substitute for, Phase 11.
+
+### Added
+
+- **Dashboard evidence & honesty** — Supporting Evidence now renders real category/region/sentiment/urgency trend summaries from `anomaly_service` (previously hardcoded); the Gateway's partial-failure `warnings` signal is now surfaced on both Dashboard and Investigation; Recommended Focus's structural always-empty state is resolved; Dashboard's four scope-filter context setters are now symmetric.
+- **Investigation intelligence** — Business Impact now carries its own confidence classification (`business_impact_service/app/domain/confidence.py`), structurally independent from Root Cause's per ARB-008 (different module, different band thresholds, never shared); Evidence can surface a real, dimension/time-window-scoped NLP enrichment aggregate from `nlp_service`.
+- **Recommendation decision persistence** — `RecommendationEntity` gained nullable `decision`/`decision_note`/`decided_at` columns and a new `PATCH /recommendations/{recommendation_id}/decision` endpoint (Gateway-routed); the workspace's Decision section is now real, persisted state with loading/success/error handling, replacing the prior honest-placeholder treatment. Deliberately excludes any decision-owner/actor field — see `docs/DECISIONS.md` (REC-003).
+- **Analytics honesty** — Executive Overview now computes real observations directly from already-fetched trend data instead of rendering fabricated boilerplate; Pattern Discovery, Organizational Insights, and Strategic Opportunities now render the same honest `FutureCapabilityPlaceholder` component Recommendation Effectiveness already used, replacing a fabricated recurring narrative that had been rendered with full visual parity to real data.
+- **Administration integration** — Platform Overview now aggregates real, just-checked service health from all 9 backend services' `/health` endpoints (Administration's first real Gateway surface); Intelligence Configuration now displays real, read-only Business Impact engine configuration (dimension weights, impact-level point values, severity-band thresholds) sourced live from a new `business_impact_service` endpoint — no edit, save, or mutation control anywhere.
+
+### Verified
+
+- Full backend suite, full frontend suite, typecheck, lint, and production build all green; all 9 backend services confirmed to import and start cleanly; the recommendation-decision migration verified as a single, additive, reversible head with no branching; the full G-01 decision flow (pending/approved/rejected/deferred, optional note, server-controlled timestamp, deterministic repeated-PATCH overwrite, 404/422 handling, no actor/owner field) and the G-05 configuration read flow (real values, no secrets, no mutation route) verified end to end.
+- Gateway/BFF boundary, three-model-layer separation, DATA-002 service-local read models, `incident_id` ≠ `event_id`, `recommendation_id` ≠ `incident_id`, ARB-008 stage-specific confidence, the existing error envelope/correlation-ID/timeout conventions, and the `BusinessImpactCompleted` fan-out all re-confirmed intact.
+- One pre-existing, unrelated frontend test-fixture gap (from the Dashboard Supporting Evidence work) was found and corrected during closure verification.
+
+### Explicitly Deferred
+
+`RecommendationStatisticsService` surfacing, Root Cause confirm/reject/refresh (a write capability), Administration User & Access Management, full Dashboard dimensional filtering, editable/persisted Intelligence Configuration, Administration Audit & Change History and Data Sources & Integrations persistence, Recommendation Effectiveness/outcome tracking, and an Evaluation Service UI (explicitly decided against). Authentication/RBAC, a production message broker/Outbox/durable retry, event replay, production observability, and mTLS/service-mesh/internal authentication remain Phase 11–13 scope — see `ROADMAP.md` and `docs/DECISIONS.md` for the full list.
+
+---
+
 # 2026-08-09
 
 ## Phase 10 – Step 7 (Integration)

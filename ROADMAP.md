@@ -240,6 +240,7 @@ Visualize operational intelligence.
 - Step 5: Analytics Workspace Architecture (Completed)
 - Step 6: Administration Workspace Architecture (Completed)
 - Step 7: Integration — Gateway/API integration, real workspace data wiring (Dashboard, Investigation, Recommendation, Analytics), canonical resource routing, and the BusinessImpactCompleted event fan-out to Recommendation/Evaluation (Completed)
+- Step 7.X: Intermediate Capability Completion — real Dashboard Supporting Evidence and partial-failure warnings, Business Impact confidence classification, real Investigation NLP evidence aggregate, honest Analytics Executive Overview/Pattern Discovery/Organizational Insights/Strategic Opportunities, real Administration Platform Overview, minimal Recommendation Decision persistence (no actor/owner — see `docs/DECISIONS.md`, REC-003), and read-only Administration Intelligence Configuration (Completed)
 - complaint dashboards
 - anomaly heatmaps
 - regional analytics

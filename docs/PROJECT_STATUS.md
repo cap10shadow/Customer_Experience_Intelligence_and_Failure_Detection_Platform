@@ -7,7 +7,7 @@
 
 # Last Updated
 
-**Date:** 2026-08-09
+**Date:** 2026-08-13
 
 ---
 
@@ -23,7 +23,7 @@
 
 **Current Phase:** Phase 10 – Executive Dashboard
 
-**Current Step:** Step 7 – Integration
+**Current Step:** Step 7.X – Intermediate Capability Completion
 
 **Status:** Complete
 
@@ -60,6 +60,33 @@
 | ✅ Step 5 – Analytics Workspace Architecture | Complete |
 | ✅ Step 6 – Administration Workspace Architecture | Complete |
 | ✅ Step 7 – Integration (Gateway, real data, events) | Complete |
+| ✅ Step 7.X – Intermediate Capability Completion | Complete |
+
+---
+
+# Phase 10 Step 7.X – Completion Summary
+
+**Intermediate Capability Completion — Real Data Wiring, Honesty Corrections, Minimal Decision Persistence, and Read-Only Configuration — Fully Implemented and Verified**
+
+Step 7.X was an intermediate step between Phase 10 Step 7 (Integration) and Phase 11, scoped by a dedicated capability-gap audit (`docs/architecture/phase-10/STEP_7X_CAPABILITY_GAP_INVENTORY.md`), a scope freeze (`STEP_7X_SCOPE_FREEZE.md`), and a field-level implementation architecture (`STEP_7X_IMPLEMENTATION_ARCHITECTURE.md`) — all three retained as the permanent design record for this step. It closed a bounded set of genuine gaps left after Step 7: real backend data that existed but was unwired, small honestly-missing capabilities, UX-honesty corrections where illustrative content was presented with the same visual confidence as real data, and two capabilities requiring an explicit architectural decision before implementation (Recommendation Decision persistence, read-only Intelligence Configuration).
+
+### Verified
+
+- **Dashboard**: Supporting Evidence now renders real category/region/sentiment/urgency trend summaries from `anomaly_service`; the partial-failure `warnings` signal is now rendered on both Dashboard and Investigation; Recommended Focus's structural always-empty state is resolved; the four scope-filter context setters are symmetric (`region`/`businessUnit`/`productScope`/`userScope`), with real dimensional filtering itself still correctly deferred (no data model exists for it).
+- **Investigation**: Business Impact now has its own ARB-008-compliant confidence classifier (`business_impact_service/app/domain/confidence.py`), structurally independent from Root Cause's — different module, different band values, never shared or reused.
+- **Recommendation**: Decision is now a real, persisted capability. `RecommendationEntity` gained three nullable, additive columns (`decision`, `decision_note`, `decided_at`); one `PATCH /recommendations/{recommendation_id}/decision` endpoint (Gateway-routed, real DTOs) records or overwrites a decision. No decision-owner, actor, approval-authority, or audit trail exists — see `docs/DECISIONS.md` (REC-003) for why that is a deliberate, minimal-scope choice, not an oversight. Recommendation Lifecycle correctly gates real stage presentation on a real decision existing (Decision Before Lifecycle).
+- **Analytics**: Executive Overview now computes real observations directly from already-fetched trend data (no fabricated boilerplate); Pattern Discovery, Organizational Insights, and Strategic Opportunities now render the same honest `FutureCapabilityPlaceholder` component Recommendation Effectiveness already used, instead of a fabricated recurring narrative rendered with full visual parity to real data.
+- **Administration**: Platform Overview now aggregates real, just-checked reachability from all 9 backend services' own `/health` endpoints (the platform's first Gateway surface for Administration). Intelligence Configuration now displays real, read-only Business Impact engine values (5 dimension weights, 5 impact-level point values, 4 severity-band thresholds) sourced live from a new `business_impact_service` endpoint — no edit/save/mutation control anywhere, no persistence, no versioning.
+- **Architecture preserved throughout**: Gateway/BFF boundary, three-model-layer separation, DATA-002 service-local read models, `incident_id` ≠ `event_id`, `recommendation_id` ≠ `incident_id`, ARB-008 stage-specific confidence, the existing error envelope/correlation-ID/timeout conventions, and the `BusinessImpactCompleted` fan-out were all re-verified intact — none was redesigned or touched.
+- **Final verification**: full backend suite, full frontend suite, typecheck, lint, and production build all green; all 9 backend services import and expose their FastAPI `app` cleanly; the recommendation-decision migration (`f05ea2afc3ee`) is a single, additive, reversible head with no branching.
+
+### Explicitly Deferred
+
+G-03 (`RecommendationStatisticsService` surfacing), G-04 (Root Cause confirm/reject/refresh — Investigation's first potential write capability), G-06 (Administration User & Access Management), G-09 (full Dashboard dimensional filtering), editable/persisted Intelligence Configuration, Administration Audit & Change History and Data Sources & Integrations persistence, Recommendation Effectiveness/outcome tracking (ARB-002 long-term vision), and an Evaluation Service UI (explicitly decided against — no Evaluation UI is planned in the Phase 10 lineage). Authentication/RBAC, a production message broker/Outbox/durable retry, event replay, production observability, and mTLS/service-mesh/internal authentication remain Phase 11–13 scope, untouched.
+
+### Outcome
+
+Step 7.X is complete and approved. It did not begin, and does not represent progress toward, Phase 11. Event delivery remains single-attempt/best-effort; there is no authentication/RBAC anywhere in the platform, including on the new decision-persistence endpoint.
 
 ---
 
@@ -437,14 +464,14 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 | Service                 | Status              |
 | ----------------------- | ------------------- |
-| Gateway Service         | Integrated (Phase 10 Step 7) |
+| Gateway Service         | Integrated (Phase 10 Step 7; extended Step 7.X — Administration overview/configuration routes, Recommendation decision PATCH route) |
 | Ingestion Service       | Stable              |
-| NLP Service             | Stable              |
+| NLP Service             | Stable; incident-scoped enrichment aggregate added (Phase 10 Step 7.X, A-06) |
 | Anomaly Service         | Stable              |
 | Root Cause Service      | Stable              |
-| Business Impact Service | Stable; publishes BusinessImpactCompleted (Phase 10 Step 7) |
+| Business Impact Service | Stable; publishes BusinessImpactCompleted (Phase 10 Step 7); confidence classifier and read-only configuration endpoint added (Step 7.X) |
 | Evaluation Service      | Stable; consumes BusinessImpactCompleted (Phase 10 Step 7) |
-| Recommendation Service  | Stable; consumes BusinessImpactCompleted (Phase 10 Step 7) |
+| Recommendation Service  | Stable; consumes BusinessImpactCompleted (Phase 10 Step 7); minimal decision persistence added (Step 7.X, REC-003) |
 | Copilot Service         | Scaffolded          |
 
 ---
@@ -454,11 +481,11 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 - React + TypeScript foundation
 - Project structure established
 - Workspace Architecture established (Phase 10 Step 1 Complete)
-- Dashboard Information Architecture established (Phase 10 Step 2 Complete); integrated with real Gateway data (Phase 10 Step 7)
-- Investigation Workspace Architecture established (Phase 10 Step 3 Complete); integrated with real Gateway data (Phase 10 Step 7)
-- Recommendation Workspace Architecture established (Phase 10 Step 4 Complete); read integration with real Gateway data (Phase 10 Step 7) — Decision/Lifecycle remain Step 7.X
-- Analytics Workspace Architecture established (Phase 10 Step 5 Complete); Trend Analysis integrated with real Gateway data (Phase 10 Step 7) — Pattern Discovery, Organizational Insights, Strategic Opportunities, and Recommendation Effectiveness remain Step 7.X
-- Administration Workspace Architecture established (Phase 10 Step 6 Complete); no backend integration — remains Step 7.X by design
+- Dashboard Information Architecture established (Phase 10 Step 2 Complete); integrated with real Gateway data (Phase 10 Step 7), including real Supporting Evidence and partial-failure warnings (Step 7.X)
+- Investigation Workspace Architecture established (Phase 10 Step 3 Complete); integrated with real Gateway data (Phase 10 Step 7), including a real, ARB-008-compliant Business Impact confidence classification (Step 7.X)
+- Recommendation Workspace Architecture established (Phase 10 Step 4 Complete); read integration with real Gateway data (Phase 10 Step 7); Decision is now a real, persisted capability (Step 7.X, REC-003) — no decision-owner/actor, no authentication
+- Analytics Workspace Architecture established (Phase 10 Step 5 Complete); Trend Analysis integrated with real Gateway data (Phase 10 Step 7); Executive Overview now computes real observations, and Pattern Discovery/Organizational Insights/Strategic Opportunities now render honest future-capability placeholders instead of fabricated narrative (Step 7.X); Recommendation Effectiveness remains a placeholder — no outcome-tracking capability exists yet
+- Administration Workspace Architecture established (Phase 10 Step 6 Complete); Platform Overview and read-only Intelligence Configuration are now integrated with real Gateway data (Step 7.X) — User & Access Management, Data Sources & Integrations, Platform Governance, and Audit & Change History remain presentation-only by design
 - Five-workspace architecture (Dashboard, Investigations, Recommendations, Analytics, Administration) following the Action Center consolidation refinement — see `docs/DECISIONS.md` (FE-001)
 
 ---
@@ -467,7 +494,7 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 **Phase 11 – Observability & Reliability (not yet started)**
 
-> Phase 10 (Executive Dashboard) is complete across all seven steps. Step 7 connected the five-workspace frontend to real backend intelligence through the Gateway and wired the BusinessImpactCompleted event fan-out. The next planned phase per `ROADMAP.md` is Phase 11 (structured logging, metrics, tracing, health monitoring, error tracking); it has not yet been scoped or started.
+> Phase 10 (Executive Dashboard) is complete across all seven steps, followed by Step 7.X (Intermediate Capability Completion), also complete. Step 7.X closed the bounded set of genuine gaps identified after Step 7 — see the Phase 10 Step 7.X Completion Summary above for the full list of what shipped and what remains explicitly deferred. Step 7.X did not begin, and is not a substitute for, Phase 11. The next planned phase per `ROADMAP.md` is Phase 11 (structured logging, metrics, tracing, health monitoring, error tracking); it has not yet been scoped or started.
 
 ---
 
@@ -475,7 +502,7 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 **Phase 11 – Observability & Reliability**
 
-> Phase 10 Step 7 (Integration) is complete and approved. No further Phase 10 step is currently defined in `ROADMAP.md`. Recommendation Decision/Lifecycle, Analytics Pattern Discovery/Organizational Insights/Strategic Opportunities/Recommendation Effectiveness, and the Administration backend remain explicitly deferred (Step 7.X) until a future phase scopes them.
+> Phase 10 (all seven steps, plus Step 7.X) is complete and approved. No further Phase 10 step is currently defined in `ROADMAP.md`. Root Cause mutation surfacing (G-04), `RecommendationStatisticsService` surfacing (G-03), full Dashboard dimensional filtering (G-09), Administration User & Access Management (G-06), editable Intelligence Configuration, Administration Audit & Change History persistence, and Recommendation Effectiveness/outcome tracking remain explicitly deferred until a future phase scopes them. Authentication/RBAC, a production message broker/Outbox/durable retry, and production observability remain Phase 11–13 scope.
 
 ---
 

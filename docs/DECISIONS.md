@@ -988,3 +988,39 @@ This is a navigation and ownership refinement, not a redesign. Dashboard, Invest
 
 **Cons**
 - None identified. Action Center had zero implemented business functionality to migrate, and no other phase or document depended on its existence (verified: it was never named in PRD.md, ARCHITECTURE.md, ROADMAP.md, or PRODUCT_EXPERIENCE_GUIDE.md).
+
+---
+
+## REC-003 — Minimal Recommendation Decision Persistence Without Attribution
+
+**Status:** Accepted
+
+**Date:** 2026-08-12
+
+### Context
+
+Step 7.X's capability audit found that Recommendation Decision/Lifecycle (Phase 10 Step 4/A-07) rendered an honest placeholder rather than fabricated data, but no domain concept of a "decision" existed anywhere in `recommendation_service` — not a wiring gap, but a missing domain concept requiring an explicit decision before any implementation could begin (see `docs/architecture/phase-10/STEP_7X_SCOPE_FREEZE.md`, G-01).
+
+The natural, complete version of "record a decision" would include who made it and what authority they had to make it. Neither exists in this platform: there is no authentication, no user model, and no RBAC (Phase 13, per `ROADMAP.md`). Building attribution now would mean inventing a throwaway identity concept purely to satisfy this one feature, one that would almost certainly conflict with or be discarded by the real Phase 13 authentication design.
+
+### Decision
+
+`RecommendationEntity` gains three new, nullable, additive columns: `decision` (enum: `pending`/`approved`/`rejected`/`deferred`), `decision_note` (free text), and `decided_at` (server-set timestamp). A single `PATCH /recommendations/{recommendation_id}/decision` endpoint records or overwrites these three fields. No decision-owner, actor, approval-authority, or audit-trail field is introduced anywhere in this design. Repeated PATCH calls unconditionally overwrite the prior decision — there is no conflict detection, since conflict detection would itself require knowing who is in conflict with whom.
+
+### Rationale
+
+- **Minimal-viable over speculative-complete:** a decision record answering only "what is the current state and optional note" is a real, usable capability today. A decision record answering "who decided, and were they allowed to" is not achievable honestly without authentication, so attempting it now would mean either fabricating an identity or blocking the whole feature on Phase 13.
+- **No throwaway modeling:** inventing a placeholder "decision owner" field now (e.g., a free-text name) would create a fake-looking real field — exactly the kind of "looks real but isn't" presentation Step 7.X exists to eliminate elsewhere (see A-07's own motivation). Omitting the field entirely is the honest choice, not a shortcut.
+- **Forward-compatible:** adding an actor/owner column later, once Phase 13 authentication exists, is a pure additive migration — nothing about this design needs to be reworked or reversed to support it.
+- **Consistent with existing persistence conventions:** the nullable-column, additive-migration approach mirrors REC-002's own precedent (adding `action` to `RecommendationEntity` without disturbing the frozen aggregate), and the overwrite-on-repeated-PATCH semantics are the simplest behavior consistent with having no attribution to arbitrate a conflict.
+
+### Consequences
+
+**Pros**
+- Recommendation Decision becomes a real, persisted capability instead of an honest placeholder, closing the last major Recommendation Workspace gap from Phase 10 Step 4.
+- `recommendation_id` and `incident_id` remain untouched and undisturbed — no new identifier concept was introduced.
+- The design imposes no migration cost or rework risk on the eventual Phase 13 authentication work.
+
+**Cons**
+- A decision cannot currently answer "who approved this" or "was this an authorized approval" — genuinely absent until Phase 13. Any consumer of this data must not assume attribution exists.
+- Because there is no conflict detection, two people editing the same recommendation's decision in quick succession will silently overwrite one another. This is an accepted, documented limitation of the prototype stage, not an oversight.

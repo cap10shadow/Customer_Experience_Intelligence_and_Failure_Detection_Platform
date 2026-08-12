@@ -83,6 +83,8 @@ describe('toDashboardViewModel', () => {
         },
       ],
       appliedFilters: { timeRange: '7d', region: null, businessUnit: null, productScope: null, userScope: null },
+      // Step 7.X A-01: real per-dimension trend summaries from anomaly_service, added to DashboardResponse after this fixture was originally written.
+      supportingEvidence: [{ id: 'evidence-1', headline: 'h', description: 'd' }],
       warnings: ['Recommendation data is temporarily unavailable. (DOWNSTREAM_SERVICE_UNAVAILABLE)'],
     }
 
@@ -95,6 +97,7 @@ describe('toDashboardViewModel', () => {
     expect(viewModel.focusAreas).toBe(response.operationalBrief.focusAreas)
     expect(viewModel.decisionOpportunities).toBe(response.decisionSummary)
     expect(viewModel.operationalStories).toBe(response.investigationEntryPoints)
+    expect(viewModel.supportingEvidence).toBe(response.supportingEvidence)
     expect(viewModel.warnings).toEqual(response.warnings)
   })
 })

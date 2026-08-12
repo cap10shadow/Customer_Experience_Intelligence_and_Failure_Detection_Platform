@@ -26,24 +26,3 @@ export interface TrendNarrative {
   evidence: string
 }
 
-/** Headline → Narrative → Supporting Evidence -- the same shape as TrendNarrative, never a bare list item or a chart. */
-export interface PatternNarrative {
-  id: string
-  headline: string
-  narrative: string
-  evidence: string
-}
-
-/** A supported conclusion, not an observation and not a recommendation. */
-export interface OrganizationalInsight {
-  id: string
-  headline: string
-  explanation: string
-}
-
-/** An organization-level opportunity -- never an incident recommendation, never governed by Decision/Lifecycle. */
-export interface StrategicOpportunity {
-  id: string
-  headline: string
-  rationale: string
-}
