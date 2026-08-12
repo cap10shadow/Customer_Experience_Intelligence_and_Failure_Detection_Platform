@@ -44,8 +44,10 @@ class OperationalBriefDTO(BaseModel):
     healthIndicators: List[HealthIndicatorDTO]
     criticalSituations: List[CriticalSituationDTO]
     keyChanges: List[KeyChangeDTO]
-    # No backend capability produces a "focus area" concept -- always
-    # empty rather than fabricated (Part 2 scope).
+    # Step 7.X A-04: a structural selection over two already-fetched real
+    # facts (incident severity + recommendation existence) -- see
+    # dashboard_aggregator._build_focus_areas. Genuinely empty when no
+    # incident satisfies both conditions, never padded.
     focusAreas: List[FocusAreaDTO]
 
 

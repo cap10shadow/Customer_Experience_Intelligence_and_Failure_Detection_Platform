@@ -231,6 +231,14 @@ async def test_dashboard_aggregates_real_downstream_data(override_http_client):
     assert body["operationalBrief"]["healthIndicators"][0]["trend"] == "up"
     assert body["operationalBrief"]["criticalSituations"][0]["headline"] == "Checkout failures rising"
 
+    # Step 7.X A-04: the fixture's one incident is high-severity AND already
+    # has a recommendation -- both real, already-fetched facts -- so it
+    # honestly qualifies as a focus area.
+    focus_areas = body["operationalBrief"]["focusAreas"]
+    assert len(focus_areas) == 1
+    assert focus_areas[0]["headline"] == "Checkout failures rising"
+    assert "high-severity" in focus_areas[0]["reason"]
+
     assert body["decisionSummary"][0]["id"] == RECOMMENDATION_ID
     assert body["decisionSummary"][0]["headline"] == "Escalate to payments team"
     assert body["decisionSummary"][0]["importance"] == "high"
@@ -550,3 +558,105 @@ async def test_supporting_evidence_fetched_concurrently_with_the_rest_of_the_das
     assert response.status_code == 200
     assert len(response.json()["supportingEvidence"]) == 4
     assert elapsed < delay_seconds * 3
+
+
+# --- Step 7.X A-04: Recommended Focus ---------------------------------------
+
+
+@pytest.mark.anyio
+async def test_focus_areas_empty_when_the_incident_has_no_recommendation_yet(override_http_client):
+    # `_make_handler` has no direct "empty recommendations" knob, so route
+    # around it: the recommendations call succeeds (status 200, a real
+    # empty list) while returning no items, delegating every other path
+    # to the standard handler.
+    inner = _make_handler()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/recommendations"):
+            return _json([])
+        return await inner(request)
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/dashboard")
+
+    assert response.status_code == 200
+    assert response.json()["operationalBrief"]["focusAreas"] == []
+
+
+@pytest.mark.anyio
+async def test_focus_areas_empty_when_the_recommended_incident_is_not_high_or_critical_severity(override_http_client):
+    incidents = [_incident(severity="low")]
+    client = _client_for(_make_handler(incidents=incidents))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/dashboard")
+
+    assert response.status_code == 200
+    assert response.json()["operationalBrief"]["focusAreas"] == []
+
+
+@pytest.mark.anyio
+async def test_focus_areas_never_contain_ranking_or_scoring_language(override_http_client):
+    client = _client_for(_make_handler())
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/dashboard")
+
+    focus_areas = response.json()["operationalBrief"]["focusAreas"]
+    assert len(focus_areas) == 1
+    combined_text = " ".join([focus_areas[0]["headline"], focus_areas[0]["reason"]]).lower()
+    for forbidden in ("most critical", "highest impact", "most urgent", "best action", "score"):
+        assert forbidden not in combined_text
+
+
+@pytest.mark.anyio
+async def test_focus_areas_capped_at_three(override_http_client):
+    incidents = [_incident(str(uuid.uuid4()), severity="critical") for _ in range(5)]
+    recommendations = [
+        {
+            "recommendation_id": str(uuid.uuid4()),
+            "incident_id": incident["id"],
+            "generation_id": str(uuid.uuid4()),
+            "category": "escalate",
+            "priority": "high",
+            "score": 88,
+            "action": "Escalate",
+            "created_at": "2026-08-08T01:05:00Z",
+        }
+        for incident in incidents
+    ]
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/incidents"):
+            return _json(incidents)
+        if request.url.path.endswith("/trends/daily"):
+            return _json(_volume_trend())
+        if request.url.path.endswith("/trends/categories"):
+            return _json(_category_trend())
+        if request.url.path.endswith("/trends/regions"):
+            return _json(_region_trend())
+        if request.url.path.endswith("/trends/sentiment"):
+            return _json(_sentiment_trend())
+        if request.url.path.endswith("/trends/urgency"):
+            return _json(_urgency_trend())
+        if request.url.path.endswith("/recommendations"):
+            return _json(recommendations)
+        if request.url.path.endswith("/root-cause"):
+            return httpx.Response(404)
+        if request.url.path.endswith("/business-impact"):
+            return _json([])
+        raise AssertionError(f"unexpected {request.url}")
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/dashboard")
+
+    assert response.status_code == 200
+    assert len(response.json()["operationalBrief"]["focusAreas"]) == 3

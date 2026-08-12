@@ -77,3 +77,17 @@ class ComplaintEnrichmentListResponse(BaseModel):
     total: int
     page: int
     size: int
+
+
+class EnrichmentCategorySummaryResponse(BaseModel):
+    """
+    A real, factual aggregate over already-persisted enrichments matching
+    one issue category within an explicit time window (Step 7.X A-06) --
+    counts and a sentiment-label breakdown only. Never a per-complaint
+    list (no complaint_id/incident_id relationship exists to support
+    that -- see the Step 7.X Implementation Architecture's A-06 STOP
+    finding); never a ranking, "top", or evaluative claim.
+    """
+    issue_category: IssueCategory
+    total_count: int
+    sentiment_counts: Dict[str, int]

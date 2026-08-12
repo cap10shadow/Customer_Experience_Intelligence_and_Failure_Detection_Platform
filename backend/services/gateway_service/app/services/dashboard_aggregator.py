@@ -12,6 +12,7 @@ from backend.services.gateway_service.app.schemas.dashboard import (
     CriticalSituationDTO,
     DashboardResponse,
     DecisionOpportunityDTO,
+    FocusAreaDTO,
     HealthIndicatorDTO,
     KeyChangeDTO,
     OperationalBriefDTO,
@@ -30,6 +31,7 @@ _TIME_RANGE_TO_DAYS = {"current": 1, "24h": 1, "7d": 7, "30d": 30}
 # incidents happen to be active (the N+1 risk the audit flagged).
 _MAX_FEATURED_INCIDENTS = 2
 _MAX_DECISION_OPPORTUNITIES = 5
+_MAX_FOCUS_AREAS = 3
 
 _ACTIVE_STATUSES = {"open", "investigating"}
 
@@ -107,7 +109,7 @@ async def build_dashboard(client: httpx.AsyncClient, query: DashboardQuery) -> D
         urgency_trend_task, warnings, "Urgency trend is temporarily unavailable."
     )
 
-    operational_brief = _build_operational_brief(incidents, volume_trend)
+    operational_brief = _build_operational_brief(incidents, volume_trend, recommendations)
     decision_summary = _build_decision_summary(recommendations)
     investigation_entry_points = await _build_investigation_entry_points(client, incidents, warnings)
     supporting_evidence = _build_supporting_evidence(category_trend, region_trend, sentiment_trend, urgency_trend)
@@ -180,7 +182,9 @@ def _direction(previous: float, latest: float) -> str:
 
 
 def _build_operational_brief(
-    incidents: list[dict[str, Any]], volume_trend: Optional[dict[str, Any]]
+    incidents: list[dict[str, Any]],
+    volume_trend: Optional[dict[str, Any]],
+    recommendations: list[dict[str, Any]],
 ) -> OperationalBriefDTO:
     active_incidents = [incident for incident in incidents if incident.get("status") in _ACTIVE_STATUSES]
     severities = [incident.get("severity", "normal") for incident in active_incidents]
@@ -222,14 +226,52 @@ def _build_operational_brief(
         if incident.get("severity") in ("high", "critical")
     ]
 
+    focus_areas = _build_focus_areas(active_incidents, recommendations)
+
     return OperationalBriefDTO(
         level=overall_level,
         summary=summary,
         healthIndicators=health_indicators,
         criticalSituations=critical_situations,
         keyChanges=key_changes,
-        focusAreas=[],
+        focusAreas=focus_areas,
     )
+
+
+def _build_focus_areas(
+    active_incidents: list[dict[str, Any]], recommendations: list[dict[str, Any]]
+) -> list[FocusAreaDTO]:
+    """
+    Step 7.X A-04: a structural selection over two already-fetched, real
+    facts -- an incident's own real severity classification (the same
+    "high"/"critical" criterion Critical Situations already uses above,
+    not a new ranking scheme) AND whether a real recommendation already
+    exists for that incident (recommendations, fetched for Decision
+    Summary). No score is invented, no new prioritization algorithm is
+    introduced, and no incident is ever called "most critical," "highest
+    impact," or "most urgent" -- each reason states only the incident's
+    own real severity value. An incident with neither condition
+    contributes nothing; a genuinely empty result is an honest empty
+    state, not a fabricated one.
+    """
+    incident_ids_with_recommendation = {
+        str(recommendation["incident_id"]) for recommendation in recommendations if recommendation.get("incident_id")
+    }
+
+    focus_areas = [
+        FocusAreaDTO(
+            id=f"{incident['id']}-focus",
+            headline=incident.get("title", "Untitled incident"),
+            reason=(
+                f"This is a {incident.get('severity')}-severity incident "
+                "with a recommendation already available for review."
+            ),
+        )
+        for incident in active_incidents
+        if incident.get("severity") in ("high", "critical") and str(incident["id"]) in incident_ids_with_recommendation
+    ]
+
+    return focus_areas[:_MAX_FOCUS_AREAS]
 
 
 def _build_decision_summary(recommendations: list[dict[str, Any]]) -> list[DecisionOpportunityDTO]:

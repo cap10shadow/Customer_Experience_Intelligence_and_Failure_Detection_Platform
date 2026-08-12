@@ -168,3 +168,30 @@ async def test_no_update_endpoint_exists(override_dependencies):
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.patch(f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}")
         assert response.status_code == 405
+
+
+# --- Step 7.X A-05: confidence_level (computed from the engine's own confidence, never persisted) ---
+
+
+@pytest.mark.anyio
+async def test_response_includes_a_real_confidence_level_computed_from_confidence(override_dependencies):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}")
+
+    assert response.status_code == 200
+    body = response.json()
+    # _StubAssessment.confidence == 80 -> business_impact_service's own
+    # bands (domain/confidence.py) classify this as "Moderate".
+    assert body["confidence"] == 80
+    assert body["confidence_level"] == "Moderate"
+
+
+@pytest.mark.anyio
+async def test_confidence_level_is_never_the_root_cause_vocabulary(override_dependencies):
+    """Root Cause's bands use 'Weak'/'Low'/'Medium'/'High'/'Very High' -- Business Impact's response must only ever use its own 'Low'/'Moderate'/'High' vocabulary."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}")
+
+    assert response.json()["confidence_level"] not in {"Weak", "Medium", "Very High"}

@@ -13,6 +13,7 @@ from backend.services.nlp_service.app.services.enrichment_service import Enrichm
 from backend.services.nlp_service.app.schemas.complaint_enrichment import (
     ComplaintEnrichmentListResponse,
     ComplaintEnrichmentResponse,
+    EnrichmentCategorySummaryResponse,
     ProcessEnrichmentRequest,
 )
 from backend.shared.constants.enums.complaint import IssueCategory, SentimentLabel, UrgencyLabel
@@ -58,6 +59,42 @@ async def process_enrichment(
         
     response.status_code = status.HTTP_201_CREATED
     return enrichment
+
+
+@router.get(
+    "/summary",
+    response_model=EnrichmentCategorySummaryResponse,
+)
+async def get_enrichment_category_summary(
+    issue_category: IssueCategory = Query(..., description="The issue category to summarize."),
+    start_date: datetime = Query(..., description="Inclusive start of the time window."),
+    end_date: datetime = Query(..., description="Inclusive end of the time window."),
+    repository: EnrichmentRepository = Depends(get_enrichment_repository),
+):
+    """
+    Real, dimension + time-window scoped enrichment aggregate (Step 7.X
+    A-06) -- counts and a sentiment breakdown for one issue category
+    within an explicit window. `issue_category` uses the same
+    `IssueCategory` vocabulary anomaly_service's category-dimension
+    anomalies already use for their own `entity_value`
+    (backend/services/anomaly_service/app/services/detectors/
+    category_detector.py groups by this exact enum), so a caller scoping
+    this by an anomaly's own (entity_value, first_detected_at,
+    last_seen_at) is not fabricating a relationship -- it is querying the
+    same real vocabulary from the other side.
+
+    Returns an honest zero-result (`total_count=0, sentiment_counts={}`)
+    when no enrichment matches -- never a 404, since an empty match set
+    is a legitimate answer for an aggregate query, not a "not found"
+    condition (route note: this is registered before `/{enrichment_id}`
+    so FastAPI never tries to parse "summary" as a UUID).
+    """
+    total_count, sentiment_counts = await repository.summarize_by_category(
+        issue_category=issue_category, start_date=start_date, end_date=end_date
+    )
+    return EnrichmentCategorySummaryResponse(
+        issue_category=issue_category, total_count=total_count, sentiment_counts=sentiment_counts
+    )
 
 
 @router.get(

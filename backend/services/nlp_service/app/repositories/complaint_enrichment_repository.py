@@ -177,6 +177,36 @@ class EnrichmentRepository:
             limit=limit,
         )
 
+    async def summarize_by_category(
+        self,
+        issue_category: IssueCategory,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> tuple[int, dict[str, int]]:
+        """
+        Returns (total_count, sentiment_counts) for enrichments matching
+        `issue_category` within [start_date, end_date] -- a real aggregate
+        over already-persisted enrichments, reusing the same filters
+        `list_enrichments`/`count_enrichments` already apply. `sentiment_counts`
+        only includes labels actually observed (no zero-padding for absent
+        labels); an enrichment with no sentiment_label yet is excluded from
+        the breakdown but still counted in `total_count`.
+        """
+        total = await self.count_enrichments(
+            issue_category=issue_category, start_date=start_date, end_date=end_date
+        )
+
+        stmt = self._apply_filters(
+            select(ComplaintEnrichment.sentiment_label, func.count(ComplaintEnrichment.id)),
+            issue_category=issue_category,
+            start_date=start_date,
+            end_date=end_date,
+        ).group_by(ComplaintEnrichment.sentiment_label)
+        result = await self.session.execute(stmt)
+        sentiment_counts = {label.value: count for label, count in result.all() if label is not None}
+
+        return total, sentiment_counts
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

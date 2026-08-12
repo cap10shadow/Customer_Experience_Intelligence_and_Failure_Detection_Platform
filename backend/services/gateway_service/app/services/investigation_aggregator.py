@@ -5,7 +5,10 @@ import httpx
 
 from backend.services.gateway_service.app.core.aggregation import await_optional
 from backend.services.gateway_service.app.core.config import settings
-from backend.services.gateway_service.app.core.confidence import band_to_confidence_level
+from backend.services.gateway_service.app.core.confidence import (
+    band_to_confidence_level,
+    business_impact_band_to_confidence_level,
+)
 from backend.services.gateway_service.app.core.downstream import get_json
 from backend.services.gateway_service.app.core.errors import ResourceNotFoundError
 from backend.services.gateway_service.app.schemas.investigation import (
@@ -88,25 +91,34 @@ async def build_investigation(client: httpx.AsyncClient, incident_id: str) -> In
         f"Recommendation data for incident {incident_id} is temporarily unavailable.",
         default=[],
     )
+    business_impact = business_impact_list[0] if business_impact_list else None
+
+    # Step 7.X A-06: only issued once `anomalies` is resolved, since it
+    # scopes the query by a real category-dimension anomaly's own
+    # entity_value + detection window.
+    nlp_summary = await _fetch_nlp_evidence(client, anomalies, warnings)
 
     return InvestigationResponse(
         incidentId=str(incident_id),
         observation=_build_observation(incident),
-        evidence=_build_evidence(incident, anomalies),
+        evidence=_build_evidence(incident, anomalies, nlp_summary),
         rootCause=_build_root_cause(root_cause),
-        businessImpact=_build_business_impact(business_impact_list[0] if business_impact_list else None),
-        # ARB-008 (Confidence Remains Stage-Specific): business_impact_service
-        # exposes only a raw `confidence: int` with no stage-specific band
-        # classification of its own. The Gateway must not invent one --
-        # least of all by reusing root_cause_service's confidence bands,
-        # which are Root-Cause-domain semantics, not a portable platform
-        # scale (see docs/DECISIONS.md ARB-008; confirmed anomaly_service's
-        # own severity bands use entirely different thresholds against a
-        # different measurement, proving the bands are not interchangeable
-        # across stages). Always None until Business Impact provides its
-        # own classification -- a Step 7.X capability if ever needed, not
-        # a Gateway concern.
-        businessImpactConfidenceLevel=None,
+        businessImpact=_build_business_impact(business_impact),
+        # Step 7.X A-05: business_impact_service now defines and exposes
+        # its own classification (BusinessImpactAssessmentResponse.
+        # confidence_level, a computed field derived from its own
+        # confidence int -- see business_impact_service/app/domain/
+        # confidence.py). Mapped here via business_impact_band_to_
+        # confidence_level, a function entirely separate from Root
+        # Cause's band_to_confidence_level (ARB-008) -- never reused
+        # across stages despite resolving to the same frontend
+        # vocabulary. Still None when no assessment exists yet (a
+        # legitimate absence, not a suppression).
+        businessImpactConfidenceLevel=(
+            business_impact_band_to_confidence_level(business_impact["confidence_level"])
+            if business_impact is not None
+            else None
+        ),
         recommendedNextStep=_build_recommended_next_step(recommendations[0] if recommendations else None),
         warnings=warnings,
     )
@@ -138,6 +150,46 @@ async def _fetch_latest_recommendation(client: httpx.AsyncClient, incident_id: s
     return recommendations or []
 
 
+async def _fetch_nlp_evidence(
+    client: httpx.AsyncClient, anomalies: list[dict[str, Any]], warnings: list[str]
+) -> Optional[dict[str, Any]]:
+    """
+    Step 7.X A-06: an incident's category-dimension anomaly (entity_type
+    == "category") carries a real IssueCategory value in entity_value --
+    anomaly_service's own category_detector.py groups by the exact same
+    enum nlp_service's ComplaintEnrichment.detected_issue_category uses --
+    plus a real detection window (first_detected_at/last_seen_at). When an
+    incident has one, this scopes a real NLP enrichment aggregate to that
+    same category and window: never a per-complaint list (no
+    incident/complaint relationship exists to support that), never a
+    fabricated one. An incident with no category-dimension anomaly (e.g.
+    purely region/urgency/global) honestly has no NLP evidence to source
+    from this dimension -- returns None without a warning, a legitimate
+    absence, not a failure. Deterministic selection when more than one
+    category anomaly is linked: the alphabetically-first entity_value.
+    """
+    category_anomalies = sorted(
+        (
+            anomaly
+            for anomaly in anomalies
+            if anomaly.get("entity_type") == "category" and anomaly.get("entity_value")
+        ),
+        key=lambda anomaly: anomaly["entity_value"],
+    )
+    if not category_anomalies:
+        return None
+
+    anomaly = category_anomalies[0]
+    url = f"{settings.NLP_SERVICE_URL}/api/v1/enrichments/summary"
+    params = {
+        "issue_category": anomaly["entity_value"],
+        "start_date": anomaly["first_detected_at"],
+        "end_date": anomaly["last_seen_at"],
+    }
+    task = asyncio.create_task(get_json(client, url, params=params))
+    return await await_optional(task, warnings, "NLP enrichment summary is temporarily unavailable.")
+
+
 def _build_observation(incident: dict[str, Any]) -> ObservationDTO:
     return ObservationDTO(
         headline=incident.get("title", "Untitled incident"),
@@ -145,15 +197,21 @@ def _build_observation(incident: dict[str, Any]) -> ObservationDTO:
     )
 
 
-def _build_evidence(incident: dict[str, Any], anomalies: list[dict[str, Any]]) -> list[EvidenceItemDTO]:
+def _build_evidence(
+    incident: dict[str, Any],
+    anomalies: list[dict[str, Any]],
+    nlp_summary: Optional[dict[str, Any]] = None,
+) -> list[EvidenceItemDTO]:
     """
-    Built only from sources with a real, queryable-by-incident API today:
-    one item per linked anomaly (Anomaly Detection) plus one correlation
-    synthesis item when more than one anomaly was linked (Incident
-    Correlation). "NLP Intelligence" evidence is intentionally omitted --
-    nlp_service exposes enrichments by complaint_id/enrichment_id only,
-    with no endpoint to list them by incident_id, so there is no real
-    capability to source that evidence type from today.
+    Built from sources with a real, queryable-by-incident API: one item
+    per linked anomaly (Anomaly Detection), one correlation synthesis
+    item when more than one anomaly was linked (Incident Correlation),
+    and -- as of Step 7.X A-06 -- one dimension+time-window-scoped NLP
+    enrichment aggregate (NLP Intelligence) when the incident has a
+    category-dimension anomaly and that aggregate found at least one
+    matching enrichment. Never a per-complaint NLP evidence list -- no
+    incident/complaint relationship exists to support that (see
+    _fetch_nlp_evidence).
     """
     items: list[EvidenceItemDTO] = [
         EvidenceItemDTO(
@@ -172,6 +230,25 @@ def _build_evidence(incident: dict[str, Any], anomalies: list[dict[str, Any]]) -
                 headline=f"{len(anomalies)} related anomalies were grouped into this incident",
                 detail=incident.get("summary", ""),
                 source="Incident Correlation",
+            )
+        )
+
+    if nlp_summary and nlp_summary.get("total_count", 0) > 0:
+        category_label = str(nlp_summary["issue_category"]).replace("_", " ").title()
+        sentiment_counts = nlp_summary.get("sentiment_counts", {})
+        detail = (
+            f"{nlp_summary['total_count']} enrichment(s) recorded for {category_label} "
+            "in this incident's detection window."
+        )
+        if sentiment_counts:
+            breakdown = ", ".join(f"{label}: {count}" for label, count in sentiment_counts.items())
+            detail += f" Sentiment breakdown: {breakdown}."
+        items.append(
+            EvidenceItemDTO(
+                id=f"{incident['id']}-nlp-summary",
+                headline=f"NLP enrichment summary for {category_label}",
+                detail=detail,
+                source="NLP Intelligence",
             )
         )
 
