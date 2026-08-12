@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
 import { AdministrationContextProvider } from '@/workspaces/administration/context'
@@ -11,6 +10,7 @@ import { DataSourcesIntegrations } from '@/workspaces/administration/components/
 import { IntelligenceConfiguration } from '@/workspaces/administration/components/IntelligenceConfiguration'
 import { PlatformGovernance } from '@/workspaces/administration/components/PlatformGovernance'
 import { AuditChangeHistory } from '@/workspaces/administration/components/AuditChangeHistory'
+import type { ConfigurationItem } from '@/workspaces/administration/types'
 
 function withProviders(children: ReactNode) {
   return (
@@ -19,6 +19,23 @@ function withProviders(children: ReactNode) {
     </MemoryRouter>
   )
 }
+
+const SAMPLE_CONFIGURATION_ITEMS: ConfigurationItem[] = [
+  {
+    id: 'business-impact-weight-financial',
+    name: 'Financial Impact Weight',
+    whatItIs: 'The relative weight this dimension carries in the overall weighted business impact score.',
+    governs: 'Determines how much this dimension contributes to an Incident\'s overall business score.',
+    currentValue: '35%',
+  },
+  {
+    id: 'business-impact-severity-bands',
+    name: 'Business Impact Severity Bands',
+    whatItIs: 'The weighted-business-score thresholds that classify an Incident\'s overall severity.',
+    governs: 'Determines which ImpactLevel an Incident\'s overall weighted business score is classified into.',
+    currentValue: 'None ≤20, Low ≤40, Medium ≤60, High ≤80',
+  },
+]
 
 /**
  * Mirrors RecommendationSections.test.tsx and AnalyticsSections.test.tsx:
@@ -49,7 +66,7 @@ describe('Section-level loading (real component hierarchy)', () => {
 
   it('Intelligence Configuration suppresses real content while loading', () => {
     render(withProviders(<IntelligenceConfiguration isLoading />))
-    expect(screen.queryByText('Anomaly Severity Threshold -- High')).not.toBeInTheDocument()
+    expect(screen.queryByText('Financial Impact Weight')).not.toBeInTheDocument()
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(3)
   })
 
@@ -66,53 +83,43 @@ describe('Section-level loading (real component hierarchy)', () => {
   })
 })
 
-describe('ADM-002: Explanation Before Control in Intelligence Configuration', () => {
-  it('presents what-it-is, then what it governs, then current value, then the edit affordance, in that fixed document order', () => {
-    render(withProviders(<IntelligenceConfiguration />))
+describe('Step 7.X G-05: real, read-only Intelligence Configuration', () => {
+  it('presents what-it-is, then what it governs, then the current value, in that fixed document order, for real fetched items', () => {
+    render(withProviders(<IntelligenceConfiguration items={SAMPLE_CONFIGURATION_ITEMS} />))
 
-    const card = screen.getByText('Anomaly Severity Threshold -- High').closest('div')
+    const card = screen.getByText('Financial Impact Weight').closest('div')
     expect(card).not.toBeNull()
     const text = card!.parentElement!.textContent ?? ''
 
-    const whatItIsIndex = text.indexOf('The complaint-spike magnitude above which')
-    const governsIndex = text.indexOf('Determines when a complaint spike is classified')
+    const whatItIsIndex = text.indexOf('The relative weight this dimension carries')
+    const governsIndex = text.indexOf('Determines how much this dimension contributes')
     const valueLabelIndex = text.indexOf('Current value')
-    const editIndex = text.indexOf('Edit')
 
     expect(whatItIsIndex).toBeGreaterThan(-1)
     expect(governsIndex).toBeGreaterThan(whatItIsIndex)
     expect(valueLabelIndex).toBeGreaterThan(governsIndex)
-    expect(editIndex).toBeGreaterThan(valueLabelIndex)
   })
 
-  it('defaults every configuration value to read-only inspection, never editable', () => {
-    render(withProviders(<IntelligenceConfiguration />))
+  it('renders the real current value for every item, sourced from the fetched response, never a hardcoded copy', () => {
+    render(withProviders(<IntelligenceConfiguration items={SAMPLE_CONFIGURATION_ITEMS} />))
 
-    const inputs = screen.getAllByRole('textbox')
-    inputs.forEach((input) => {
-      expect(input).toHaveAttribute('readonly')
-    })
+    expect(screen.getByText('35%')).toBeInTheDocument()
+    expect(screen.getByText('None ≤20, Low ≤40, Medium ≤60, High ≤80')).toBeInTheDocument()
   })
 
-  it('only enters an editable state after the Edit affordance is explicitly used, and distinguishes inspection from editing via aria-pressed', async () => {
-    const user = userEvent.setup()
-    render(withProviders(<IntelligenceConfiguration />))
+  it('never renders an edit button, save button, toggle, or any mutation control', async () => {
+    render(withProviders(<IntelligenceConfiguration items={SAMPLE_CONFIGURATION_ITEMS} />))
 
-    const editButtons = screen.getAllByRole('button', { name: 'Edit' })
-    expect(editButtons[0]).toHaveAttribute('aria-pressed', 'false')
-
-    await user.click(editButtons[0])
-
-    const inputs = screen.getAllByRole('textbox')
-    expect(inputs[0]).not.toHaveAttribute('readonly')
-    expect(screen.getByRole('button', { name: /done inspecting draft/i })).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('never persists a configuration change -- no fetch, no save confirmation, no network call is possible in this step', () => {
-    // No save/confirm control exists at all; the only control is the Edit toggle.
-    render(withProviders(<IntelligenceConfiguration />))
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /confirm/i })).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0)
+  })
+
+  it('shows an honest empty state, not a blank section, when the real response has no items', () => {
+    render(withProviders(<IntelligenceConfiguration items={[]} />))
+
+    expect(screen.getByText('No configuration values available')).toBeInTheDocument()
   })
 })
 

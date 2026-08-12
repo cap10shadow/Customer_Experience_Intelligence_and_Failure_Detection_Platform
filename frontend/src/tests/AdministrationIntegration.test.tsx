@@ -21,8 +21,31 @@ const SAMPLE_OVERVIEW_RESPONSE: AdministrationApiOverviewResponse = {
   warnings: [],
 }
 
+const SAMPLE_INTELLIGENCE_CONFIGURATION_RESPONSE = { items: [] }
+
 function jsonResponse(body: unknown, status = 200) {
   return { status, ok: status >= 200 && status < 300, text: async () => JSON.stringify(body) } as Response
+}
+
+/**
+ * Stubs fetch for both Administration data sources (Platform Overview and
+ * Intelligence Configuration, Step 7.X A-02/G-05) -- `overviewResponder`
+ * controls only the `/administration/overview` call under test;
+ * `/administration/intelligence-configuration` always resolves to a
+ * minimal, valid, empty response so it never interferes with Platform
+ * Overview assertions in this file.
+ */
+function stubAdministrationFetch(overviewResponse: unknown, overviewStatus = 200) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/administration/intelligence-configuration')) {
+        return Promise.resolve(jsonResponse(SAMPLE_INTELLIGENCE_CONFIGURATION_RESPONSE))
+      }
+      return Promise.resolve(jsonResponse(overviewResponse, overviewStatus))
+    }),
+  )
 }
 
 function renderWorkspace() {
@@ -39,7 +62,7 @@ describe('Administration Platform Overview real Gateway integration (Step 7.X A-
   })
 
   it('shows a loading state, then renders real per-service health data', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_OVERVIEW_RESPONSE)))
+    stubAdministrationFetch(SAMPLE_OVERVIEW_RESPONSE)
 
     renderWorkspace()
 
@@ -53,7 +76,7 @@ describe('Administration Platform Overview real Gateway integration (Step 7.X A-
   })
 
   it('requests only the Gateway base path, never a raw backend service host', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_OVERVIEW_RESPONSE)))
+    stubAdministrationFetch(SAMPLE_OVERVIEW_RESPONSE)
 
     renderWorkspace()
 
@@ -68,18 +91,13 @@ describe('Administration Platform Overview real Gateway integration (Step 7.X A-
   })
 
   it('reports a partial service-health failure honestly, without failing the whole section', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({
-          services: [
-            ...SAMPLE_OVERVIEW_RESPONSE.services.filter((service) => service.id !== 'copilot'),
-            { id: 'copilot', name: 'Copilot Service', status: 'unavailable', detail: 'DOWNSTREAM_SERVICE_UNAVAILABLE' },
-          ],
-          warnings: ['Copilot Service is unavailable (DOWNSTREAM_SERVICE_UNAVAILABLE).'],
-        }),
-      ),
-    )
+    stubAdministrationFetch({
+      services: [
+        ...SAMPLE_OVERVIEW_RESPONSE.services.filter((service) => service.id !== 'copilot'),
+        { id: 'copilot', name: 'Copilot Service', status: 'unavailable', detail: 'DOWNSTREAM_SERVICE_UNAVAILABLE' },
+      ],
+      warnings: ['Copilot Service is unavailable (DOWNSTREAM_SERVICE_UNAVAILABLE).'],
+    })
 
     renderWorkspace()
 
@@ -94,7 +112,7 @@ describe('Administration Platform Overview real Gateway integration (Step 7.X A-
   })
 
   it('never invents a service status beyond the two real values (healthy/unavailable)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_OVERVIEW_RESPONSE)))
+    stubAdministrationFetch(SAMPLE_OVERVIEW_RESPONSE)
 
     renderWorkspace()
 
@@ -104,14 +122,9 @@ describe('Administration Platform Overview real Gateway integration (Step 7.X A-
   })
 
   it('routes a complete Gateway failure into the Platform Overview ErrorBoundary, leaving the rest of Administration presentation-safe', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.', requestId: 'req-1' } },
-          500,
-        ),
-      ),
+    stubAdministrationFetch(
+      { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred.', requestId: 'req-1' } },
+      500,
     )
 
     renderWorkspace()
@@ -133,12 +146,20 @@ describe('Administration Platform Overview real Gateway integration (Step 7.X A-
 
   it('Part 7-style retry: issues a genuine new GET /api/v1/administration/overview request and recovers', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({ error: { code: 'DOWNSTREAM_SERVICE_UNAVAILABLE', message: 'Unavailable.', requestId: 'req-1' } }, 503),
-      )
-      .mockResolvedValueOnce(jsonResponse(SAMPLE_OVERVIEW_RESPONSE))
+    let overviewCallCount = 0
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/administration/intelligence-configuration')) {
+        return Promise.resolve(jsonResponse(SAMPLE_INTELLIGENCE_CONFIGURATION_RESPONSE))
+      }
+      overviewCallCount += 1
+      if (overviewCallCount === 1) {
+        return Promise.resolve(
+          jsonResponse({ error: { code: 'DOWNSTREAM_SERVICE_UNAVAILABLE', message: 'Unavailable.', requestId: 'req-1' } }, 503),
+        )
+      }
+      return Promise.resolve(jsonResponse(SAMPLE_OVERVIEW_RESPONSE))
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     renderWorkspace()

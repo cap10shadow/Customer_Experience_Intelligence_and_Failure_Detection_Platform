@@ -62,23 +62,21 @@ describe('RecommendationsWorkspace composition', () => {
     expect(overviewLink).not.toHaveAttribute('aria-current')
   })
 
-  it('shows a persistent, calm Decision reference (UX-001) that honestly states no decision capability exists yet (Step 7.X A-07) -- never a fabricated "Pending Review" status or a floating action toolbar', () => {
+  it('shows a persistent, calm Decision reference (UX-001) that honestly states no decision has been recorded yet -- never a fabricated "Pending Review" status or a floating action toolbar', () => {
     renderWorkspace()
 
     expect(screen.getByText('Current status')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Recommendation sections' })
     expect(nav).toHaveTextContent('Decision capability not yet available')
     expect(nav).not.toHaveTextContent('Pending Review')
-    expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
   })
 
-  it('presents Decision as a future capability, never a fabricated decision/lifecycle state (Step 7.X A-07)', () => {
+  it('renders the real Decision form (Step 7.X G-01) with no route param, since there is no recommendationId to submit against', () => {
     renderWorkspace()
 
-    expect(screen.getByText('Decision capture is a future capability')).toBeInTheDocument()
-    expect(screen.queryByText('Awaiting review. No action has been taken yet.')).not.toBeInTheDocument()
+    // No :recommendationId route param -- onSubmitDecision is intentionally undefined, so no form renders.
+    expect(screen.queryByRole('button', { name: /save decision/i })).not.toBeInTheDocument()
   })
 
   it('presents Alternative Options as a future capability, never "No Data" or "Empty" (UX-003)', () => {

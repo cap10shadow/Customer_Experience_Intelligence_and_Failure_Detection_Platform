@@ -28,10 +28,10 @@ export interface RecommendationNavigatorProps {
  * to action. Never a colored "alarm" tone even for 'rejected' -- a past
  * decision is informational, not a warning to act on.
  *
- * Step 7.X A-07: `decision` is undefined until G-01 provides a real,
- * persisted decision -- no backend capability exists yet, so no status
- * badge is shown; the reference honestly states the capability isn't
- * available rather than fabricating a "Pending Review" state.
+ * `decision` is real, persisted state since Step 7.X G-01; it remains
+ * `undefined` only when this Recommendation genuinely has no decision
+ * recorded yet, in which case the reference honestly says so rather than
+ * fabricating a "Pending Review" state.
  */
 export function RecommendationNavigator({ decision }: RecommendationNavigatorProps) {
   const { activeSection, setActiveSection } = useRecommendationContext()

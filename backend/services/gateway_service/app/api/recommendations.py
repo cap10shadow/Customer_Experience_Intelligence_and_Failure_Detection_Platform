@@ -2,8 +2,14 @@ import httpx
 from fastapi import APIRouter, Depends
 
 from backend.services.gateway_service.app.dependencies.http_client import get_http_client
-from backend.services.gateway_service.app.schemas.recommendations import RecommendationResponse
-from backend.services.gateway_service.app.services.recommendation_aggregator import build_recommendation
+from backend.services.gateway_service.app.schemas.recommendations import (
+    RecommendationDecisionPatchRequest,
+    RecommendationResponse,
+)
+from backend.services.gateway_service.app.services.recommendation_aggregator import (
+    build_recommendation,
+    update_recommendation_decision,
+)
 
 router = APIRouter(tags=["recommendations"])
 
@@ -25,3 +31,23 @@ async def get_recommendation(
     recommendation_aggregator.build_recommendation's docstring.
     """
     return await build_recommendation(client, recommendation_id)
+
+
+@router.patch("/recommendations/{recommendation_id}/decision", response_model=RecommendationResponse)
+async def patch_recommendation_decision(
+    recommendation_id: str,
+    request: RecommendationDecisionPatchRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+) -> RecommendationResponse:
+    """
+    Recommendation decision persistence (Step 7.X G-01): forwards the
+    real decision to recommendation_service and returns its real,
+    updated response. No business logic lives here -- FastAPI/Pydantic
+    validates request shape via `RecommendationDecisionPatchRequest`
+    (rejecting any unsupported field, including an actor/owner or a
+    client-supplied timestamp), and `update_recommendation_decision`
+    forwards the request as-is.
+    """
+    return await update_recommendation_decision(
+        client, recommendation_id, decision=request.decision, note=request.note
+    )

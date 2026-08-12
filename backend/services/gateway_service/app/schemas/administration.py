@@ -34,3 +34,27 @@ class AdministrationOverviewResponse(BaseModel):
     # each unavailable service is still represented in `services` above,
     # so this is a supplementary note, not the only signal of the failure.
     warnings: List[str] = []
+
+
+class ConfigurationItemDTO(BaseModel):
+    """
+    One read-only Business Impact configuration value (Step 7.X G-05).
+    `currentValue` is sourced from business_impact_service's real,
+    currently-active engine constants -- never a hardcoded frontend copy.
+    `name`/`whatItIs`/`governs` are static, human-readable narration
+    supplied by the Gateway (matching the descriptive style Administration
+    already established), since business_impact_service's configuration
+    endpoint returns only the raw values, not their business meaning.
+    Read-only by construction: there is no corresponding write DTO or
+    mutation route anywhere in this module.
+    """
+
+    id: str
+    name: str
+    whatItIs: str
+    governs: str
+    currentValue: str
+
+
+class IntelligenceConfigurationResponse(BaseModel):
+    items: List[ConfigurationItemDTO]

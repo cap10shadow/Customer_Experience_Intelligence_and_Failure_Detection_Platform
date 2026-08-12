@@ -244,7 +244,14 @@ async def test_get_statistics_with_no_recommendations(wired_repository):
 
 @pytest.mark.anyio
 async def test_no_write_endpoints_exist(wired_repository):
-    """These APIs expose stored Recommendation artifacts only -- they never generate Recommendations."""
+    """
+    These APIs expose stored Recommendation artifacts only -- they never
+    generate Recommendations, and never mutate a Recommendation's own
+    fields. The one deliberate exception is the decision sub-resource
+    (`PATCH /recommendations/{id}/decision`, Step 7.X G-01, tested
+    separately below) -- PATCH directly against the Recommendation
+    resource itself remains unsupported.
+    """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         post_response = await client.post("/api/v1/recommendations", json={})
@@ -256,3 +263,134 @@ async def test_no_write_endpoints_exist(wired_repository):
     assert put_response.status_code == 405
     assert patch_response.status_code == 405
     assert delete_response.status_code == 405
+
+
+@pytest.mark.anyio
+async def test_get_recommendation_by_id_exposes_null_decision_fields_when_never_decided(wired_repository, make_recommendation):
+    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(f"/api/v1/recommendations/{saved[0].recommendation_id}")
+
+    body = response.json()
+    assert body["decision"] is None
+    assert body["decision_note"] is None
+    assert body["decided_at"] is None
+
+
+@pytest.mark.anyio
+async def test_patch_decision_persists_and_get_reflects_it(wired_repository, make_recommendation):
+    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    recommendation_id = saved[0].recommendation_id
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        patch_response = await client.patch(
+            f"/api/v1/recommendations/{recommendation_id}/decision",
+            json={"decision": "approved", "note": "Looks correct."},
+        )
+        assert patch_response.status_code == 200
+        patched_body = patch_response.json()
+        assert patched_body["decision"] == "approved"
+        assert patched_body["decision_note"] == "Looks correct."
+        assert patched_body["decided_at"] is not None
+
+        get_response = await client.get(f"/api/v1/recommendations/{recommendation_id}")
+
+    get_body = get_response.json()
+    assert get_body["decision"] == "approved"
+    assert get_body["decision_note"] == "Looks correct."
+    assert get_body["decided_at"] == patched_body["decided_at"]
+
+
+@pytest.mark.anyio
+async def test_patch_decision_without_note_is_valid(wired_repository, make_recommendation):
+    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(
+            f"/api/v1/recommendations/{saved[0].recommendation_id}/decision", json={"decision": "deferred"}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["decision_note"] is None
+
+
+@pytest.mark.anyio
+async def test_patch_decision_rejects_invalid_decision_value(wired_repository, make_recommendation):
+    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(
+            f"/api/v1/recommendations/{saved[0].recommendation_id}/decision", json={"decision": "maybe"}
+        )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_patch_decision_404_when_recommendation_missing(wired_repository):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(
+            f"/api/v1/recommendations/{uuid.uuid4()}/decision", json={"decision": "approved"}
+        )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_patch_decision_repeated_calls_overwrite_deterministically(wired_repository, make_recommendation):
+    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    recommendation_id = saved[0].recommendation_id
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        first = await client.patch(
+            f"/api/v1/recommendations/{recommendation_id}/decision",
+            json={"decision": "approved", "note": "First pass."},
+        )
+        second = await client.patch(
+            f"/api/v1/recommendations/{recommendation_id}/decision",
+            json={"decision": "deferred", "note": "Changed my mind."},
+        )
+
+    assert first.json()["decision"] == "approved"
+    assert second.json()["decision"] == "deferred"
+    assert second.json()["decision_note"] == "Changed my mind."
+
+
+@pytest.mark.anyio
+async def test_patch_decision_never_alters_recommendation_id_or_incident_id(wired_repository, make_recommendation):
+    saved = await wired_repository.save_many(
+        [make_recommendation(incident_id="INC-IDENTITY")], incident_id="INC-IDENTITY", generation_id=uuid.uuid4()
+    )
+    recommendation_id = saved[0].recommendation_id
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(
+            f"/api/v1/recommendations/{recommendation_id}/decision", json={"decision": "approved"}
+        )
+
+    body = response.json()
+    assert body["recommendation_id"] == str(recommendation_id)
+    assert body["incident_id"] == "INC-IDENTITY"
+
+
+@pytest.mark.anyio
+async def test_patch_decision_response_never_exposes_actor_or_owner_fields(wired_repository, make_recommendation):
+    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(
+            f"/api/v1/recommendations/{saved[0].recommendation_id}/decision", json={"decision": "approved"}
+        )
+
+    body = response.json()
+    for forbidden_field in ("actor_id", "user_id", "owner", "approval_authority", "lifecycle_stage", "decided_by"):
+        assert forbidden_field not in body

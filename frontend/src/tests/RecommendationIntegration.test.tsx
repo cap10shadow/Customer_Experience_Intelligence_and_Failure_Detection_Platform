@@ -21,6 +21,9 @@ const SAMPLE_RECOMMENDATION_RESPONSE: RecommendationApiResponse = {
   priorityRationale: 'High business impact warrants immediate attention.',
   supportingEvidence: [{ source: 'business_impact', description: 'Business impact overall severity is high', weight: 5 }],
   createdAt: '2026-08-08T01:05:00Z',
+  decision: null,
+  decisionNote: null,
+  decidedAt: null,
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -95,7 +98,7 @@ describe('Recommendation real routing + Gateway integration', () => {
     expect(link).toHaveAttribute('href', `/investigations/${INCIDENT_ID}`)
   })
 
-  it('never fabricates a decision, lifecycle, confidence, alternatives, risk, or outcome for real data', async () => {
+  it('never fabricates a lifecycle, confidence, alternatives, risk, or outcome for real data, and shows no decision when none is persisted', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_RECOMMENDATION_RESPONSE)))
 
     renderAtRecommendation(RECOMMENDATION_ID)
@@ -107,18 +110,76 @@ describe('Recommendation real routing + Gateway integration', () => {
     expect(screen.getByText('Expected outcome tracking is a future capability')).toBeInTheDocument()
     expect(screen.getByText('Risk assessment is a future capability')).toBeInTheDocument()
 
-    // No approval/rejection/workflow controls anywhere.
-    expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /defer/i })).not.toBeInTheDocument()
-
-    // Step 7.X A-07: Decision/Lifecycle present an honest future-capability
-    // placeholder for a real recommendation -- never a fabricated "Pending
-    // Review" status, since no backend capability persists a decision yet.
-    expect(screen.getByText('Decision capture is a future capability')).toBeInTheDocument()
+    // Recommendation Lifecycle still has no real decision to gate on for this recommendation.
     expect(screen.getByText('Recommendation lifecycle tracking is a future capability')).toBeInTheDocument()
     expect(screen.getByText('Decision capability not yet available')).toBeInTheDocument()
     expect(screen.queryByText('Pending Review')).not.toBeInTheDocument()
+
+    // The real Decision form (Step 7.X G-01) is present -- not a placeholder -- since a real recommendationId exists to submit against.
+    expect(screen.getByRole('button', { name: /save decision/i })).toBeInTheDocument()
+  })
+
+  it('shows the real, persisted decision when the backend has one, reflected in both the section and the navigator status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...SAMPLE_RECOMMENDATION_RESPONSE,
+          decision: 'approved',
+          decisionNote: 'Reviewed and approved.',
+          decidedAt: '2026-08-12T10:00:00Z',
+        }),
+      ),
+    )
+
+    renderAtRecommendation(RECOMMENDATION_ID)
+
+    await waitFor(() => expect(screen.getByText('Escalate to payments team')).toBeInTheDocument())
+
+    expect(screen.getByText('Reviewed and approved.')).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: 'Recommendation sections' })
+    expect(nav).toHaveTextContent('Approved')
+  })
+
+  it('submitting a decision issues a real PATCH and reflects the refetched, persisted state -- never an optimistic fabrication', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(SAMPLE_RECOMMENDATION_RESPONSE))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...SAMPLE_RECOMMENDATION_RESPONSE,
+          decision: 'deferred',
+          decisionNote: 'Need more information.',
+          decidedAt: '2026-08-12T11:00:00Z',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...SAMPLE_RECOMMENDATION_RESPONSE,
+          decision: 'deferred',
+          decisionNote: 'Need more information.',
+          decidedAt: '2026-08-12T11:00:00Z',
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAtRecommendation(RECOMMENDATION_ID)
+
+    await waitFor(() => expect(screen.getByText('Escalate to payments team')).toBeInTheDocument())
+
+    const select = screen.getByLabelText('Record a decision')
+    await user.selectOptions(select, 'deferred')
+    const noteField = screen.getByLabelText('Note (optional)')
+    await user.type(noteField, 'Need more information.')
+    await user.click(screen.getByRole('button', { name: /save decision/i }))
+
+    await waitFor(() => expect(screen.getByText('Need more information.')).toBeInTheDocument())
+
+    const [, patchInit] = fetchMock.mock.calls[1]
+    expect(patchInit?.method).toBe('PATCH')
+    expect(String(fetchMock.mock.calls[1][0])).toContain(`/recommendations/${RECOMMENDATION_ID}/decision`)
+    expect(JSON.parse(String(patchInit?.body))).toEqual({ decision: 'deferred', note: 'Need more information.' })
   })
 
   it('routes a 404 (recommendation genuinely not found) into the Recommendation error boundaries', async () => {

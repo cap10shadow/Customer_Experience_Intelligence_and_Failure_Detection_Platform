@@ -5,7 +5,7 @@ import { RecommendationNavigator } from './RecommendationNavigator'
 import styles from './RecommendationLayout.module.css'
 
 export interface RecommendationLayoutProps {
-  /** Undefined until Step 7.X G-01 provides a real, persisted decision -- never fabricated (Step 7.X A-07). */
+  /** Undefined only when this Recommendation genuinely has no decision recorded yet -- never fabricated (Step 7.X G-01/A-07). */
   decision?: DecisionRecord
   children: ReactNode
 }

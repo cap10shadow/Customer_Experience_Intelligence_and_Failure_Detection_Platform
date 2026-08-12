@@ -1,35 +1,22 @@
 import { Stack } from '@/shared/components/layout'
 
-import { AdministrationSection } from '../foundation'
+import { AdministrationEmptyState, AdministrationSection } from '../foundation'
 import type { ConfigurationItem } from '../../types'
-import { ConfigurationItemCard } from './ConfigurationItemCard'
+import { ReadOnlyConfigurationItemCard } from './ReadOnlyConfigurationItemCard'
 import styles from './IntelligenceConfiguration.module.css'
 
-const CONFIGURATION_ITEMS: ConfigurationItem[] = [
-  {
-    id: 'anomaly-severity-threshold-high',
-    name: 'Anomaly Severity Threshold -- High',
-    whatItIs: 'The complaint-spike magnitude above which an anomaly is classified as High severity.',
-    governs: 'Determines when a complaint spike is classified as High-severity for Incident Correlation, which in turn shapes which anomalies are grouped into an Incident.',
-    currentValue: '3.0x baseline',
-  },
-  {
-    id: 'urgency-classification-keywords',
-    name: 'Urgency Classification Keywords',
-    whatItIs: 'The keyword set the NLP pipeline uses to flag a complaint as urgent.',
-    governs: 'Determines which complaints are enriched with an "urgent" classification before trend and anomaly analysis runs.',
-    currentValue: '18 keywords configured',
-  },
-  {
-    id: 'alert-policy-critical-incidents',
-    name: 'Alert Policy -- Critical Incidents',
-    whatItIs: 'The notification policy applied when an Incident reaches Critical business impact.',
-    governs: 'Determines who is notified, and how quickly, once Business Impact Analysis classifies an Incident as Critical.',
-    currentValue: 'Notify Operations Managers immediately',
-  },
-]
+/** Shape-only placeholder while loading -- never rendered as visible text; see PlatformOverview's identical LOADING_SERVICE_SHAPE precedent. */
+const LOADING_ITEM_SHAPE: ConfigurationItem[] = Array.from({ length: 3 }, (_, index) => ({
+  id: `loading-${index}`,
+  name: '',
+  whatItIs: '',
+  governs: '',
+  currentValue: '',
+}))
 
 export interface IntelligenceConfigurationProps {
+  /** Real, currently-active Business Impact configuration values (Step 7.X G-05) -- undefined only before the first fetch resolves. */
+  items?: ConfigurationItem[]
   isLoading?: boolean
 }
 
@@ -42,21 +29,36 @@ export interface IntelligenceConfigurationProps {
  * never interprets intelligence -- nothing in this section renders live
  * classification results, current alert volumes, or any data that looks
  * like it is reporting on intelligence output.
+ *
+ * Step 7.X G-05: every item is real, currently-active Business Impact
+ * engine configuration, sourced from business_impact_service via the
+ * Gateway -- never a hardcoded frontend copy. Read-only: no edit/save
+ * button, no mutation control, anywhere in this section (see
+ * `ReadOnlyConfigurationItemCard`).
  */
-export function IntelligenceConfiguration({ isLoading = false }: IntelligenceConfigurationProps) {
+export function IntelligenceConfiguration({ items, isLoading = false }: IntelligenceConfigurationProps) {
+  const resolvedItems = items ?? LOADING_ITEM_SHAPE
+
   return (
     <AdministrationSection
       id="intelligence-configuration"
       title="Intelligence Configuration"
-      description="How is platform intelligence configured?"
+      description="How is platform intelligence configured? Values shown are current and read-only."
       register="configuration"
     >
       <div className={styles.container}>
-        <Stack gap={5}>
-          {CONFIGURATION_ITEMS.map((item) => (
-            <ConfigurationItemCard key={item.id} item={item} isLoading={isLoading} />
-          ))}
-        </Stack>
+        {!isLoading && items && items.length === 0 ? (
+          <AdministrationEmptyState
+            title="No configuration values available"
+            description="Intelligence configuration could not be retrieved for this request."
+          />
+        ) : (
+          <Stack gap={5}>
+            {resolvedItems.map((item) => (
+              <ReadOnlyConfigurationItemCard key={item.id} item={item} isLoading={isLoading || !items} />
+            ))}
+          </Stack>
+        )}
       </div>
     </AdministrationSection>
   )

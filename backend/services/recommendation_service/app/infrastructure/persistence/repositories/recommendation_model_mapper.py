@@ -61,6 +61,9 @@ class RecommendationModelMapper:
             recommendation=recommendation,
             generation_id=model.generation_id,
             created_at=model.created_at,
+            decision=model.decision,
+            decision_note=model.decision_note,
+            decided_at=model.decided_at,
         )
 
     @staticmethod

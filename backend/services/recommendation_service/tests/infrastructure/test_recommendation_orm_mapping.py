@@ -111,3 +111,36 @@ def test_round_trip_preserves_evidence_source_enum_type(make_recommendation):
 
     assert isinstance(record.recommendation.supporting_evidence[0].source, EvidenceSource)
     assert record.recommendation.supporting_evidence[0].source == EvidenceSource.ANOMALY_INTELLIGENCE
+
+
+def test_to_domain_defaults_decision_fields_to_none_for_a_never_decided_row(make_recommendation):
+    """A freshly-mapped ORM row (decision/decision_note/decided_at all unset, i.e. NULL) maps to None -- never a fabricated PENDING sentinel."""
+    recommendation = make_recommendation()
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    _simulate_flush(model)
+
+    record = RecommendationModelMapper.to_domain(model)
+
+    assert record.decision is None
+    assert record.decision_note is None
+    assert record.decided_at is None
+
+
+def test_to_domain_carries_decision_fields_through_when_present(make_recommendation):
+    from datetime import datetime, timezone
+
+    from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
+
+    recommendation = make_recommendation()
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    _simulate_flush(model)
+    decided_at = datetime.now(timezone.utc)
+    model.decision = RecommendationDecision.DEFERRED
+    model.decision_note = "Needs more data."
+    model.decided_at = decided_at
+
+    record = RecommendationModelMapper.to_domain(model)
+
+    assert record.decision == RecommendationDecision.DEFERRED
+    assert record.decision_note == "Needs more data."
+    assert record.decided_at == decided_at

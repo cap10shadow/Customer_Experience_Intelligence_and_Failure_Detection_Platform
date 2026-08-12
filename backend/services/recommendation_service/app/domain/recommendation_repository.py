@@ -1,9 +1,11 @@
 import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import List, Optional, Sequence
 
 from backend.services.recommendation_service.app.domain.recommendation import Recommendation
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.domain.recommendation_record import RecommendationRecord
 
@@ -151,4 +153,29 @@ class RecommendationRepository(ABC):
         self, incident_id: str, *, limit: int, offset: int
     ) -> List[RecommendationRecord]:
         """Lists every Recommendation belonging to the most recent RecommendationGeneration for one incident."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_decision(
+        self,
+        recommendation_id: uuid.UUID,
+        *,
+        decision: RecommendationDecision,
+        note: Optional[str],
+        decided_at: datetime,
+    ) -> Optional[RecommendationRecord]:
+        """
+        Overwrites the decision state on one persisted Recommendation
+        (Step 7.X G-01) -- the one deliberate exception to this port's
+        otherwise fully immutable, append-only contract. Returns the
+        updated record, or `None` if `recommendation_id` does not exist.
+
+        Idempotent/repeated-decision behavior is deliberately simple:
+        each call unconditionally overwrites `decision`/`decision_note`/
+        `decided_at`, since there is no decision-owner/actor field to
+        distinguish "the same person changed their mind" from "someone
+        else overwrote it" -- see G-01's scope freeze for why building
+        any conflict/versioning behavior here would require the very
+        attribution this design explicitly excludes.
+        """
         raise NotImplementedError

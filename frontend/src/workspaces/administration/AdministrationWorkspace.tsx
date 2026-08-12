@@ -13,6 +13,7 @@ import { PlatformOverview } from './components/PlatformOverview'
 import { UserAccessManagement } from './components/UserAccessManagement'
 import { AdministrationContextProvider } from './context'
 import { useAdministrationData } from './hooks/useAdministrationData'
+import { useIntelligenceConfigurationData } from './hooks/useIntelligenceConfigurationData'
 
 /**
  * Administration Workspace -- the Enterprise Control Center. Governs the
@@ -39,16 +40,24 @@ import { useAdministrationData } from './hooks/useAdministrationData'
  * passes it down to every section, matching Analytics' (Step 5)
  * established pattern -- the skeleton -> content transition each section
  * already renders (via its own `isLoading` prop) is driven by something,
- * rather than sitting unwired. Platform Overview (Step 7.X A-02) is the
- * one section with a real backend source: it additionally waits on
- * `useAdministrationData()`'s own real fetch, so its transition never
- * completes before genuine service-health data has actually arrived.
+ * rather than sitting unwired. Platform Overview (Step 7.X A-02) and
+ * Intelligence Configuration (Step 7.X G-05) are the two sections with a
+ * real backend source: each additionally waits on its own real fetch
+ * (`useAdministrationData()`/`useIntelligenceConfigurationData()`), fetched
+ * and error-isolated independently, so a failure in one never blocks the
+ * other's real data from loading.
  */
 const INITIAL_LOAD_DELAY_MS = 300
 
 export function AdministrationWorkspace() {
   const [isLoading, setIsLoading] = useState(true)
   const { data, isLoading: isOverviewLoading, error: overviewError, refetch: refetchOverview } = useAdministrationData()
+  const {
+    data: configurationData,
+    isLoading: isConfigurationLoading,
+    error: configurationError,
+    refetch: refetchConfiguration,
+  } = useIntelligenceConfigurationData()
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setIsLoading(false), INITIAL_LOAD_DELAY_MS)
@@ -79,8 +88,14 @@ export function AdministrationWorkspace() {
               <DataSourcesIntegrations isLoading={isLoading} />
             </ErrorBoundary>
 
-            <ErrorBoundary boundaryLabel="the Intelligence Configuration">
-              <IntelligenceConfiguration isLoading={isLoading} />
+            <ErrorBoundary
+              boundaryLabel="the Intelligence Configuration"
+              onRetry={refetchConfiguration}
+              resetKeys={[isConfigurationLoading]}
+            >
+              <AdministrationSectionErrorGate error={configurationError}>
+                <IntelligenceConfiguration items={configurationData?.items} isLoading={isLoading || isConfigurationLoading} />
+              </AdministrationSectionErrorGate>
             </ErrorBoundary>
 
             <ErrorBoundary boundaryLabel="the Platform Governance">

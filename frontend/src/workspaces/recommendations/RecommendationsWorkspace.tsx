@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { ErrorBoundary } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
+import type { RecommendationDecisionApiValue } from './api'
 import { AlternativeOptions } from './components/AlternativeOptions'
 import { Decision } from './components/Decision'
 import { ExpectedOutcome } from './components/ExpectedOutcome'
@@ -14,26 +15,25 @@ import { RecommendationLifecycle } from './components/RecommendationLifecycle'
 import { RiskAssessment } from './components/RiskAssessment'
 import { RecommendationContextProvider } from './context'
 import { useRecommendationData } from './hooks/useRecommendationData'
+import { useRecommendationDecision } from './hooks/useRecommendationDecision'
 
 /**
  * Recommendation Workspace -- transforms operational understanding into
  * an explainable, governed operational decision while preserving human
  * oversight. The platform recommends; humans decide. This workspace
  * represents that decision and, once it exists, the recommendation's
- * lifecycle -- it never automates the decision itself. Read as one
- * single-column memo (Recommendation Overview → Rationale → Alternative
- * Options → Expected Outcome → Risk Assessment → Decision →
- * Recommendation Lifecycle), with the persistent `RecommendationNavigator`
- * (reusing Investigation's navigation model) keeping every section
- * directly reachable. Decision and Recommendation Lifecycle currently
- * render an honest `FutureCapabilityPlaceholder` (Step 7.X A-07): no
- * backend capability persists a real decision yet (that is Step 7.X
- * G-01), so no `DecisionRecord` is fabricated here -- carrying forward
- * a placeholder status through the workspace and its navigator would
- * misrepresent an unsupported capability as real, already-tracked state.
- * Each section is individually error-isolated, exactly like Dashboard
- * and Investigation's sections, so a failure in one never blanks the
- * rest of the memo.
+ * lifecycle. Read as one single-column memo (Recommendation Overview →
+ * Rationale → Alternative Options → Expected Outcome → Risk Assessment →
+ * Decision → Recommendation Lifecycle), with the persistent
+ * `RecommendationNavigator` (reusing Investigation's navigation model)
+ * keeping every section directly reachable. Decision (Step 7.X G-01) is
+ * this workspace's one real write capability -- `data?.decision` is
+ * `undefined` only when the backend genuinely has no decision recorded
+ * for this Recommendation, never fabricated; submitting a decision
+ * refetches the real, persisted state rather than optimistically
+ * assuming success. Each section is individually error-isolated, exactly
+ * like Dashboard and Investigation's sections, so a failure in one never
+ * blanks the rest of the memo.
  *
  * `recommendationId` comes from the canonical
  * `/recommendations/:recommendationId` route param -- the resource
@@ -44,6 +44,15 @@ import { useRecommendationData } from './hooks/useRecommendationData'
 export function RecommendationsWorkspace() {
   const { recommendationId } = useParams<{ recommendationId: string }>()
   const { data, isLoading, error, refetch } = useRecommendationData(recommendationId ?? null)
+  const { isSubmitting, error: decisionError, submit } = useRecommendationDecision(recommendationId ?? null)
+
+  const handleSubmitDecision = (decision: RecommendationDecisionApiValue, note: string | undefined) => {
+    submit(decision, note)
+      .then(refetch)
+      .catch(() => {
+        // Real failure state is already captured in `decisionError`; nothing further to do here.
+      })
+  }
 
   return (
     <RecommendationContextProvider recommendationId={recommendationId ?? null} incidentId={data?.incidentId ?? null}>
@@ -51,7 +60,7 @@ export function RecommendationsWorkspace() {
         title="Recommendations"
         description="An explainable, governed operational decision -- the platform recommends, you decide."
       >
-        <RecommendationLayout>
+        <RecommendationLayout decision={data?.decision}>
           <RecommendationContent>
             <ErrorBoundary boundaryLabel="the Recommendation Overview" onRetry={refetch} resetKeys={[isLoading]}>
               <RecommendationSectionErrorGate error={error}>
@@ -78,11 +87,17 @@ export function RecommendationsWorkspace() {
             </ErrorBoundary>
 
             <ErrorBoundary boundaryLabel="the Decision">
-              <Decision />
+              <Decision
+                decision={data?.decision}
+                isLoading={isLoading}
+                isSubmitting={isSubmitting}
+                submitErrorMessage={decisionError?.message}
+                onSubmitDecision={recommendationId ? handleSubmitDecision : undefined}
+              />
             </ErrorBoundary>
 
             <ErrorBoundary boundaryLabel="the Recommendation Lifecycle">
-              <RecommendationLifecycle />
+              <RecommendationLifecycle decision={data?.decision} isLoading={isLoading} />
             </ErrorBoundary>
           </RecommendationContent>
         </RecommendationLayout>

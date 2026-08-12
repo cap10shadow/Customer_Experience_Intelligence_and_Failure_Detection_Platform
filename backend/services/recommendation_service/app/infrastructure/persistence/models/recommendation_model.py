@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime
-from typing import Any, List
+from typing import Any, List, Optional
 
 from sqlalchemy import DateTime, Enum, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.shared.database.base import Base
 
@@ -43,10 +44,18 @@ class RecommendationModel(Base):
       service, but the frozen architecture treats grouping as a plain
       identifier relationship, and no join/relationship() is declared here
       (list_by_generation() filters by this column directly).
-    - No update semantics: no `onupdate`, no mutable timestamp beyond
-      `created_at` -- Recommendations are immutable and append-only. There
-      is no repository method that would ever issue an UPDATE against this
-      table.
+    - No update semantics for the Recommendation itself: no `onupdate`, no
+      mutable timestamp beyond `created_at` -- the Recommendation's own
+      fields (category, priority, score, action, rationale, evidence) are
+      immutable and append-only, and no repository method ever issues an
+      UPDATE against them.
+    - `decision`/`decision_note`/`decided_at` (Step 7.X G-01) are the one
+      deliberate exception: three nullable columns, all defaulting to
+      `NULL`, added additively via migration so every pre-existing row
+      remains valid without a backfill. `PostgreSQLRecommendationRepository
+      .update_decision()` is the one repository method that does issue an
+      UPDATE, and it only ever touches these three columns -- never any
+      other field on this row.
     - No index on `category`/`priority`/`generation_id` individually: the
       frozen Index Strategy names only the primary key and the
       `(incident_id, generation_id)` composite index -- "add additional
@@ -92,5 +101,14 @@ class RecommendationModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )
+
+    # Step 7.X G-01 -- minimal decision persistence. Nullable/default-safe:
+    # every pre-existing row gets NULL for all three, correctly meaning "no
+    # decision was ever recorded", never a fabricated historical decision.
+    decision: Mapped[Optional[RecommendationDecision]] = mapped_column(
+        Enum(RecommendationDecision), nullable=True, default=None
+    )
+    decision_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     __table_args__ = (Index("ix_recommendations_incident_id_generation_id", "incident_id", "generation_id"),)

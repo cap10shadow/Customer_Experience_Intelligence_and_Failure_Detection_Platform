@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import List, Optional, Sequence
 
 from sqlalchemy import select
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.services.recommendation_service.app.domain.recommendation import Recommendation
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.domain.recommendation_record import RecommendationRecord
 from backend.services.recommendation_service.app.domain.recommendation_repository import (
@@ -39,8 +41,11 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
 
     Architectural Boundaries:
     - Recommendations are immutable and append-only: this class exposes no
-      update or delete operation, and never issues an UPDATE/DELETE
-      against `recommendations` or `recommendation_generations`.
+      generic update or delete operation, and never issues an
+      UPDATE/DELETE against `recommendation_generations` or against any
+      field on `recommendations` other than `decision`/`decision_note`/
+      `decided_at` (Step 7.X G-01's one deliberate, narrowly-scoped
+      exception -- see `update_decision()`).
     - `save_many()` persists exactly one `RecommendationGeneration` row
       (using the `generation_id` its caller supplies -- this repository
       never generates one) plus one `RecommendationModel` row per
@@ -164,3 +169,24 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
             return []
 
         return await self.list_by_generation(latest_generation_id, limit=limit, offset=offset)
+
+    async def update_decision(
+        self,
+        recommendation_id: uuid.UUID,
+        *,
+        decision: RecommendationDecision,
+        note: Optional[str],
+        decided_at: datetime,
+    ) -> Optional[RecommendationRecord]:
+        stmt = select(RecommendationModel).where(RecommendationModel.recommendation_id == recommendation_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+
+        model.decision = decision
+        model.decision_note = note
+        model.decided_at = decided_at
+        await self.session.flush()
+
+        return RecommendationModelMapper.to_domain(model)

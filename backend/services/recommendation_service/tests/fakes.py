@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Sequence
 
 from backend.services.recommendation_service.app.domain.recommendation import Recommendation
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.domain.recommendation_record import RecommendationRecord
 from backend.services.recommendation_service.app.domain.recommendation_repository import (
@@ -104,3 +105,27 @@ class FakeRecommendationRepository(RecommendationRepository):
             return []
         latest_generation_id = max(generations, key=lambda item: item[1])[0]
         return await self.list_by_generation(latest_generation_id, limit=limit, offset=offset)
+
+    async def update_decision(
+        self,
+        recommendation_id: uuid.UUID,
+        *,
+        decision: RecommendationDecision,
+        note: Optional[str],
+        decided_at: datetime,
+    ) -> Optional[RecommendationRecord]:
+        existing = self.by_id.get(recommendation_id)
+        if existing is None:
+            return None
+
+        updated = RecommendationRecord(
+            recommendation_id=existing.recommendation_id,
+            recommendation=existing.recommendation,
+            generation_id=existing.generation_id,
+            created_at=existing.created_at,
+            decision=decision,
+            decision_note=note,
+            decided_at=decided_at,
+        )
+        self.by_id[recommendation_id] = updated
+        return updated

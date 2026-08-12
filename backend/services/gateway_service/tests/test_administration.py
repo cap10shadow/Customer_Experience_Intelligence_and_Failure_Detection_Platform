@@ -164,3 +164,120 @@ async def test_administration_overview_calls_health_at_service_root_not_under_ap
     assert response.status_code == 200
     assert seen_paths  # at least the 8 downstream calls happened
     assert all(path == "/health" for path in seen_paths)
+
+
+def _configuration_payload():
+    return {
+        "dimension_weights": [
+            {"dimension": "financial", "weight": 0.35},
+            {"dimension": "customer", "weight": 0.25},
+            {"dimension": "operational", "weight": 0.15},
+            {"dimension": "sla", "weight": 0.15},
+            {"dimension": "reputation", "weight": 0.10},
+        ],
+        "impact_level_points": [
+            {"level": "none", "points": 0},
+            {"level": "low", "points": 25},
+            {"level": "medium", "points": 50},
+            {"level": "high", "points": 75},
+            {"level": "critical", "points": 100},
+        ],
+        "severity_bands": [
+            {"upper_bound_inclusive": 20, "level": "none"},
+            {"upper_bound_inclusive": 40, "level": "low"},
+            {"upper_bound_inclusive": 60, "level": "medium"},
+            {"upper_bound_inclusive": 80, "level": "high"},
+        ],
+    }
+
+
+@pytest.mark.anyio
+async def test_intelligence_configuration_returns_real_values_from_business_impact_service(override_http_client):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert "/api/v1/configuration/business-impact" in str(request.url)
+        return _json(_configuration_payload())
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/administration/intelligence-configuration")
+
+    assert response.status_code == 200
+    body = response.json()
+    weight_items = [item for item in body["items"] if item["id"].startswith("business-impact-weight-")]
+    assert len(weight_items) == 5
+    financial = next(item for item in weight_items if item["id"] == "business-impact-weight-financial")
+    assert financial["currentValue"] == "35%"
+
+    severity_item = next(item for item in body["items"] if item["id"] == "business-impact-severity-bands")
+    assert "None ≤20" in severity_item["currentValue"]
+    assert "High ≤80" in severity_item["currentValue"]
+
+    points_item = next(item for item in body["items"] if item["id"] == "business-impact-level-points")
+    assert "Critical=100" in points_item["currentValue"]
+
+
+@pytest.mark.anyio
+async def test_intelligence_configuration_items_have_no_edit_affordance_fields(override_http_client):
+    """Every item carries only display fields -- no editable/version/mutation-related field is ever included."""
+    client = _client_for(lambda request: _json(_configuration_payload()))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/administration/intelligence-configuration")
+
+    body = response.json()
+    for item in body["items"]:
+        assert set(item.keys()) == {"id", "name", "whatItIs", "governs", "currentValue"}
+
+
+@pytest.mark.anyio
+async def test_intelligence_configuration_exposes_no_secrets(override_http_client):
+    client = _client_for(lambda request: _json(_configuration_payload()))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/administration/intelligence-configuration")
+
+    body_text = response.text.lower()
+    for forbidden_term in ("password", "secret", "token", "api_key", "database_url", "credential"):
+        assert forbidden_term not in body_text
+
+
+@pytest.mark.anyio
+async def test_intelligence_configuration_downstream_unavailable_maps_to_503(override_http_client):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/administration/intelligence-configuration")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "DOWNSTREAM_SERVICE_UNAVAILABLE"
+
+
+@pytest.mark.anyio
+async def test_intelligence_configuration_downstream_failure_maps_to_502(override_http_client):
+    client = _client_for(lambda request: httpx.Response(500))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/administration/intelligence-configuration")
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "DOWNSTREAM_SERVICE_FAILURE"
+
+
+@pytest.mark.anyio
+async def test_intelligence_configuration_has_no_mutation_route(override_http_client):
+    client = _client_for(lambda request: _json(_configuration_payload()))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        for method in ("post", "put", "patch", "delete"):
+            response = await test_client.request(method, "/api/v1/administration/intelligence-configuration")
+            assert response.status_code == 405

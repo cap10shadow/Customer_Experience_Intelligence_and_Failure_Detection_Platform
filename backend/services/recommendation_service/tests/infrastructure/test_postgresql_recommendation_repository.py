@@ -14,6 +14,7 @@ end, so no test data is ever actually committed or left behind.
 import asyncio
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
 
 import pytest
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 from backend.services.recommendation_service.app.domain.recommendation_repository import DuplicateGenerationEventError
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.infrastructure.persistence.models.recommendation_generation_model import (
@@ -426,7 +428,112 @@ async def test_concurrent_save_many_with_the_same_event_id_are_mutually_exclusiv
 
 
 def test_repository_exposes_no_update_or_delete_operations():
-    """Structural immutability check: append-only persistence has no mutation surface."""
+    """Structural immutability check: append-only persistence has no generic mutation surface."""
     public_methods = {name for name in dir(PostgreSQLRecommendationRepository) if not name.startswith("_")}
     assert "update" not in public_methods
     assert "delete" not in public_methods
+
+
+@pytest.mark.anyio
+async def test_newly_saved_recommendation_has_null_decision_fields(make_recommendation):
+    """Existing-data compatibility: a freshly persisted row is never assigned a fabricated historical decision."""
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-DECISION", generation_id=uuid.uuid4()
+        )
+
+        fetched = await repository.get_by_id(saved[0].recommendation_id)
+
+        assert fetched is not None
+        assert fetched.decision is None
+        assert fetched.decision_note is None
+        assert fetched.decided_at is None
+
+
+@pytest.mark.anyio
+async def test_update_decision_persists_decision_note_and_decided_at(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-DECISION", generation_id=uuid.uuid4()
+        )
+        decided_at = datetime.now(timezone.utc)
+
+        updated = await repository.update_decision(
+            saved[0].recommendation_id, decision=RecommendationDecision.APPROVED, note="Reviewed.", decided_at=decided_at
+        )
+
+        assert updated is not None
+        assert updated.decision == RecommendationDecision.APPROVED
+        assert updated.decision_note == "Reviewed."
+        assert updated.decided_at == decided_at
+
+        refetched = await repository.get_by_id(saved[0].recommendation_id)
+        assert refetched is not None
+        assert refetched.decision == RecommendationDecision.APPROVED
+        assert refetched.decision_note == "Reviewed."
+
+
+@pytest.mark.anyio
+async def test_update_decision_returns_none_for_unknown_recommendation():
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+
+        result = await repository.update_decision(
+            uuid.uuid4(), decision=RecommendationDecision.APPROVED, note=None, decided_at=datetime.now(timezone.utc)
+        )
+
+        assert result is None
+
+
+@pytest.mark.anyio
+async def test_update_decision_overwrites_deterministically_on_repeated_calls(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-DECISION", generation_id=uuid.uuid4()
+        )
+
+        await repository.update_decision(
+            saved[0].recommendation_id, decision=RecommendationDecision.PENDING, note="First.", decided_at=datetime.now(timezone.utc)
+        )
+        second = await repository.update_decision(
+            saved[0].recommendation_id, decision=RecommendationDecision.REJECTED, note="Changed.", decided_at=datetime.now(timezone.utc)
+        )
+
+        assert second is not None
+        assert second.decision == RecommendationDecision.REJECTED
+        assert second.decision_note == "Changed."
+
+
+@pytest.mark.anyio
+async def test_update_decision_never_alters_recommendation_id_or_generation_id(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        generation_id = uuid.uuid4()
+        saved = await repository.save_many(
+            [make_recommendation(incident_id="INC-IDENTITY")], incident_id="INC-IDENTITY", generation_id=generation_id
+        )
+
+        updated = await repository.update_decision(
+            saved[0].recommendation_id, decision=RecommendationDecision.APPROVED, note=None, decided_at=datetime.now(timezone.utc)
+        )
+
+        assert updated is not None
+        assert updated.recommendation_id == saved[0].recommendation_id
+        assert updated.generation_id == generation_id
+        assert updated.recommendation.incident_id == "INC-IDENTITY"
+
+
+@pytest.mark.anyio
+async def test_decision_column_exists_and_accepts_null():
+    async with _repository_session() as session:
+        result = await session.execute(
+            text(
+                "SELECT column_name, is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'recommendations' AND column_name IN ('decision', 'decision_note', 'decided_at')"
+            )
+        )
+        rows = {row[0]: row[1] for row in result.fetchall()}
+        assert rows == {"decision": "YES", "decision_note": "YES", "decided_at": "YES"}

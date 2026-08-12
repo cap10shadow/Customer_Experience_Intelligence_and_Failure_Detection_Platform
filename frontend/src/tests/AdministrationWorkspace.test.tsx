@@ -20,8 +20,30 @@ const SAMPLE_ADMINISTRATION_RESPONSE = {
   warnings: [],
 }
 
+const SAMPLE_INTELLIGENCE_CONFIGURATION_RESPONSE = {
+  items: [
+    {
+      id: 'business-impact-weight-financial',
+      name: 'Financial Impact Weight',
+      whatItIs: 'The relative weight this dimension carries in the overall weighted business impact score.',
+      governs: "Determines how much this dimension contributes to an Incident's overall business score.",
+      currentValue: '35%',
+    },
+  ],
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return { status, ok: status >= 200 && status < 300, text: async () => JSON.stringify(body) } as Response
+}
+
+function mockFetchByUrl() {
+  return vi.fn((input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/administration/intelligence-configuration')) {
+      return Promise.resolve(jsonResponse(SAMPLE_INTELLIGENCE_CONFIGURATION_RESPONSE))
+    }
+    return Promise.resolve(jsonResponse(SAMPLE_ADMINISTRATION_RESPONSE))
+  })
 }
 
 function mountWorkspace() {
@@ -47,7 +69,7 @@ async function renderWorkspace() {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ADMINISTRATION_RESPONSE)))
+  vi.stubGlobal('fetch', mockFetchByUrl())
 })
 
 afterEach(() => {
@@ -161,14 +183,14 @@ describe('Regression protection for ADM-001 through ADM-006', () => {
     expect(auditSection?.querySelector('ol[aria-label]')).not.toBeNull()
   })
 
-  it('ADM-002: every Intelligence Configuration item defaults to read-only inspection', async () => {
+  it('Step 7.X G-05: Intelligence Configuration renders real, read-only values with no editable input anywhere', async () => {
     await renderWorkspace()
 
     const configurationHeading = screen.getByRole('heading', { level: 2, name: 'Intelligence Configuration' })
     const configurationSection = configurationHeading.closest('section')
-    const inputs = configurationSection?.querySelectorAll('input') ?? []
-    expect(inputs.length).toBeGreaterThan(0)
-    inputs.forEach((input) => expect(input).toHaveAttribute('readonly'))
+    expect(configurationSection?.querySelectorAll('input')).toHaveLength(0)
+    expect(configurationSection?.querySelectorAll('button')).toHaveLength(0)
+    expect(screen.getByText('35%')).toBeInTheDocument()
   })
 
   it('ADM-003: Audit & Change History renders no clickable rows and no "new"/unread language', async () => {

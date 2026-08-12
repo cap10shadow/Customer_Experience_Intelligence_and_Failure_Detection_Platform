@@ -1,8 +1,10 @@
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 from backend.services.recommendation_service.app.domain.recommendation import Recommendation
+from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 
 
 @dataclass(frozen=True)
@@ -39,9 +41,21 @@ class RecommendationRecord:
     - Immutable and append-only, matching `Recommendation` itself: there is
       no operation anywhere in this service that mutates a persisted
       Recommendation record.
+    - `decision`/`decision_note`/`decided_at` (Step 7.X G-01) are the one
+      deliberate exception to the row-level immutability described above:
+      a persisted Recommendation's decision state can be overwritten via
+      `RecommendationRepository.update_decision()`, while the
+      `Recommendation` aggregate itself (and every other field on this
+      record) remains exactly as append-only as before. All three default
+      to `None`, meaning "no decision has ever been recorded" -- this
+      Domain-owned envelope is where that distinction lives, not on the
+      immutable `Recommendation` aggregate.
     """
 
     recommendation_id: uuid.UUID
     recommendation: Recommendation
     generation_id: uuid.UUID
     created_at: datetime
+    decision: Optional[RecommendationDecision] = None
+    decision_note: Optional[str] = None
+    decided_at: Optional[datetime] = None

@@ -33,3 +33,31 @@ async def get_json(client: httpx.AsyncClient, url: str, *, params: Optional[dict
     if response.status_code >= 400:
         raise DownstreamServiceError(f"{url} returned status {response.status_code}.")
     return response.json()
+
+
+async def patch_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None) -> Any:
+    """
+    Issues one bounded PATCH to a downstream service and returns its
+    parsed JSON body, or None for a 404 -- the same contract as
+    `get_json()` (see its docstring), reused here rather than duplicated
+    so every downstream call, GET or PATCH, gets identical
+    timeout/connection-failure/non-2xx handling and the same standardized
+    error envelope. A 422 (the downstream's own request-validation
+    failure) is deliberately included in the ">= 400" branch, surfacing
+    as a 502 DownstreamServiceError -- the Gateway's own request model
+    already validates shape before this call is ever made, so a
+    downstream 422 here indicates a genuine contract mismatch, not a
+    client input error the Gateway should re-validate.
+    """
+    try:
+        response = await client.patch(url, json=json)
+    except httpx.TimeoutException as exc:
+        raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
+    except httpx.RequestError as exc:
+        raise DownstreamUnavailableError(f"Could not reach {url}.") from exc
+
+    if response.status_code == 404:
+        return None
+    if response.status_code >= 400:
+        raise DownstreamServiceError(f"{url} returned status {response.status_code}.")
+    return response.json()

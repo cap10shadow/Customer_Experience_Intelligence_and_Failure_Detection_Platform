@@ -4,6 +4,7 @@ import httpx
 from fastapi import FastAPI
 
 from backend.services.business_impact_service.app.api.business_impact import router as business_impact_router
+from backend.services.business_impact_service.app.api.configuration import router as configuration_router
 from backend.services.business_impact_service.app.core.config import settings
 from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Business Impact Service", lifespan=lifespan)
 
 app.include_router(business_impact_router, prefix="/api/v1")
+app.include_router(configuration_router, prefix="/api/v1")
 
 
 @app.get("/health")

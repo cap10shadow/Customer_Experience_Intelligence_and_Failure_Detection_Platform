@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,6 +11,7 @@ from backend.services.recommendation_service.app.domain.recommendation_category 
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.domain.recommendation_repository import RecommendationRepository
 from backend.services.recommendation_service.app.presentation.api.schemas import (
+    RecommendationDecisionPatchRequest,
     RecommendationDetailResponse,
     RecommendationStatisticsResponse,
     RecommendationSummaryResponse,
@@ -117,3 +119,29 @@ async def list_latest_recommendations_for_incident(
     """Lists the Recommendations belonging to the most recent engine execution (RecommendationGeneration) for one incident."""
     records = await repository.get_latest_by_incident(incident_id, limit=limit, offset=offset)
     return [RecommendationSummaryResponse.from_record(record) for record in records]
+
+
+@router.patch("/recommendations/{recommendation_id}/decision", response_model=RecommendationDetailResponse)
+async def update_recommendation_decision(
+    recommendation_id: uuid.UUID,
+    request: RecommendationDecisionPatchRequest,
+    repository: RecommendationRepository = Depends(get_recommendation_repository),
+):
+    """
+    Records a human decision against one persisted Recommendation (Step
+    7.X G-01) -- the platform's one minimal decision-persistence
+    capability. `decided_at` is always set here, server-side, from the
+    current time; the request never supplies it. Repeated calls simply
+    overwrite the prior decision (see `RecommendationRepository
+    .update_decision()`'s own docstring for why that is the correct,
+    honest behavior given no decision-owner/actor field exists).
+    """
+    updated = await repository.update_decision(
+        recommendation_id,
+        decision=request.decision,
+        note=request.note,
+        decided_at=datetime.now(timezone.utc),
+    )
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+    return RecommendationDetailResponse.from_record(updated)

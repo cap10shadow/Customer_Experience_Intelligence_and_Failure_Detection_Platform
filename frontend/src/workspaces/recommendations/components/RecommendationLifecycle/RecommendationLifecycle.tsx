@@ -17,11 +17,14 @@ export interface RecommendationLifecycleProps {
  * progression for a recommendation that is still Pending Review -- see
  * `LifecycleSummary` for how each decision outcome is represented.
  *
- * Step 7.X A-07: renders an honest `FutureCapabilityPlaceholder` until
- * `decision` is real, rather than a fabricated "still pending review"
- * lifecycle state -- no backend capability persists a decision yet
- * (that is Step 7.X G-01), so there is genuinely no lifecycle state to
- * describe, not merely an empty one.
+ * `decision` is real, persisted state since Step 7.X G-01. This
+ * component still renders an honest `FutureCapabilityPlaceholder`
+ * whenever `decision` is undefined -- now meaning "no decision has been
+ * recorded for this Recommendation yet" (a real, current fact) rather
+ * than "no backend capability exists yet". Lifecycle stage tracking
+ * itself (Awaiting Implementation / Outcome Evaluation / Completed)
+ * remains out of scope -- `currentStage` has no real backend source and
+ * is never fabricated by this workspace.
  */
 export function RecommendationLifecycle({ decision, currentStage, isLoading = false }: RecommendationLifecycleProps) {
   return (

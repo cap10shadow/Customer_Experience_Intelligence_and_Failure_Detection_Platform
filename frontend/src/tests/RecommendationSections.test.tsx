@@ -90,16 +90,21 @@ describe('Section-level loading (real component hierarchy)', () => {
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0)
   })
 
-  it('Decision renders an honest future-capability placeholder when no decision exists yet (Step 7.X A-07), suppressing it the same way while loading', () => {
-    const { container: loadingContainer } = render(withProviders(<Decision isLoading />))
-    expect(screen.queryByText('Decision capture is a future capability')).not.toBeInTheDocument()
-    const loadingPanel = loadingContainer.querySelector('[aria-busy="true"]')?.parentElement
-    expect(loadingPanel).not.toBeNull()
-    expect(loadingPanel?.children).toHaveLength(1)
-
+  it('Decision renders no summary and no form when no decision exists and no submit handler is supplied (read-only usage)', () => {
     render(withProviders(<Decision />))
-    expect(screen.getAllByText('Decision capture is a future capability')).toHaveLength(1)
     expect(screen.queryByText('Pending Review')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /save decision/i })).not.toBeInTheDocument()
+  })
+
+  it('Decision renders the real DecisionForm (Step 7.X G-01) once a submit handler is supplied, with no decision pre-selected as "Pending"', () => {
+    render(withProviders(<Decision onSubmitDecision={() => {}} />))
+    expect(screen.getByRole('button', { name: /save decision/i })).toBeInTheDocument()
+    expect(screen.getByLabelText('Record a decision')).toHaveValue('pending')
+  })
+
+  it('Decision renders the DecisionForm pre-selected to the current decision, labeled as a change rather than a first-time record', () => {
+    render(withProviders(<Decision decision={APPROVED_DECISION} onSubmitDecision={() => {}} />))
+    expect(screen.getByLabelText('Change decision')).toHaveValue('approved')
   })
 
   it('Recommendation Lifecycle renders an honest future-capability placeholder when no decision exists yet (Step 7.X A-07)', () => {

@@ -1,3 +1,8 @@
-export { getRecommendation, type GetRecommendationOptions } from './recommendationApi'
-export type { RecommendationApiResponse, SupportingEvidenceApi } from './types'
+export {
+  getRecommendation,
+  patchRecommendationDecision,
+  type GetRecommendationOptions,
+  type PatchRecommendationDecisionOptions,
+} from './recommendationApi'
+export type { RecommendationApiResponse, RecommendationDecisionApiValue, SupportingEvidenceApi } from './types'
 export { toRecommendationViewModel, type RecommendationViewModel } from './viewModel'

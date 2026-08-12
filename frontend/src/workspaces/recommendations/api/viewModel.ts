@@ -1,5 +1,5 @@
-import type { RationaleReason, RecommendationOverview } from '../types'
-import type { RecommendationApiResponse } from './types'
+import type { DecisionRecord, DecisionStatus, RationaleReason, RecommendationOverview } from '../types'
+import type { RecommendationApiResponse, RecommendationDecisionApiValue } from './types'
 
 /** The Recommendation workspace's own view model -- what RecommendationsWorkspace hands down to its sections. */
 export interface RecommendationViewModel {
@@ -7,6 +7,13 @@ export interface RecommendationViewModel {
   incidentId: string
   overview: RecommendationOverview
   rationale: RationaleReason
+  /** Undefined only when no decision has ever been persisted (backend `decision` is null) -- never a fabricated 'pending-review' default (Step 7.X G-01/A-07). */
+  decision?: DecisionRecord
+}
+
+/** recommendation_service's own `pending` maps to this workspace's `pending-review` -- every other value is already a 1:1 match. */
+function toDecisionStatus(decision: RecommendationDecisionApiValue): DecisionStatus {
+  return decision === 'pending' ? 'pending-review' : decision
 }
 
 function toTitleCase(value: string): string {
@@ -25,9 +32,11 @@ function toTitleCase(value: string): string {
  * `recommendationRationale` text rather than inventing a distinct one;
  * Rationale's `headline` uses the real `priorityRationale` sentence rather
  * than a fabricated label. Nothing here invents confidence, alternatives,
- * risk, expected outcome, or decision/lifecycle state -- those sections
- * remain FutureCapabilityPlaceholder/illustrative, as none of that data
- * exists on the backend today (Part 4's capability audit).
+ * risk, or expected outcome -- those sections remain
+ * FutureCapabilityPlaceholder/illustrative, as none of that data exists on
+ * the backend today (Part 4's capability audit). `decision` (Step 7.X
+ * G-01) is the one exception: real, persisted decision state, mapped only
+ * when the backend actually has one.
  */
 export function toRecommendationViewModel(response: RecommendationApiResponse): RecommendationViewModel {
   return {
@@ -43,5 +52,8 @@ export function toRecommendationViewModel(response: RecommendationApiResponse): 
       headline: response.priorityRationale,
       explanation: response.recommendationRationale,
     },
+    decision: response.decision
+      ? { status: toDecisionStatus(response.decision), note: response.decisionNote ?? '' }
+      : undefined,
   }
 }

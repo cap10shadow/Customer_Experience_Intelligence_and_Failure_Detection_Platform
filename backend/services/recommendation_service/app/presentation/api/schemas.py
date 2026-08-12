@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
 from backend.services.recommendation_service.app.domain.recommendation_category import RecommendationCategory
+from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
 from backend.services.recommendation_service.app.domain.recommendation_record import RecommendationRecord
 
@@ -66,6 +67,12 @@ class RecommendationDetailResponse(BaseModel):
     priority_rationale: str
     supporting_evidence: List[SupportingEvidenceResponse]
     created_at: datetime
+    # Step 7.X G-01 -- additive fields only, all Optional/None until a
+    # decision is actually persisted. No actor/owner field: see
+    # RecommendationDecision's own docstring.
+    decision: Optional[RecommendationDecision] = None
+    decision_note: Optional[str] = None
+    decided_at: Optional[datetime] = None
 
     @staticmethod
     def from_record(record: RecommendationRecord) -> "RecommendationDetailResponse":
@@ -85,7 +92,23 @@ class RecommendationDetailResponse(BaseModel):
                 for evidence in recommendation.supporting_evidence
             ],
             created_at=record.created_at,
+            decision=record.decision,
+            decision_note=record.decision_note,
+            decided_at=record.decided_at,
         )
+
+
+class RecommendationDecisionPatchRequest(BaseModel):
+    """
+    Request body for `PATCH /recommendations/{recommendation_id}/decision`
+    (Step 7.X G-01). Deliberately accepts only `decision` and an optional
+    `note` -- no `actor_id`/`user_id`/`owner`/`approval_authority`/
+    `lifecycle_stage`, and no client-supplied timestamp: `decided_at` is
+    always set by the server.
+    """
+
+    decision: RecommendationDecision
+    note: Optional[str] = None
 
 
 class RecommendationStatisticsResponse(BaseModel):

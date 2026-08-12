@@ -50,6 +50,9 @@ describe('useRecommendationData', () => {
           priorityRationale: 'p',
           supportingEvidence: [],
           createdAt: '2026-08-08T01:05:00Z',
+          decision: null,
+          decisionNote: null,
+          decidedAt: null,
         }),
       ),
     )
