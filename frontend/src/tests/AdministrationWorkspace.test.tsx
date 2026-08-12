@@ -1,9 +1,28 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
 import { AdministrationWorkspace } from '@/workspaces/administration'
+
+const SAMPLE_ADMINISTRATION_RESPONSE = {
+  services: [
+    { id: 'gateway', name: 'Gateway Service', status: 'healthy', detail: 'ok' },
+    { id: 'ingestion', name: 'Ingestion Service', status: 'healthy', detail: 'ok' },
+    { id: 'nlp', name: 'NLP Service', status: 'healthy', detail: 'ok' },
+    { id: 'anomaly', name: 'Anomaly Service', status: 'healthy', detail: 'ok' },
+    { id: 'root_cause', name: 'Root Cause Service', status: 'healthy', detail: 'ok' },
+    { id: 'business_impact', name: 'Business Impact Service', status: 'healthy', detail: 'ok' },
+    { id: 'recommendation', name: 'Recommendation Service', status: 'healthy', detail: 'ok' },
+    { id: 'copilot', name: 'Copilot Service', status: 'healthy', detail: 'ok' },
+    { id: 'evaluation', name: 'Evaluation Service', status: 'healthy', detail: 'ok' },
+  ],
+  warnings: [],
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return { status, ok: status >= 200 && status < 300, text: async () => JSON.stringify(body) } as Response
+}
 
 function mountWorkspace() {
   return render(
@@ -27,18 +46,26 @@ async function renderWorkspace() {
   return utils
 }
 
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ADMINISTRATION_RESPONSE)))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('AdministrationWorkspace loading (real composition hierarchy)', () => {
   it('starts every section busy and transitions to loaded content once the workspace load completes, without a static isLoading prop', async () => {
     mountWorkspace()
 
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0)
-    expect(screen.queryByText('Operating normally')).not.toBeInTheDocument()
+    expect(screen.queryByText('9/9 services healthy')).not.toBeInTheDocument()
 
     await waitFor(() => {
       expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(0)
     })
 
-    expect(screen.getByText('Operating normally')).toBeInTheDocument()
+    expect(screen.getByText('9/9 services healthy')).toBeInTheDocument()
   })
 })
 

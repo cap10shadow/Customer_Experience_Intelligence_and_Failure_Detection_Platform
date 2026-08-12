@@ -30,8 +30,9 @@ function withProviders(children: ReactNode) {
 describe('Section-level loading (real component hierarchy)', () => {
   it('Platform Overview suppresses real content and announces busy regions while loading', () => {
     render(withProviders(<PlatformOverview isLoading />))
-    expect(screen.queryByText('Operating normally')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(7)
+    expect(screen.queryByText('9/9 services healthy')).not.toBeInTheDocument()
+    // 5 Platform Overview facts + 9 service-health facts (Step 7.X A-02) + 2 Connected Services.
+    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(16)
   })
 
   it('User & Access Management suppresses real content while loading', () => {

@@ -66,6 +66,22 @@ class DecisionOpportunityDTO(BaseModel):
     drillDownLabel: Optional[str] = None
 
 
+class SupportingEvidenceItemDTO(BaseModel):
+    """
+    One factual trend summary from anomaly_service's existing per-dimension
+    trend endpoints (/trends/categories, /trends/regions, /trends/sentiment,
+    /trends/urgency). Strictly descriptive -- counts, totals, and averages
+    only. Never ranks, compares, or assigns severity/significance: no
+    dimension is ever presented as "most", "highest", "dominant", or
+    "critical" unless that exact classification is itself a real field
+    returned by the backend (none of these four endpoints return one).
+    """
+
+    id: str
+    headline: str
+    description: str
+
+
 class OperationalStoryDTO(BaseModel):
     id: str
     headline: str
@@ -99,10 +115,12 @@ class DashboardResponse(BaseModel):
     decisionSummary: List[DecisionOpportunityDTO]
     investigationEntryPoints: List[OperationalStoryDTO]
     appliedFilters: AppliedFiltersDTO
+    # Real, factual trend summaries from anomaly_service's existing
+    # per-dimension endpoints (Step 7.X A-01) -- not present in Step 7,
+    # where no backend capability was wired for this section.
+    supportingEvidence: List[SupportingEvidenceItemDTO] = []
     # Human-readable notes about any non-essential downstream source that
     # was unavailable when this response was built (Batch 3 SS21 / Batch 4C
     # SS15's endpoint-specific partial-failure rule) -- e.g. "Recommendation
     # data is temporarily unavailable." Empty when everything succeeded.
-    # Supporting Evidence is deliberately absent from this DTO entirely
-    # (Batch 2 SS2: no backend capability exists for it in Step 7).
     warnings: List[str] = []

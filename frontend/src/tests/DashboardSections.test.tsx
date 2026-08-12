@@ -71,8 +71,9 @@ describe('Section-level loading (real component hierarchy, not just the leaf pri
   it('Supporting Evidence suppresses evidence content while loading', () => {
     render(withProviders(<SupportingEvidence isLoading />))
 
-    expect(screen.queryByText('Operational trends')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(5)
+    expect(screen.queryByText('Complaint categories')).not.toBeInTheDocument()
+    // Step 7.X A-01: one skeleton card per real trend dimension (categories/regions/sentiment/urgency).
+    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(4)
   })
 })
 

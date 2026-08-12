@@ -1,6 +1,7 @@
 import type {
   CriticalSituation,
   DecisionOpportunity,
+  EvidenceItem,
   FocusArea,
   HealthIndicator,
   KeyChange,
@@ -39,6 +40,8 @@ export interface DashboardApiResponse {
   decisionSummary: DecisionOpportunity[]
   investigationEntryPoints: OperationalStory[]
   appliedFilters: DashboardApiAppliedFilters
+  /** Real, factual trend summaries from anomaly_service's existing per-dimension trend endpoints (Step 7.X A-01). */
+  supportingEvidence: EvidenceItem[]
   /** Human-readable notes about any non-essential source that was unavailable when this response was built. Empty when everything succeeded. */
   warnings: string[]
 }

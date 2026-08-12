@@ -39,6 +39,28 @@ def _volume_trend():
     }
 
 
+def _category_trend():
+    return {"period": "Last 1 Days", "categories": [{"category": "billing", "count": 18}, {"category": "delivery", "count": 12}]}
+
+
+def _region_trend():
+    return {"period": "Last 1 Days", "regions": [{"region": "west", "count": 20}, {"region": "east", "count": 10}]}
+
+
+def _sentiment_trend():
+    return {
+        "period": "Last 1 Days",
+        "sentiment": [
+            {"date": "2026-08-07", "average_score": -0.2, "label_counts": {"negative": 10}},
+            {"date": "2026-08-08", "average_score": -0.4, "label_counts": {"negative": 15}},
+        ],
+    }
+
+
+def _urgency_trend():
+    return {"period": "Last 1 Days", "urgency": [{"urgency": "high", "count": 8}, {"urgency": "low", "count": 22}]}
+
+
 def _recommendation():
     return {
         "recommendation_id": RECOMMENDATION_ID,
@@ -94,10 +116,22 @@ def _json(payload, status_code=200):
     return httpx.Response(status_code, json=payload)
 
 
-def _make_handler(*, incidents=None, trend_status=200, recommendations_status=200, root_cause_status=200, business_impact_status=200, delays=None):
+def _make_handler(
+    *,
+    incidents=None,
+    trend_status=200,
+    recommendations_status=200,
+    root_cause_status=200,
+    business_impact_status=200,
+    category_trend_status=200,
+    region_trend_status=200,
+    sentiment_trend_status=200,
+    urgency_trend_status=200,
+    delays=None,
+):
     """
     Builds an async httpx.MockTransport handler that routes by URL, so one
-    fake "downstream cluster" can stand in for all four real services in a
+    fake "downstream cluster" can stand in for all real services in a
     single test. `delays` optionally injects an artificial async sleep per
     path segment, used only by the concurrency test.
     """
@@ -118,6 +152,26 @@ def _make_handler(*, incidents=None, trend_status=200, recommendations_status=20
             if trend_status != 200:
                 return httpx.Response(trend_status)
             return _json(_volume_trend())
+
+        if path.endswith("/trends/categories"):
+            if category_trend_status != 200:
+                return httpx.Response(category_trend_status)
+            return _json(_category_trend())
+
+        if path.endswith("/trends/regions"):
+            if region_trend_status != 200:
+                return httpx.Response(region_trend_status)
+            return _json(_region_trend())
+
+        if path.endswith("/trends/sentiment"):
+            if sentiment_trend_status != 200:
+                return httpx.Response(sentiment_trend_status)
+            return _json(_sentiment_trend())
+
+        if path.endswith("/trends/urgency"):
+            if urgency_trend_status != 200:
+                return httpx.Response(urgency_trend_status)
+            return _json(_urgency_trend())
 
         if path.endswith("/recommendations"):
             if "recommendations" in delays:
@@ -188,6 +242,11 @@ async def test_dashboard_aggregates_real_downstream_data(override_http_client):
 
     assert body["appliedFilters"]["timeRange"] == "current"
     assert body["warnings"] == []
+
+    evidence_ids = [item["id"] for item in body["supportingEvidence"]]
+    assert evidence_ids == ["category-trend", "region-trend", "sentiment-trend", "urgency-trend"]
+    category_item = next(item for item in body["supportingEvidence"] if item["id"] == "category-trend")
+    assert category_item["description"] == "2 categories recorded in the returned trend data, totaling 30 complaints."
 
 
 @pytest.mark.anyio
@@ -332,6 +391,14 @@ async def test_time_range_maps_to_the_real_days_window(override_http_client):
         if request.url.path.endswith("/trends/daily"):
             seen_days["days"] = request.url.params.get("days")
             return _json(_volume_trend())
+        if request.url.path.endswith("/trends/categories"):
+            return _json(_category_trend())
+        if request.url.path.endswith("/trends/regions"):
+            return _json(_region_trend())
+        if request.url.path.endswith("/trends/sentiment"):
+            return _json(_sentiment_trend())
+        if request.url.path.endswith("/trends/urgency"):
+            return _json(_urgency_trend())
         if request.url.path.endswith("/recommendations"):
             return _json([])
         if request.url.path.endswith("/root-cause"):
@@ -379,6 +446,14 @@ async def test_no_more_than_two_incidents_are_enriched_with_root_cause_and_busin
             return _json(incidents)
         if request.url.path.endswith("/trends/daily"):
             return _json(_volume_trend())
+        if request.url.path.endswith("/trends/categories"):
+            return _json(_category_trend())
+        if request.url.path.endswith("/trends/regions"):
+            return _json(_region_trend())
+        if request.url.path.endswith("/trends/sentiment"):
+            return _json(_sentiment_trend())
+        if request.url.path.endswith("/trends/urgency"):
+            return _json(_urgency_trend())
         if request.url.path.endswith("/recommendations"):
             return _json([])
         if request.url.path.endswith("/root-cause"):
@@ -399,3 +474,79 @@ async def test_no_more_than_two_incidents_are_enriched_with_root_cause_and_busin
     assert len(response.json()["investigationEntryPoints"]) == 2
     assert len(root_cause_calls) == 2
     assert len(business_impact_calls) == 2
+
+
+# --- Step 7.X A-01: Supporting Evidence -------------------------------------
+
+
+@pytest.mark.anyio
+async def test_supporting_evidence_reports_factual_counts_only_no_ranking_or_severity_language(override_http_client):
+    client = _client_for(_make_handler())
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/dashboard")
+
+    body = response.json()
+    combined_text = " ".join(f"{item['headline']} {item['description']}" for item in body["supportingEvidence"]).lower()
+
+    forbidden = ("most", "highest", "dominant", "critical", "significant", "top ", "leading", "worst", "best")
+    for phrase in forbidden:
+        assert phrase not in combined_text, f"unexpected evaluative/ranking language: {phrase!r}"
+
+
+@pytest.mark.anyio
+async def test_supporting_evidence_dimension_is_omitted_on_failure_and_recorded_as_a_warning(override_http_client):
+    client = _client_for(_make_handler(category_trend_status=503))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/dashboard")
+
+    assert response.status_code == 200
+    body = response.json()
+    evidence_ids = [item["id"] for item in body["supportingEvidence"]]
+    assert "category-trend" not in evidence_ids
+    assert any("category trend" in warning.lower() for warning in body["warnings"])
+
+
+@pytest.mark.anyio
+async def test_supporting_evidence_reports_a_genuine_zero_result_honestly(override_http_client):
+    client = _client_for(_make_handler())
+    override_http_client(client)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/trends/sentiment"):
+            return _json({"period": "Last 1 Days", "sentiment": []})
+        return await _make_handler()(request)
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get("/api/v1/dashboard")
+
+    body = response.json()
+    sentiment_item = next(item for item in body["supportingEvidence"] if item["id"] == "sentiment-trend")
+    assert sentiment_item["description"] == "No sentiment data recorded in the returned trend data."
+    assert "warnings" not in body or not any("sentiment" in warning.lower() for warning in body["warnings"])
+
+
+@pytest.mark.anyio
+async def test_supporting_evidence_fetched_concurrently_with_the_rest_of_the_dashboard(override_http_client):
+    delay_seconds = 0.05
+    client = _client_for(
+        _make_handler(
+            delays={"incidents": delay_seconds, "trends": delay_seconds, "recommendations": delay_seconds}
+        )
+    )
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        start = time.perf_counter()
+        response = await test_client.get("/api/v1/dashboard")
+        elapsed = time.perf_counter() - start
+
+    assert response.status_code == 200
+    assert len(response.json()["supportingEvidence"]) == 4
+    assert elapsed < delay_seconds * 3

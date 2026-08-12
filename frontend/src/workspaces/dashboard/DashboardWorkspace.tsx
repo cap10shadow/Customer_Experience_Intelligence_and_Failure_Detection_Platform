@@ -35,15 +35,15 @@ export function DashboardWorkspace() {
  *
  * One `useDashboardData()` call fetches the whole Dashboard through the
  * Gateway's single aggregated `GET /api/v1/dashboard` -- not four
- * separate requests. A fetch failure is thrown into each of the three
+ * separate requests. A fetch failure is thrown into each of the four
  * data-backed sections' own ErrorBoundary via DashboardSectionErrorGate,
- * so each keeps its existing per-section fallback; Supporting Evidence is
- * untouched (Batch 2 SS2: no backend capability for it in Step 7), so it
- * keeps rendering its own illustrative content regardless of the fetch
- * outcome. Each data-backed section's ErrorBoundary is given the hook's
- * `refetch` as `onRetry` (Part 7 rectification), so "Try again" issues a
- * genuine new GET /api/v1/dashboard request rather than merely
- * re-rendering the same already-failed state.
+ * so each keeps its existing per-section fallback; Supporting Evidence
+ * (Step 7.X A-01) is now real, factual trend data from the same
+ * aggregated response, not illustrative content. Each data-backed
+ * section's ErrorBoundary is given the hook's `refetch` as `onRetry`
+ * (Part 7 rectification), so "Try again" issues a genuine new
+ * GET /api/v1/dashboard request rather than merely re-rendering the
+ * same already-failed state.
  */
 function DashboardWorkspaceContent() {
   const { data, isLoading, error, refetch } = useDashboardData()
@@ -87,8 +87,10 @@ function DashboardWorkspaceContent() {
 
         <Divider />
 
-        <ErrorBoundary boundaryLabel="the Supporting Evidence">
-          <SupportingEvidence />
+        <ErrorBoundary boundaryLabel="the Supporting Evidence" onRetry={refetch} resetKeys={[isLoading]}>
+          <DashboardSectionErrorGate error={error}>
+            <SupportingEvidence items={data?.supportingEvidence} isLoading={isLoading} />
+          </DashboardSectionErrorGate>
         </ErrorBoundary>
       </Stack>
     </WorkspaceContainer>

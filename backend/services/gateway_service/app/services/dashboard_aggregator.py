@@ -16,6 +16,7 @@ from backend.services.gateway_service.app.schemas.dashboard import (
     KeyChangeDTO,
     OperationalBriefDTO,
     OperationalStoryDTO,
+    SupportingEvidenceItemDTO,
 )
 
 # 'current' and '24h' both resolve to the smallest real granularity the
@@ -80,6 +81,10 @@ async def build_dashboard(client: httpx.AsyncClient, query: DashboardQuery) -> D
     incidents_task = asyncio.create_task(_fetch_active_incidents(client))
     trend_task = asyncio.create_task(_fetch_volume_trend(client, days))
     recommendations_task = asyncio.create_task(_fetch_recent_recommendations(client))
+    category_trend_task = asyncio.create_task(_fetch_category_trend(client, days))
+    region_trend_task = asyncio.create_task(_fetch_region_trend(client, days))
+    sentiment_trend_task = asyncio.create_task(_fetch_sentiment_trend(client, days))
+    urgency_trend_task = asyncio.create_task(_fetch_urgency_trend(client, days))
 
     incidents = await incidents_task
 
@@ -89,10 +94,23 @@ async def build_dashboard(client: httpx.AsyncClient, query: DashboardQuery) -> D
     recommendations = await await_optional(
         recommendations_task, warnings, "Recommendation data is temporarily unavailable.", default=[]
     )
+    category_trend = await await_optional(
+        category_trend_task, warnings, "Complaint category trend is temporarily unavailable."
+    )
+    region_trend = await await_optional(
+        region_trend_task, warnings, "Complaint region trend is temporarily unavailable."
+    )
+    sentiment_trend = await await_optional(
+        sentiment_trend_task, warnings, "Sentiment trend is temporarily unavailable."
+    )
+    urgency_trend = await await_optional(
+        urgency_trend_task, warnings, "Urgency trend is temporarily unavailable."
+    )
 
     operational_brief = _build_operational_brief(incidents, volume_trend)
     decision_summary = _build_decision_summary(recommendations)
     investigation_entry_points = await _build_investigation_entry_points(client, incidents, warnings)
+    supporting_evidence = _build_supporting_evidence(category_trend, region_trend, sentiment_trend, urgency_trend)
 
     return DashboardResponse(
         operationalBrief=operational_brief,
@@ -105,6 +123,7 @@ async def build_dashboard(client: httpx.AsyncClient, query: DashboardQuery) -> D
             productScope=None,
             userScope=None,
         ),
+        supportingEvidence=supporting_evidence,
         warnings=warnings,
     )
 
@@ -124,6 +143,26 @@ async def _fetch_recent_recommendations(client: httpx.AsyncClient) -> list[dict[
     url = f"{settings.RECOMMENDATION_SERVICE_URL}/api/v1/recommendations"
     recommendations = await get_json(client, url, params={"limit": _MAX_DECISION_OPPORTUNITIES})
     return recommendations or []
+
+
+async def _fetch_category_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+    url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/categories"
+    return await get_json(client, url, params={"days": days})
+
+
+async def _fetch_region_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+    url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/regions"
+    return await get_json(client, url, params={"days": days})
+
+
+async def _fetch_sentiment_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+    url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/sentiment"
+    return await get_json(client, url, params={"days": days})
+
+
+async def _fetch_urgency_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+    url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/urgency"
+    return await get_json(client, url, params={"days": days})
 
 
 def _max_severity(severities: list[str]) -> str:
@@ -283,3 +322,82 @@ async def _build_story(
         drillDownPath=f"/investigations/{incident_id}",
         drillDownLabel="Investigate this story",
     )
+
+
+def _build_supporting_evidence(
+    category_trend: Optional[dict[str, Any]],
+    region_trend: Optional[dict[str, Any]],
+    sentiment_trend: Optional[dict[str, Any]],
+    urgency_trend: Optional[dict[str, Any]],
+) -> list[SupportingEvidenceItemDTO]:
+    """
+    Builds Supporting Evidence entirely from anomaly_service's existing
+    per-dimension trend endpoints -- counts, totals, and averages only,
+    never a ranking or severity claim (A-01 narrative rule). A dimension
+    whose fetch failed is omitted entirely (the failure is already
+    recorded in `warnings`, so a fabricated zero-value card would be
+    redundant and misleading); a dimension that fetched successfully but
+    returned no points is still included, honestly reporting zero, since
+    that is a real result, not a failure.
+    """
+    items: list[SupportingEvidenceItemDTO] = []
+
+    if category_trend is not None:
+        categories = category_trend.get("categories", [])
+        total = sum(item.get("count", 0) for item in categories)
+        items.append(
+            SupportingEvidenceItemDTO(
+                id="category-trend",
+                headline="Complaint categories",
+                description=(
+                    f"{len(categories)} categor{'y' if len(categories) == 1 else 'ies'} recorded in the "
+                    f"returned trend data, totaling {total} complaint{'s' if total != 1 else ''}."
+                ),
+            )
+        )
+
+    if region_trend is not None:
+        regions = region_trend.get("regions", [])
+        total = sum(item.get("count", 0) for item in regions)
+        items.append(
+            SupportingEvidenceItemDTO(
+                id="region-trend",
+                headline="Regional complaint distribution",
+                description=(
+                    f"{len(regions)} region{'s' if len(regions) != 1 else ''} recorded in the returned "
+                    f"trend data, totaling {total} complaint{'s' if total != 1 else ''}."
+                ),
+            )
+        )
+
+    if sentiment_trend is not None:
+        sentiment_points = sentiment_trend.get("sentiment", [])
+        if sentiment_points:
+            average_score = round(
+                sum(point.get("average_score", 0.0) for point in sentiment_points) / len(sentiment_points), 2
+            )
+            description = (
+                f"{len(sentiment_points)} day{'s' if len(sentiment_points) != 1 else ''} of sentiment data "
+                f"recorded, with an average score of {average_score} across the period."
+            )
+        else:
+            description = "No sentiment data recorded in the returned trend data."
+        items.append(
+            SupportingEvidenceItemDTO(id="sentiment-trend", headline="Sentiment trend", description=description)
+        )
+
+    if urgency_trend is not None:
+        urgency_points = urgency_trend.get("urgency", [])
+        total = sum(item.get("count", 0) for item in urgency_points)
+        items.append(
+            SupportingEvidenceItemDTO(
+                id="urgency-trend",
+                headline="Urgency distribution",
+                description=(
+                    f"{len(urgency_points)} urgency level{'s' if len(urgency_points) != 1 else ''} recorded "
+                    f"in the returned trend data, totaling {total} complaint{'s' if total != 1 else ''}."
+                ),
+            )
+        )
+
+    return items

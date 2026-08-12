@@ -6,6 +6,22 @@ export interface PlatformOverviewFact {
 }
 
 /**
+ * A backend service's real, just-checked reachability (Step 7.X A-02) --
+ * sourced from that service's own existing `/health` endpoint via the
+ * Gateway's `/administration/overview` aggregation. Not a production
+ * observability/uptime-history capability: no metrics storage, no
+ * historical SLA calculation, just the current reachability.
+ */
+export type ServiceHealthStatus = 'healthy' | 'unavailable'
+
+export interface ServiceHealth {
+  id: string
+  name: string
+  status: ServiceHealthStatus
+  detail: string
+}
+
+/**
  * Platform infrastructure dependencies -- e.g. the database or message
  * infrastructure this service itself runs on. Deliberately distinct from
  * `ConnectedSystem` (Data Sources & Integrations' external business

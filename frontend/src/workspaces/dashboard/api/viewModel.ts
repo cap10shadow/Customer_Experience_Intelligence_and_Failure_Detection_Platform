@@ -1,6 +1,7 @@
 import type {
   CriticalSituation,
   DecisionOpportunity,
+  EvidenceItem,
   FocusArea,
   HealthIndicator,
   KeyChange,
@@ -21,6 +22,7 @@ export interface DashboardViewModel {
   focusAreas: FocusArea[]
   decisionOpportunities: DecisionOpportunity[]
   operationalStories: OperationalStory[]
+  supportingEvidence: EvidenceItem[]
   warnings: string[]
 }
 
@@ -44,6 +46,7 @@ export function toDashboardViewModel(response: DashboardApiResponse): DashboardV
     focusAreas: response.operationalBrief.focusAreas,
     decisionOpportunities: response.decisionSummary,
     operationalStories: response.investigationEntryPoints,
+    supportingEvidence: response.supportingEvidence,
     warnings: response.warnings,
   }
 }
