@@ -7,13 +7,13 @@
 
 # Last Updated
 
-**Date:** 2026-08-07
+**Date:** 2026-08-09
 
 ---
 
 # Overall Progress
 
-**Estimated Completion:** ~80%
+**Estimated Completion:** ~85%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -23,9 +23,9 @@
 
 **Current Phase:** Phase 10 – Executive Dashboard
 
-**Current Step:** Step 7
+**Current Step:** Step 7 – Integration
 
-**Status:** Active — scope not yet defined
+**Status:** Complete
 
 ---
 
@@ -42,7 +42,7 @@
 | ✅ Phase 7 – Business Impact Engine       | Complete |
 | ✅ Phase 8 – Intelligence Evaluation      | Complete    |
 | ✅ Phase 9 – Recommendation Engine        | Complete    |
-| 🔄 Phase 10 – Executive Dashboard         | In Progress |
+| ✅ Phase 10 – Executive Dashboard         | Complete    |
 | ⬜ Phase 11 – Observability & Reliability | Pending     |
 | ⬜ Phase 12 – AI Copilot                  | Pending     |
 | ⬜ Phase 13 – Production Hardening        | Pending     |
@@ -59,7 +59,33 @@
 | ✅ Step 4 – Recommendation Workspace Architecture | Complete |
 | ✅ Step 5 – Analytics Workspace Architecture | Complete |
 | ✅ Step 6 – Administration Workspace Architecture | Complete |
-| 🔄 Step 7 – (scope not yet defined)       | Active      |
+| ✅ Step 7 – Integration (Gateway, real data, events) | Complete |
+
+---
+
+# Phase 10 Step 7 – Completion Summary
+
+**Integration — Gateway, Frontend Data Wiring, and BusinessImpactCompleted Event Fan-Out — Fully Implemented, Hardened, and Verified**
+
+### Verified
+
+- **Gateway foundation**: a BFF-style Gateway (`gateway_service`) established as the sole public API boundary (`/api/v1/*`), with a centralized frontend HTTP client, standardized error envelope (`code`/`message`/`requestId`/`details`), correlation-ID propagation, explicit CORS origins, and bounded downstream timeouts. No frontend workspace calls any backend service directly.
+- **Dashboard integration**: `GET /api/v1/dashboard` aggregates real Operational Brief, Decision Summary, and Investigation Entry Points data; Decision Summary remains strictly descriptive (no lifecycle/approval claims); unsupported filters are rejected, never silently accepted.
+- **Investigation vertical slice**: canonical `/investigations/:incidentId` route, real 4–5 service Gateway aggregation (Anomaly, Root Cause, Business Impact, Recommendation traceability). Confidence presentation reconfirmed stage-specific per ARB-008 — Business Impact never inherits Root Cause's confidence bands.
+- **Recommendation read integration**: canonical `/recommendations/:recommendationId` route; `recommendationId` is the resource identity, `incidentId` is preserved only as traceability metadata; only real backend fields are surfaced — no fabricated confidence, alternatives, risk, expected outcome, or decision/lifecycle state.
+- **Analytics trend integration**: `GET /api/v1/analytics/trends` surfaces real `anomaly_service` trend data; presentation is strictly factual (no ranking, comparative, or causal language); Pattern Discovery, Organizational Insights, Strategic Opportunities, and Recommendation Effectiveness remain honest future-capability states, not real data.
+- **BusinessImpactCompleted event integration**: `business_impact_service` publishes one event per completed assessment to `recommendation_service` and `evaluation_service` independently (parallel fan-out, not chained), preserving one `event_id` per occurrence and `incident_id` as business lineage. Both consumers are idempotent (event-id uniqueness enforced at the database level). `/internal/events/*` is never Gateway-routed and has no host-published port.
+- **Integration hardening**: a shared ErrorBoundary retry mechanism was implemented (`onRetry` + `resetKeys`) so failed requests can be genuinely retried, with all data-backed sections of a shared fetch recovering together; a stale query-string navigation path was replaced with the canonical route.
+- **Real-service end-to-end verification**: Dashboard, Investigation, Recommendation, Analytics, Administration regression, and the BusinessImpactCompleted → Recommendation/Evaluation fan-out (including live duplicate-delivery idempotency and identifier-integrity checks) were verified against real running services, real PostgreSQL, and real HTTP requests — not mocks.
+- Full verification suite passing: backend 837 tests (35 intentionally skipped), frontend 254 tests, typecheck, lint, and production build all green, with `docker compose config` validated.
+
+### Explicitly Deferred (Step 7.X / Future Production Hardening)
+
+Recommendation Decision/Lifecycle, Recommendation Effectiveness, Analytics Pattern Discovery, Organizational Insights, Strategic Opportunities, and the Administration backend remain unimplemented by design. Event delivery remains single-attempt/best-effort (no broker, Outbox, or durable retry); authentication/RBAC is not implemented. See `ROADMAP.md` and `docs/DECISIONS.md` for the full list.
+
+### Outcome
+
+Phase 10 Step 7 is complete and approved. The platform's frontend now communicates with real backend intelligence through the Gateway across all five workspaces where a genuine backend capability exists, and the Business Impact → Recommendation/Evaluation event path is real, idempotent, and network-isolated. Phase 10 (Executive Dashboard) is complete across all seven steps.
 
 ---
 
@@ -411,14 +437,14 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 | Service                 | Status              |
 | ----------------------- | ------------------- |
-| Gateway Service         | Foundation Complete |
+| Gateway Service         | Integrated (Phase 10 Step 7) |
 | Ingestion Service       | Stable              |
 | NLP Service             | Stable              |
 | Anomaly Service         | Stable              |
 | Root Cause Service      | Stable              |
-| Business Impact Service | Stable              |
-| Evaluation Service      | Stable              |
-| Recommendation Service  | Domain Engine Complete (Phase 9 Step 1) |
+| Business Impact Service | Stable; publishes BusinessImpactCompleted (Phase 10 Step 7) |
+| Evaluation Service      | Stable; consumes BusinessImpactCompleted (Phase 10 Step 7) |
+| Recommendation Service  | Stable; consumes BusinessImpactCompleted (Phase 10 Step 7) |
 | Copilot Service         | Scaffolded          |
 
 ---
@@ -428,28 +454,28 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 - React + TypeScript foundation
 - Project structure established
 - Workspace Architecture established (Phase 10 Step 1 Complete)
-- Dashboard Information Architecture established (Phase 10 Step 2 Complete)
-- Investigation Workspace Architecture established (Phase 10 Step 3 Complete)
-- Recommendation Workspace Architecture established (Phase 10 Step 4 Complete)
-- Analytics Workspace Architecture established (Phase 10 Step 5 Complete)
-- Administration Workspace Architecture established (Phase 10 Step 6 Complete)
+- Dashboard Information Architecture established (Phase 10 Step 2 Complete); integrated with real Gateway data (Phase 10 Step 7)
+- Investigation Workspace Architecture established (Phase 10 Step 3 Complete); integrated with real Gateway data (Phase 10 Step 7)
+- Recommendation Workspace Architecture established (Phase 10 Step 4 Complete); read integration with real Gateway data (Phase 10 Step 7) — Decision/Lifecycle remain Step 7.X
+- Analytics Workspace Architecture established (Phase 10 Step 5 Complete); Trend Analysis integrated with real Gateway data (Phase 10 Step 7) — Pattern Discovery, Organizational Insights, Strategic Opportunities, and Recommendation Effectiveness remain Step 7.X
+- Administration Workspace Architecture established (Phase 10 Step 6 Complete); no backend integration — remains Step 7.X by design
 - Five-workspace architecture (Dashboard, Investigations, Recommendations, Analytics, Administration) following the Action Center consolidation refinement — see `docs/DECISIONS.md` (FE-001)
 
 ---
 
 # Current Focus
 
-**Phase 10 Step 7**
+**Phase 11 – Observability & Reliability (not yet started)**
 
-> Scope not yet defined. Phase 10 Steps 1–6 (Product Workspace Architecture, Dashboard Information Architecture, Investigation Workspace Architecture, Recommendation Workspace Architecture, Analytics Workspace Architecture, and Administration Workspace Architecture) are complete; the remaining Phase 10 deliverables (see `ROADMAP.md`) — real data, real backend integration, and real business logic across all five workspaces — are expected to be scoped into Step 7 in a future planning step.
+> Phase 10 (Executive Dashboard) is complete across all seven steps. Step 7 connected the five-workspace frontend to real backend intelligence through the Gateway and wired the BusinessImpactCompleted event fan-out. The next planned phase per `ROADMAP.md` is Phase 11 (structured logging, metrics, tracing, health monitoring, error tracking); it has not yet been scoped or started.
 
 ---
 
 # Next Milestone
 
-**Phase 10 Step 7**
+**Phase 11 – Observability & Reliability**
 
-> Phase 10 Step 6 (Administration Workspace Architecture) is complete and approved. The next step will scope and implement the business-facing functionality the Step 1–6 architecture was deliberately built to support without redesign.
+> Phase 10 Step 7 (Integration) is complete and approved. No further Phase 10 step is currently defined in `ROADMAP.md`. Recommendation Decision/Lifecycle, Analytics Pattern Discovery/Organizational Insights/Strategic Opportunities/Recommendation Effectiveness, and the Administration backend remain explicitly deferred (Step 7.X) until a future phase scopes them.
 
 ---
 

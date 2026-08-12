@@ -9,6 +9,34 @@ export interface ErrorBoundaryProps {
   /** What failed, in user terms (e.g. "the Recommendations queue") -- used in the fallback's heading so the failure is legible, not a stack trace. */
   boundaryLabel: string
   onError?: (error: Error, info: ErrorInfo) => void
+  /**
+   * Called when the user selects "Try again," before this boundary clears
+   * its own caught error -- pass a workspace data hook's `refetch` so a
+   * retry genuinely issues a new request, not merely a remount that
+   * re-renders the same already-failed state (Part 7 rectification: this
+   * was previously a known limitation across Dashboard/Investigation/
+   * Recommendation/Analytics). Optional so non-data-backed boundaries
+   * (e.g. sections with no fetch to retry) don't need to supply one --
+   * they still get a working "reset this boundary" retry.
+   */
+  onRetry?: () => void
+  /**
+   * When any entry in this array differs (shallow, by index) from its
+   * previous render, an already-caught error clears automatically -- the
+   * same `resetKeys` convention the `react-error-boundary` library
+   * popularized (not that package; this is our own minimal version of it).
+   *
+   * Exists for the case `onRetry` alone doesn't cover: several sibling
+   * ErrorBoundaries fed by the *same* data hook (e.g. Dashboard's three
+   * data-backed sections). Clicking "Try again" in just one of them
+   * re-triggers the one shared fetch, but without this, the *other*
+   * siblings' own caught-error state never clears even after that fetch
+   * succeeds -- each has its own independent `state.error`, and nothing
+   * else tells it the underlying data actually changed. Passing the
+   * hook's own `[isLoading]` (or `[data]`/`[error]`) as `resetKeys` means
+   * every sibling observes the same transition and recovers together.
+   */
+  resetKeys?: readonly unknown[]
 }
 
 interface ErrorBoundaryState {
@@ -33,7 +61,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.props.onError?.(error, info)
   }
 
+  componentDidUpdate(prevProps: ErrorBoundaryProps) {
+    if (!this.state.error) {
+      return
+    }
+    const previousKeys = prevProps.resetKeys
+    const nextKeys = this.props.resetKeys
+    if (!nextKeys || nextKeys.length !== previousKeys?.length) {
+      return
+    }
+    const changed = nextKeys.some((key, index) => key !== previousKeys[index])
+    if (changed) {
+      this.setState({ error: null })
+    }
+  }
+
   private handleRetry = () => {
+    this.props.onRetry?.()
     this.setState({ error: null })
   }
 

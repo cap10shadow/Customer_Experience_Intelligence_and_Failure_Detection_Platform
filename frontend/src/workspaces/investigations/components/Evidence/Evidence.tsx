@@ -2,7 +2,7 @@ import { InvestigationEmptyState, InvestigationSection } from '../foundation'
 import type { EvidenceItem } from '../../types'
 import { EvidenceGroup } from './EvidenceGroup'
 
-const EVIDENCE_ITEMS: EvidenceItem[] = [
+const DEFAULT_EVIDENCE_ITEMS: EvidenceItem[] = [
   {
     id: 'nlp-complaint-cluster',
     headline: 'A cluster of complaints mentions failed payments at checkout',
@@ -24,6 +24,8 @@ const EVIDENCE_ITEMS: EvidenceItem[] = [
 ]
 
 export interface EvidenceProps {
+  /** Defaults to illustrative content -- InvestigationsWorkspace passes real, Gateway-sourced evidence here instead of editing this component. */
+  items?: EvidenceItem[]
   isLoading?: boolean
 }
 
@@ -33,20 +35,20 @@ export interface EvidenceProps {
  * conclusion itself; Root Cause Analysis is the first section allowed
  * to do that, and only after this one.
  */
-export function Evidence({ isLoading = false }: EvidenceProps) {
+export function Evidence({ items = DEFAULT_EVIDENCE_ITEMS, isLoading = false }: EvidenceProps) {
   return (
     <InvestigationSection
       id="evidence"
       title="Evidence"
       description="Why should I believe this investigation?"
     >
-      {!isLoading && EVIDENCE_ITEMS.length === 0 ? (
+      {!isLoading && items.length === 0 ? (
         <InvestigationEmptyState
           title="No evidence gathered yet"
           description="This investigation hasn't collected supporting evidence for this stage yet. Evidence appears here as soon as an upstream intelligence stage contributes it."
         />
       ) : (
-        <EvidenceGroup items={EVIDENCE_ITEMS} isLoading={isLoading} />
+        <EvidenceGroup items={items} isLoading={isLoading} />
       )}
     </InvestigationSection>
   )

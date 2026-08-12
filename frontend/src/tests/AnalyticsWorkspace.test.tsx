@@ -1,9 +1,27 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
 import { AnalyticsWorkspace } from '@/workspaces/analytics'
+import type { AnalyticsApiResponse } from '@/workspaces/analytics/api'
+
+const SAMPLE_ANALYTICS_RESPONSE: AnalyticsApiResponse = {
+  period: 'Last 30 Days',
+  volumeTrend: [
+    { date: '2026-08-07', count: 15 },
+    { date: '2026-08-08', count: 20 },
+  ],
+  categoryTrend: [{ category: 'billing', count: 18 }],
+  regionTrend: [{ region: 'EMEA', count: 12 }],
+  sentimentTrend: [{ date: '2026-08-08', averageScore: 0.2, labelCounts: { positive: 5 } }],
+  urgencyTrend: [{ urgency: 'high', count: 7 }],
+  warnings: [],
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return { status, ok: status >= 200 && status < 300, text: async () => JSON.stringify(body) } as Response
+}
 
 function mountWorkspace() {
   return render(
@@ -14,10 +32,11 @@ function mountWorkspace() {
 }
 
 /**
- * AnalyticsWorkspace owns a real (if brief) initial loading state and
- * passes it through the composed section hierarchy -- so composition
- * assertions that need loaded content wait for that transition to
- * finish, exactly as they would against a real data load.
+ * AnalyticsWorkspace owns a real loading state, driven by an actual
+ * Gateway fetch (Part 5), and passes it through the composed section
+ * hierarchy -- so composition assertions that need loaded content wait
+ * for that transition to finish, exactly as they would against a real
+ * data load.
  */
 async function renderWorkspace() {
   const utils = mountWorkspace()
@@ -28,6 +47,14 @@ async function renderWorkspace() {
 }
 
 describe('AnalyticsWorkspace loading (real composition hierarchy)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ANALYTICS_RESPONSE)))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('starts every section busy and transitions to loaded content once the workspace load completes, without a static isLoading prop', async () => {
     mountWorkspace()
 
@@ -50,6 +77,14 @@ describe('AnalyticsWorkspace loading (real composition hierarchy)', () => {
 })
 
 describe('AnalyticsWorkspace composition', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ANALYTICS_RESPONSE)))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('renders one workspace heading and the six sections in fixed order', async () => {
     await renderWorkspace()
 
@@ -150,6 +185,14 @@ describe('AnalyticsWorkspace composition', () => {
 })
 
 describe('Organizational Insights (UX-006: distinct rhythm, never distinct color)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ANALYTICS_RESPONSE)))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('selects an insight via its card, toggling aria-pressed', async () => {
     const user = userEvent.setup()
     await renderWorkspace()

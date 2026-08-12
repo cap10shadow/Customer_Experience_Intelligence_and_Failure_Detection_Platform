@@ -45,8 +45,10 @@ services:
       dockerfile: backend/services/ingestion_service/Dockerfile
     container_name: oi_ingestion
     command: uvicorn backend.services.ingestion_service.app.main:app --host 0.0.0.0 --port 8001 --reload
-    ports:
-      - "${INGESTION_SERVICE_PORT:-8001}:8001"
+    # No host port mapping: ingestion_service is internal-only, reachable
+    # from other containers via Docker service-name networking
+    # (http://ingestion_service:8001) and from the browser only through
+    # the Gateway. Only gateway_service and postgres are host-published.
     env_file:
       - .env
     volumes:
@@ -68,8 +70,7 @@ services:
       dockerfile: backend/services/nlp_service/Dockerfile
     container_name: oi_nlp
     command: uvicorn backend.services.nlp_service.app.main:app --host 0.0.0.0 --port 8002 --reload
-    ports:
-      - "${NLP_SERVICE_PORT:-8002}:8002"
+    # No host port mapping: internal-only, same rationale as ingestion_service above.
     env_file:
       - .env
     volumes:
@@ -91,8 +92,7 @@ services:
       dockerfile: backend/services/anomaly_service/Dockerfile
     container_name: oi_anomaly
     command: uvicorn backend.services.anomaly_service.app.main:app --host 0.0.0.0 --port 8003 --reload
-    ports:
-      - "${ANOMALY_SERVICE_PORT:-8003}:8003"
+    # No host port mapping: internal-only, same rationale as ingestion_service above.
     env_file:
       - .env
     volumes:
@@ -114,8 +114,7 @@ services:
       dockerfile: backend/services/root_cause_service/Dockerfile
     container_name: oi_root_cause
     command: uvicorn backend.services.root_cause_service.app.main:app --host 0.0.0.0 --port 8004 --reload
-    ports:
-      - "${ROOT_CAUSE_SERVICE_PORT:-8004}:8004"
+    # No host port mapping: internal-only, same rationale as ingestion_service above.
     env_file:
       - .env
     volumes:
@@ -137,8 +136,7 @@ services:
       dockerfile: backend/services/business_impact_service/Dockerfile
     container_name: oi_business_impact
     command: uvicorn backend.services.business_impact_service.app.main:app --host 0.0.0.0 --port 8005 --reload
-    ports:
-      - "${BUSINESS_IMPACT_SERVICE_PORT:-8005}:8005"
+    # No host port mapping: internal-only, same rationale as ingestion_service above.
     env_file:
       - .env
     volumes:
@@ -160,8 +158,10 @@ services:
       dockerfile: backend/services/recommendation_service/Dockerfile
     container_name: oi_recommendation
     command: uvicorn backend.services.recommendation_service.app.main:app --host 0.0.0.0 --port 8006 --reload
-    ports:
-      - "${RECOMMENDATION_SERVICE_PORT:-8006}:8006"
+    # No host port mapping: internal-only. This is the service that hosts
+    # /internal/events/business-impact-completed -- removing the host
+    # publish is what actually makes that route unreachable from outside
+    # the Docker network (P1-4), not just a routing convention.
     env_file:
       - .env
     volumes:
@@ -183,8 +183,7 @@ services:
       dockerfile: backend/services/copilot_service/Dockerfile
     container_name: oi_copilot
     command: uvicorn backend.services.copilot_service.app.main:app --host 0.0.0.0 --port 8007 --reload
-    ports:
-      - "${COPILOT_SERVICE_PORT:-8007}:8007"
+    # No host port mapping: internal-only, same rationale as ingestion_service above.
     env_file:
       - .env
     volumes:
@@ -206,8 +205,8 @@ services:
       dockerfile: backend/services/evaluation_service/Dockerfile
     container_name: oi_evaluation
     command: uvicorn backend.services.evaluation_service.app.main:app --host 0.0.0.0 --port 8008 --reload
-    ports:
-      - "${EVALUATION_SERVICE_PORT:-8008}:8008"
+    # No host port mapping: internal-only. Also hosts
+    # /internal/events/business-impact-completed -- see recommendation_service's note above.
     env_file:
       - .env
     volumes:

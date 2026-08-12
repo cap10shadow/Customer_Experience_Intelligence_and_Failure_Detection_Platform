@@ -2,3 +2,4 @@ export { InvestigationSection, type InvestigationSectionProps } from './Investig
 export { InvestigationEmptyState, type InvestigationEmptyStateProps } from './InvestigationEmptyState'
 export { InvestigationLoadingState, type InvestigationLoadingStateProps } from './InvestigationLoadingState'
 export { ConfidencePresentation, type ConfidencePresentationProps } from './ConfidencePresentation'
+export { InvestigationSectionErrorGate, type InvestigationSectionErrorGateProps } from './InvestigationSectionErrorGate'

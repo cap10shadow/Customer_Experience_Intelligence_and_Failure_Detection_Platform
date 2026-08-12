@@ -1,36 +1,27 @@
-import { RecommendationSection } from '../foundation'
-import type { RiskItem } from '../../types'
-import { RiskCard } from './RiskCard'
-import styles from './RiskAssessment.module.css'
+import { FutureCapabilityPlaceholder } from '@/shared/components/feedback'
 
-const RISKS: RiskItem[] = [
-  { id: 'trade-offs', headline: 'Trade-offs', detail: 'Time spent reviewing the provider change is time not spent on other open work.' },
-  { id: 'uncertainty', headline: 'Uncertainty', detail: 'The provider change is the most likely cause, not a confirmed one.' },
-  { id: 'implementation-risk', headline: 'Implementation risk', detail: 'If the cause is different than expected, the review may not resolve the issue.' },
-  { id: 'business-risk', headline: 'Business risk', detail: 'Checkout failures continue at the current rate while this is reviewed.' },
-]
+import { RecommendationSection } from '../foundation'
 
 export interface RiskAssessmentProps {
   isLoading?: boolean
 }
 
 /**
- * UX-002: a distinct grouping, distinct spacing, and a distinct
- * container from every other section -- but never warning styling,
- * stronger colors, or alarm visuals. The `.container` below is the one
- * place in this workspace with its own visual treatment (a quieter
- * background, more generous internal spacing), and it is intentionally
- * still neutral: same text colors, same typography scale as everywhere
- * else.
+ * "What could go wrong?" -- UX-003: always a future-capability
+ * placeholder, never "No Data" or "Empty." recommendation_service has no
+ * risk-assessment capability today (Part 4's backend capability audit),
+ * and the frozen architecture forbids deriving risk from priority/score
+ * without an explicit backend contract for it.
  */
 export function RiskAssessment({ isLoading = false }: RiskAssessmentProps) {
   return (
     <RecommendationSection id="risk-assessment" title="Risk Assessment" description="What could go wrong?">
-      <div className={styles.container}>
-        {RISKS.map((risk) => (
-          <RiskCard key={risk.id} risk={risk} isLoading={isLoading} />
-        ))}
-      </div>
+      <FutureCapabilityPlaceholder
+        title="Risk assessment is a future capability"
+        description="What could go wrong with this recommendation will appear here once the recommendation engine begins assessing risk."
+        isLoading={isLoading}
+        loadingLabel="Loading risk assessment"
+      />
     </RecommendationSection>
   )
 }

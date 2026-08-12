@@ -78,11 +78,11 @@ describe('InvestigationsWorkspace composition', () => {
     expect(screen.getByText(/business impact data completeness/)).toBeInTheDocument()
   })
 
-  it('transitions into Recommendations with the recommendation id carried as a deep-link parameter', () => {
+  it('transitions into Recommendations via the canonical recommendationId route', () => {
     renderWorkspace()
 
     const link = screen.getByRole('link', { name: /Open in Recommendations/ })
-    expect(link).toHaveAttribute('href', '/recommendations?recommendationId=illustrative-recommendation-id')
+    expect(link).toHaveAttribute('href', '/recommendations/illustrative-recommendation-id')
   })
 
   it('never implements approval, rejection, or execution controls', () => {

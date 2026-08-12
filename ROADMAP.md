@@ -226,7 +226,7 @@ The system evolves from analytics to decision-support intelligence.
 
 ---
 
-# Phase 10 — Executive Dashboard
+# Phase 10 — Executive Dashboard (Completed)
 
 ## Goals
 Visualize operational intelligence.
@@ -239,7 +239,7 @@ Visualize operational intelligence.
 - Step 4: Recommendation Workspace Architecture (Completed)
 - Step 5: Analytics Workspace Architecture (Completed)
 - Step 6: Administration Workspace Architecture (Completed)
-- Step 7: (Active — scope not yet defined)
+- Step 7: Integration — Gateway/API integration, real workspace data wiring (Dashboard, Investigation, Recommendation, Analytics), canonical resource routing, and the BusinessImpactCompleted event fan-out to Recommendation/Evaluation (Completed)
 - complaint dashboards
 - anomaly heatmaps
 - regional analytics

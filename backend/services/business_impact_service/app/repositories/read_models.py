@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Enum, Float, Integer, MetaData, String, Table
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Enum, Float, Integer, MetaData, String, Table, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
 from backend.shared.constants.enums.root_cause import RootCause as RootCauseEnum
@@ -48,4 +48,11 @@ root_causes_table = Table(
     Column("cause", Enum(RootCauseEnum)),
     Column("confidence_score", Integer),
     Column("confidence_level", String(20)),
+    # Added for Part 6 (BusinessImpactCompleted publishing): evaluation_service's
+    # existing event contract requires `root_cause_explanation` and
+    # `root_cause_evidence_count`, neither of which the Business Impact
+    # Engine itself needs -- these two columns exist solely to satisfy that
+    # already-frozen consumer-side schema.
+    Column("evidence", JSONB),
+    Column("explanation", Text),
 )

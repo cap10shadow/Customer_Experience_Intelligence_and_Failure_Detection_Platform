@@ -8,7 +8,7 @@ import { createBrowserRouter } from 'react-router-dom'
 
 import { AppShell } from '@/app/layouts/AppShell'
 
-import { ROUTE_PATHS } from './routePaths'
+import { ROUTE_PATHS, ROUTE_TEMPLATES } from './routePaths'
 
 const DashboardWorkspace = lazy(() =>
   import('@/workspaces/dashboard').then((module) => ({ default: module.DashboardWorkspace })),
@@ -37,8 +37,8 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <DashboardWorkspace /> },
-      { path: ROUTE_PATHS.investigations, element: <InvestigationsWorkspace /> },
-      { path: ROUTE_PATHS.recommendations, element: <RecommendationsWorkspace /> },
+      { path: ROUTE_TEMPLATES.investigation, element: <InvestigationsWorkspace /> },
+      { path: ROUTE_TEMPLATES.recommendation, element: <RecommendationsWorkspace /> },
       { path: ROUTE_PATHS.analytics, element: <AnalyticsWorkspace /> },
       { path: ROUTE_PATHS.administration, element: <AdministrationWorkspace /> },
     ],

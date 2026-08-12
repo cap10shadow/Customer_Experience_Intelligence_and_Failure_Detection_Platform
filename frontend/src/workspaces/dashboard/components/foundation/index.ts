@@ -3,3 +3,4 @@ export { DashboardSubsectionHeading, type DashboardSubsectionHeadingProps } from
 export { DashboardDrillDownLink, type DashboardDrillDownLinkProps } from './DashboardDrillDownLink'
 export { DashboardEmptyState, type DashboardEmptyStateProps } from './DashboardEmptyState'
 export { DashboardLoadingState, type DashboardLoadingStateProps } from './DashboardLoadingState'
+export { DashboardSectionErrorGate, type DashboardSectionErrorGateProps } from './DashboardSectionErrorGate'

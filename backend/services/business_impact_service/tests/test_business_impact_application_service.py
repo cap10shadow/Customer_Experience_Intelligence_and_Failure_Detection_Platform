@@ -221,6 +221,88 @@ async def test_list_assessments_returns_all_when_no_filters_given():
     assert len(await service.list_assessments()) == 1
 
 
+class _RecordingPublisher:
+    def __init__(self) -> None:
+        self.published = []
+
+    async def publish(self, event) -> list:
+        self.published.append(event)
+        return []
+
+
+class _FailingPublisher:
+    async def publish(self, event) -> list:
+        raise RuntimeError("simulated publisher failure")
+
+
+@pytest.mark.anyio
+async def test_create_assessment_publishes_a_completed_event_when_a_publisher_is_configured():
+    incident_id = uuid.uuid4()
+    incident_repo = FakeIncidentReadRepository({incident_id: _persisted_incident(incident_id)})
+    root_cause_repo = FakeRootCauseReadRepository({incident_id: _persisted_root_cause(incident_id)})
+    business_impact_repo = FakeBusinessImpactRepository()
+    publisher = _RecordingPublisher()
+    service = BusinessImpactApplicationService(
+        incident_repo, root_cause_repo, business_impact_repo, _engine(), event_publisher=publisher
+    )
+
+    assessment = await service.create_assessment(incident_id)
+
+    assert len(publisher.published) == 1
+    event = publisher.published[0]
+    assert event.incident_id == incident_id
+    assert event.assessment is assessment
+    # event_id and incident_id are kept semantically distinct -- never the same value.
+    assert event.event_id != incident_id
+
+
+@pytest.mark.anyio
+async def test_create_assessment_mints_a_fresh_event_id_for_every_assessment():
+    incident_id = uuid.uuid4()
+    incident_repo = FakeIncidentReadRepository({incident_id: _persisted_incident(incident_id)})
+    root_cause_repo = FakeRootCauseReadRepository({incident_id: _persisted_root_cause(incident_id)})
+    business_impact_repo = FakeBusinessImpactRepository()
+    publisher = _RecordingPublisher()
+    service = BusinessImpactApplicationService(
+        incident_repo, root_cause_repo, business_impact_repo, _engine(), event_publisher=publisher
+    )
+
+    await service.create_assessment(incident_id)
+    await service.create_assessment(incident_id)
+
+    assert len(publisher.published) == 2
+    assert publisher.published[0].event_id != publisher.published[1].event_id
+
+
+@pytest.mark.anyio
+async def test_no_event_is_published_when_no_publisher_is_configured():
+    incident_id = uuid.uuid4()
+    incident_repo = FakeIncidentReadRepository({incident_id: _persisted_incident(incident_id)})
+    root_cause_repo = FakeRootCauseReadRepository({incident_id: _persisted_root_cause(incident_id)})
+    business_impact_repo = FakeBusinessImpactRepository()
+    service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
+
+    # Must not raise merely because no publisher was configured.
+    assessment = await service.create_assessment(incident_id)
+    assert assessment is not None
+
+
+@pytest.mark.anyio
+async def test_a_publisher_failure_never_fails_or_rolls_back_the_already_persisted_assessment():
+    incident_id = uuid.uuid4()
+    incident_repo = FakeIncidentReadRepository({incident_id: _persisted_incident(incident_id)})
+    root_cause_repo = FakeRootCauseReadRepository({incident_id: _persisted_root_cause(incident_id)})
+    business_impact_repo = FakeBusinessImpactRepository()
+    service = BusinessImpactApplicationService(
+        incident_repo, root_cause_repo, business_impact_repo, _engine(), event_publisher=_FailingPublisher()
+    )
+
+    assessment = await service.create_assessment(incident_id)
+
+    assert assessment is not None
+    assert business_impact_repo.by_id[assessment.assessment_id] is assessment
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"

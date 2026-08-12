@@ -65,15 +65,3 @@ export interface RationaleReason {
   headline: string
   explanation: string
 }
-
-export interface OutcomeItem {
-  id: string
-  headline: string
-  detail: string
-}
-
-export interface RiskItem {
-  id: string
-  headline: string
-  detail: string
-}

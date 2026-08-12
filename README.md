@@ -8,7 +8,7 @@ A Customer Experience Intelligence & Operational Decision Support Platform (per 
 
 **Phase 1 through Phase 9 are fully IMPLEMENTED.** The core data ingestion, NLP enrichment, anomaly detection, incident correlation, root cause analysis, business impact analysis, intelligence evaluation engines, and the recommendation engine are all operational.
 
-**Phase 10 (Executive Dashboard) is the active development phase.** Phase 10 Step 1 (Product Workspace Architecture), Step 2 (Dashboard Information Architecture), Step 3 (Investigation Workspace Architecture), Step 4 (Recommendation Workspace Architecture), Step 5 (Analytics Workspace Architecture), and Step 6 (Administration Workspace Architecture) are now complete. Following a Product Architecture Review, the frontend workspace architecture was refined from six workspaces to five: Action Center was retired as a standalone workspace and its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001). Phase 10 Step 7 is next; its scope is not yet defined.
+**Phase 10 (Executive Dashboard) is COMPLETE across all seven steps.** Steps 1–6 established the five-workspace frontend architecture (Dashboard, Investigations, Recommendations, Analytics, Administration); following a Product Architecture Review, Action Center was retired as a standalone workspace and its responsibility absorbed into Recommendations (see `docs/DECISIONS.md`, FE-001). Step 7 connected that architecture to real backend intelligence through a centralized Gateway: Dashboard, Investigation, Recommendation (read), and Analytics (trends) now render real data end to end, and Business Impact assessments publish a `BusinessImpactCompleted` event consumed independently by Recommendation and Evaluation. Administration remains presentation-only by design — it has no backend yet. Recommendation Decision/Lifecycle, Recommendation Effectiveness, Analytics Pattern Discovery/Organizational Insights/Strategic Opportunities, and the Administration backend are explicitly **not** implemented — see `ROADMAP.md` §6/6a and `docs/DECISIONS.md` for what remains deferred. Event delivery today is single-attempt/best-effort (no message broker, Outbox, or durable retry yet), and there is no authentication/RBAC yet.
 
 **Phase 11+ (Observability & Reliability, AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
 
@@ -36,10 +36,8 @@ The Evaluation Service (Phase 8) is an independent Intelligence Assurance Servic
 - **Business Impact Analysis** (Deterministic Rules, Persistence & Lifecycle)
 - ↓
 - **Recommendation Engine** (Deterministic Rules, Persistence & Lifecycle)
-
-### In Progress
 - ↓
-- **Executive Dashboard** (Steps 1–6 Complete)
+- **Executive Dashboard** (Steps 1–7 Complete — Gateway/API integration, real workspace data, BusinessImpactCompleted event fan-out)
 
 ### Planned Future Phases
 - ↓
@@ -57,16 +55,16 @@ The platform uses a modular, service-based architecture sharing a single reposit
 
 | Service | Port | Responsibility | Status |
 |---------|------|----------------|--------|
-| gateway_service | 8000 | API routing and request orchestration | Implemented |
+| gateway_service | 8000 | API routing, aggregation, and request orchestration for the frontend | Implemented — public boundary for Dashboard/Investigation/Recommendation/Analytics |
 | ingestion_service | 8001 | Data ingestion and validation | Implemented |
 | nlp_service | 8002 | NLP enrichment pipeline | Implemented |
 | anomaly_service | 8003 | Anomaly detection & Incident Correlation | Implemented |
 | root_cause_service | 8004 | Root cause correlation | Stable |
-| business_impact_service | 8005 | Business impact estimation | Stable |
-| recommendation_service | 8006 | Recommendation generation | Stable |
+| business_impact_service | 8005 | Business impact estimation; publishes `BusinessImpactCompleted` | Stable |
+| recommendation_service | 8006 | Recommendation generation; consumes `BusinessImpactCompleted` | Stable |
 | copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |
-| evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven) | Stable |
-| frontend | 3000 | Operational dashboard | Dashboard, Investigation, Recommendation, Analytics & Administration Workspace Architecture Complete |
+| evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven); consumes `BusinessImpactCompleted` | Stable |
+| frontend | 3000 | Operational dashboard | Dashboard, Investigation, Recommendation (read), and Analytics (trends) integrated with real Gateway data; Administration remains presentation-only |
 
 Each service exposes a `/health` endpoint.
 
@@ -78,7 +76,7 @@ Each service exposes a `/health` endpoint.
 - **Database:** PostgreSQL, SQLAlchemy 2.x, Alembic
 - **Infrastructure:** Docker, Docker Compose
 - **Intelligence:** Deterministic rules, Scikit-learn (planned), LangGraph (planned)
-- **Frontend:** React, TypeScript, React Router (application shell, workspace routing, and Dashboard information architecture implemented)
+- **Frontend:** React, TypeScript, React Router — application shell, five-workspace architecture, and centralized Gateway API client, integrated with real backend data for Dashboard, Investigation, Recommendation (read), and Analytics (trends)
 
 ---
 

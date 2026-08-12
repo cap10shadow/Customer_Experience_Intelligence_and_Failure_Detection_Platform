@@ -17,6 +17,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from backend.services.business_impact_service.app.dependencies.services import (
+    get_business_impact_event_publisher,
     get_business_impact_repository,
     get_incident_read_repository,
     get_root_cause_read_repository,
@@ -34,6 +35,7 @@ from backend.services.business_impact_service.tests.fakes import (
     FakeBusinessImpactRepository,
     FakeIncidentReadRepository,
     FakeRootCauseReadRepository,
+    NoopEventPublisher,
     build_realistic_incident_scenario,
 )
 from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
@@ -165,6 +167,7 @@ async def test_full_lifecycle_is_deterministic_over_http():
         {incident_id: persisted_root_cause}
     )
     app.dependency_overrides[get_business_impact_repository] = lambda: business_impact_repo
+    app.dependency_overrides[get_business_impact_event_publisher] = lambda: NoopEventPublisher()
 
     try:
         transport = ASGITransport(app=app)

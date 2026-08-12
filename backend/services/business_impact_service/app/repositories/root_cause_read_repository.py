@@ -1,6 +1,6 @@
 import uuid
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,12 +16,22 @@ class PersistedRootCause:
     Root Cause Service. This is the sole input the Input Mapper uses to
     build the RootCauseSummary domain value object the (frozen) Business
     Impact Engine expects -- never an ORM object.
+
+    `evidence`/`explanation` (Part 6) are NOT read by the Engine or
+    `BusinessImpactInputMapper.to_root_cause_summary` -- they exist only so
+    `BusinessImpactEventPublisher` can populate evaluation_service's
+    already-frozen `root_cause_explanation`/`root_cause_evidence_count`
+    event fields. Defaulted (rather than required) so every existing
+    call site that only needs the Engine's own three fields keeps working
+    unchanged.
     """
     id: uuid.UUID
     incident_id: uuid.UUID
     cause: RootCauseEnum
     confidence_score: int
     confidence_level: str
+    evidence: List[Dict[str, Any]] = field(default_factory=list)
+    explanation: str = ""
 
 
 class RootCauseReadRepository:
@@ -58,4 +68,6 @@ class RootCauseReadRepository:
             cause=row.cause,
             confidence_score=row.confidence_score,
             confidence_level=row.confidence_level,
+            evidence=row.evidence or [],
+            explanation=row.explanation or "",
         )

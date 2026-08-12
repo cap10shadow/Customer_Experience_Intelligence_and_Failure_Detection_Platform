@@ -92,8 +92,11 @@ describe('RecommendationsWorkspace composition', () => {
   it('references the originating Incident from Rationale, never introducing a separate investigation identifier in the URL', () => {
     renderWorkspace()
 
+    // No :recommendationId route param here, so no real incidentId has been
+    // fetched yet -- the link degrades to the bare Investigations path
+    // rather than fabricating an incidentId.
     const link = screen.getByRole('link', { name: /Review the full investigation/ })
-    expect(link).toHaveAttribute('href', '/investigations?incidentId=illustrative-incident-id')
+    expect(link).toHaveAttribute('href', '/investigations')
   })
 
   it('never implements approval, rejection, or workflow controls anywhere in the workspace', () => {
@@ -118,19 +121,25 @@ describe('Risk Assessment (UX-002 regression protection)', () => {
     expect(container.querySelectorAll('[class*="warning"]')).toHaveLength(0)
   })
 
-  it('Risk Assessment renders its four risks using only neutral typography, not alarm-toned components', () => {
+  it('presents Risk Assessment as a future capability, never "No Data" or "Empty" (UX-003) -- recommendation_service has no risk-assessment capability today', () => {
     renderWorkspace()
 
     const riskHeading = screen.getByRole('heading', { level: 2, name: 'Risk Assessment' })
     const riskSection = riskHeading.closest('section')
     expect(riskSection).not.toBeNull()
 
-    ;['Trade-offs', 'Uncertainty', 'Implementation risk', 'Business risk'].forEach((headline) => {
-      expect(screen.getByText(headline)).toBeInTheDocument()
-    })
-
+    expect(screen.getByText('Risk assessment is a future capability')).toBeInTheDocument()
     expect(riskSection?.querySelectorAll('[class*="critical"]')).toHaveLength(0)
     expect(riskSection?.querySelectorAll('[class*="warning"]')).toHaveLength(0)
     expect(riskSection?.querySelector('[role="alert"]')).toBeNull()
+  })
+})
+
+describe('Expected Outcome (no fabricated outcome data)', () => {
+  it('presents Expected Outcome as a future capability, never "No Data" or "Empty" (UX-003) -- recommendation_service has no outcome-tracking capability today', () => {
+    renderWorkspace()
+
+    expect(screen.getByText('Expected outcome tracking is a future capability')).toBeInTheDocument()
+    expect(screen.queryByText('Operational improvement')).not.toBeInTheDocument()
   })
 })

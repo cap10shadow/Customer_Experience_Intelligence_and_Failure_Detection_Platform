@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-import { ROUTE_PATHS } from '@/app/routing/routePaths'
+import { ROUTE_PATHS, buildRecommendationPath } from '@/app/routing/routePaths'
 import { Panel, Stack } from '@/shared/components/layout'
 import { Icon } from '@/shared/icons'
 
@@ -17,11 +17,9 @@ export interface RecommendationSummaryProps {
  * Summarizes the recommended action and transitions into Recommendations
  * -- it never owns approval, implementation, or monitoring (that
  * boundary is FE-001). When a recommendation already exists for this
- * Incident, its id is carried as a query parameter so the link is
- * future-deep-link-ready: the architecture already supports opening
- * Recommendations pre-scoped to this Incident's recommendation, per the
- * Step 3 Architecture Review (item 4). Recommendations does not read
- * this parameter yet -- that wiring is explicitly out of scope here.
+ * Incident, its id is carried via the canonical
+ * `/recommendations/:recommendationId` route (Part 4) so the transition
+ * opens Recommendations pre-scoped to this Incident's real recommendation.
  */
 export function RecommendationSummary({ action, isLoading = false }: RecommendationSummaryProps) {
   if (isLoading) {
@@ -32,9 +30,7 @@ export function RecommendationSummary({ action, isLoading = false }: Recommendat
     )
   }
 
-  const transitionPath = action.recommendationId
-    ? `${ROUTE_PATHS.recommendations}?recommendationId=${encodeURIComponent(action.recommendationId)}`
-    : ROUTE_PATHS.recommendations
+  const transitionPath = action.recommendationId ? buildRecommendationPath(action.recommendationId) : ROUTE_PATHS.recommendations
 
   return (
     <Panel>

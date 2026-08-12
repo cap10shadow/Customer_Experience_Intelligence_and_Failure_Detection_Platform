@@ -7,6 +7,35 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-09
+
+## Phase 10 – Step 7 (Integration)
+
+Phase 10 Step 7 has been fully implemented, hardened, and verified against real running services, completing Phase 10 (Executive Dashboard) across all seven steps. This step connects the five-workspace frontend architecture (Steps 1–6) to real backend intelligence — no workspace's real-data path renders illustrative content any longer, and the platform's first cross-service event integration is live.
+
+### Added
+
+- **Gateway/API integration** — a BFF-style Gateway (`gateway_service`) established as the sole public API boundary (`/api/v1/*`) for the frontend, with a centralized HTTP client, a standardized error envelope (`code`/`message`/`requestId`/`details`), correlation-ID propagation, explicit CORS origins, and bounded downstream timeouts. No workspace calls a backend service directly.
+- **Dashboard integration** — `GET /api/v1/dashboard` aggregates real Operational Brief, Decision Summary, and Investigation Entry Points data; Decision Summary remains strictly descriptive, with no fabricated lifecycle or approval state.
+- **Investigation vertical slice** — the canonical `/investigations/:incidentId` route now aggregates real Anomaly, Root Cause, Business Impact, and Recommendation-traceability data through the Gateway. Confidence presentation remains stage-specific (ARB-008): Business Impact never inherits Root Cause's confidence classification.
+- **Recommendation read integration** — the canonical `/recommendations/:recommendationId` route surfaces only real backend fields; `recommendationId` is the resource identity, `incidentId` is preserved as traceability metadata only. Alternative Options, Expected Outcome, Risk Assessment, Decision, and Recommendation Lifecycle remain honest, unfabricated future-capability/illustrative states.
+- **Analytics trend integration** — `GET /api/v1/analytics/trends` surfaces real trend data from `anomaly_service`, presented as strictly factual observations (no ranking, comparative, or causal language). Pattern Discovery, Organizational Insights, Strategic Opportunities, and Recommendation Effectiveness remain future-capability states — no backend capability exists for them yet.
+- **BusinessImpactCompleted event integration** — `business_impact_service` now publishes one event per completed Business Impact assessment, delivered independently (parallel fan-out, never chained) to `recommendation_service` and `evaluation_service`. One `event_id` per occurrence is preserved end to end and kept distinct from `incident_id`; both consumers are idempotent under duplicate delivery (database-enforced event-id uniqueness). `/internal/events/*` remains internal-only — never Gateway-routed, never host-published, never frontend-facing.
+- **Canonical resource routing** — Dashboard, Investigation, and Recommendation drill-down/traceability links consistently use path-based canonical routes (`/investigations/:incidentId`, `/recommendations/:recommendationId`) rather than query-string parameters.
+- **Integration hardening** — a shared retry mechanism (`ErrorBoundary`'s `onRetry`/`resetKeys`) ensures a failed request can be genuinely retried, with every section sharing that fetch recovering together, not just the section whose retry control was used.
+
+### Verified
+
+- Real-service end-to-end verification performed against real running services (all 8 backend services, the Gateway, and PostgreSQL) and real HTTP requests: Dashboard, Investigation, Recommendation, Analytics, Administration regression (no change), and the BusinessImpactCompleted → Recommendation/Evaluation fan-out — including live duplicate-event idempotency and end-to-end identifier-integrity checks (`incident_id`, `recommendation_id`, `event_id`, `generation_id`, `evaluation_id` each confirmed to remain distinct and correctly threaded).
+- Full verification suite passing: backend 837 tests (35 intentionally skipped), frontend 254 tests, typecheck, lint, and production build all green; `docker compose config` validated, with internal services confirmed to have no host-published port.
+- Event delivery is explicitly single-attempt/best-effort in this prototype (no message broker, Outbox, or durable retry) — a live delivery failure was observed and confirmed not to roll back an already-persisted Business Impact assessment, consistent with the documented prototype guarantee.
+
+### Explicitly Not Implemented (Deferred)
+
+Recommendation Decision/Lifecycle, Recommendation Effectiveness, Analytics Pattern Discovery, Organizational Insights, Strategic Opportunities, the Administration backend, authentication/RBAC, and production event/messaging infrastructure (broker, Outbox, durable retry) — see `ROADMAP.md` and `docs/DECISIONS.md` for the full list of deferred capabilities.
+
+---
+
 # 2026-08-07
 
 ## Phase 10 – Step 6 (Administration Workspace Architecture)

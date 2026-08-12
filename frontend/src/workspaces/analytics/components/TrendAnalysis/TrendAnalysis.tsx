@@ -1,10 +1,10 @@
 import { Stack } from '@/shared/components/layout'
 
-import { AnalyticsSection } from '../foundation'
+import { AnalyticsEmptyState, AnalyticsSection } from '../foundation'
 import type { TrendNarrative } from '../../types'
 import { TrendNarrativeCard } from './TrendNarrativeCard'
 
-const TRENDS: TrendNarrative[] = [
+const DEFAULT_TRENDS: TrendNarrative[] = [
   {
     id: 'complaint-volume-trend',
     trend: 'Complaint volume has remained broadly stable across the period',
@@ -20,18 +20,27 @@ const TRENDS: TrendNarrative[] = [
 ]
 
 export interface TrendAnalysisProps {
+  /** Defaults to illustrative content -- AnalyticsWorkspace passes real, Gateway-sourced trend narratives here instead of editing this component. */
+  trends?: TrendNarrative[]
   isLoading?: boolean
 }
 
 /** "What has changed?" -- Trend → Narrative → Supporting Evidence for every entry; charts, when they exist, will support this narrative, never replace it. */
-export function TrendAnalysis({ isLoading = false }: TrendAnalysisProps) {
+export function TrendAnalysis({ trends = DEFAULT_TRENDS, isLoading = false }: TrendAnalysisProps) {
   return (
     <AnalyticsSection id="trend-analysis" title="Trend Analysis" description="What has changed?">
-      <Stack gap={4}>
-        {TRENDS.map((trend) => (
-          <TrendNarrativeCard key={trend.id} trend={trend} isLoading={isLoading} />
-        ))}
-      </Stack>
+      {!isLoading && trends.length === 0 ? (
+        <AnalyticsEmptyState
+          title="No trend data recorded yet"
+          description="Trend analysis will appear here once complaint data has been recorded for the selected analysis period."
+        />
+      ) : (
+        <Stack gap={4}>
+          {trends.map((trend) => (
+            <TrendNarrativeCard key={trend.id} trend={trend} isLoading={isLoading} />
+          ))}
+        </Stack>
+      )}
     </AnalyticsSection>
   )
 }

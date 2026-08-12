@@ -60,16 +60,22 @@ describe('Section-level loading (real component hierarchy)', () => {
     expect(screen.getAllByText('Alternative option comparison is a future capability')).toHaveLength(1)
   })
 
-  it('Expected Outcome suppresses all outcome cards and announces four independent busy regions while loading', () => {
+  it('Expected Outcome suppresses the future-capability copy while loading (no outcome-tracking capability exists yet)', () => {
     render(withProviders(<ExpectedOutcome isLoading />))
-    expect(screen.queryByText('Operational improvement')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(4)
+    expect(screen.queryByText('Expected outcome tracking is a future capability')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0)
+
+    render(withProviders(<ExpectedOutcome />))
+    expect(screen.getAllByText('Expected outcome tracking is a future capability')).toHaveLength(1)
   })
 
-  it('Risk Assessment suppresses all risk cards while loading', () => {
+  it('Risk Assessment suppresses the future-capability copy while loading (no risk-assessment capability exists yet)', () => {
     render(withProviders(<RiskAssessment isLoading />))
-    expect(screen.queryByText('Trade-offs')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(4)
+    expect(screen.queryByText('Risk assessment is a future capability')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0)
+
+    render(withProviders(<RiskAssessment />))
+    expect(screen.getAllByText('Risk assessment is a future capability')).toHaveLength(1)
   })
 
   it('Decision suppresses the decision status while loading', () => {

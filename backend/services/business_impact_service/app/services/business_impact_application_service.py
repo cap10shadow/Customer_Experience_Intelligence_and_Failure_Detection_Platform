@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Optional, Sequence
 
@@ -17,11 +18,17 @@ from backend.services.business_impact_service.app.repositories.incident_read_rep
 from backend.services.business_impact_service.app.repositories.root_cause_read_repository import (
     RootCauseReadRepository,
 )
+from backend.services.business_impact_service.app.services.business_impact_event_publisher import (
+    BusinessImpactCompletedEvent,
+    BusinessImpactEventPublisher,
+)
 from backend.services.business_impact_service.app.services.exceptions import (
     IncidentNotFoundError,
     RootCauseNotFoundError,
 )
 from backend.services.business_impact_service.app.services.impact_engine import BusinessImpactEngine
+
+logger = logging.getLogger(__name__)
 
 
 class BusinessImpactApplicationService:
@@ -47,6 +54,18 @@ class BusinessImpactApplicationService:
       explanation are frozen (Phase 7 Step 1) and are never reimplemented
       or duplicated here.
     - Assessments are immutable: there is no update method on this service.
+
+    Event Publishing (Part 6):
+    Once an assessment is persisted, this is the "Business Impact
+    completed" moment -- a `BusinessImpactCompletedEvent` is minted (one
+    fresh `event_id` per assessment) and handed to `event_publisher` for
+    independent, parallel delivery to recommendation_service and
+    evaluation_service. `event_publisher` is optional (defaults to `None`,
+    meaning publishing is disabled) so every test exercising this service's
+    CRUD/orchestration behavior in isolation is unaffected; production
+    wiring (`dependencies/services.py`) always supplies a real one. A
+    publish failure is caught here and logged -- it must never fail or roll
+    back the assessment that already, genuinely, completed.
     """
 
     def __init__(
@@ -55,11 +74,13 @@ class BusinessImpactApplicationService:
         root_cause_read_repository: RootCauseReadRepository,
         business_impact_repository: BusinessImpactRepository,
         engine: BusinessImpactEngine,
+        event_publisher: Optional[BusinessImpactEventPublisher] = None,
     ) -> None:
         self.incident_read_repository = incident_read_repository
         self.root_cause_read_repository = root_cause_read_repository
         self.business_impact_repository = business_impact_repository
         self.engine = engine
+        self.event_publisher = event_publisher
 
     async def create_assessment(self, incident_id: uuid.UUID) -> BusinessImpactAssessmentEntity:
         persisted_incident = await self.incident_read_repository.get_by_id(incident_id)
@@ -78,7 +99,33 @@ class BusinessImpactApplicationService:
         assessment = self.engine.analyze(incident, root_cause_summary, trend_metrics, anomaly_metrics)
 
         entity = BusinessImpactOutputMapper.to_orm(incident_id, persisted_root_cause.id, assessment)
-        return await self.business_impact_repository.save(entity)
+        saved = await self.business_impact_repository.save(entity)
+
+        publisher = self.event_publisher
+        if publisher is not None:
+            await self._publish_completed_event(publisher, incident_id, persisted_incident.severity, saved, persisted_root_cause)
+
+        return saved
+
+    async def _publish_completed_event(
+        self,
+        publisher: BusinessImpactEventPublisher,
+        incident_id: uuid.UUID,
+        incident_severity,
+        assessment: BusinessImpactAssessmentEntity,
+        persisted_root_cause,
+    ) -> None:
+        event = BusinessImpactCompletedEvent(
+            event_id=uuid.uuid4(),
+            incident_id=incident_id,
+            incident_severity=incident_severity,
+            assessment=assessment,
+            root_cause=persisted_root_cause,
+        )
+        try:
+            await publisher.publish(event)
+        except Exception:  # noqa: BLE001 -- delivery must never fail/roll back an already-persisted assessment.
+            logger.exception("BusinessImpactCompleted publishing raised unexpectedly for incident %s", incident_id)
 
     async def get_assessment(self, assessment_id: uuid.UUID) -> Optional[BusinessImpactAssessmentEntity]:
         return await self.business_impact_repository.get(assessment_id)

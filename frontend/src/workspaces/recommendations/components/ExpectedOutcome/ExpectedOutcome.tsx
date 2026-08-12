@@ -1,29 +1,27 @@
-import { Grid } from '@/shared/components/layout'
+import { FutureCapabilityPlaceholder } from '@/shared/components/feedback'
 
 import { RecommendationSection } from '../foundation'
-import type { OutcomeItem } from '../../types'
-import { OutcomeCard } from './OutcomeCard'
-
-const OUTCOMES: OutcomeItem[] = [
-  { id: 'operational', headline: 'Operational improvement', detail: 'Checkout should return to its normal success rate once the cause is addressed.' },
-  { id: 'customer', headline: 'Customer improvement', detail: 'Fewer customers should encounter a failed payment at checkout.' },
-  { id: 'financial', headline: 'Financial improvement', detail: 'Recovered transactions that are currently failing at checkout.' },
-  { id: 'risk-reduction', headline: 'Risk reduction', detail: 'Reduces the chance of the issue escalating into a larger service disruption.' },
-]
 
 export interface ExpectedOutcomeProps {
   isLoading?: boolean
 }
 
-/** "What should improve?" -- expected improvement only, never a guarantee. */
+/**
+ * "What should improve?" -- UX-003: always a future-capability
+ * placeholder, never "No Data" or "Empty." recommendation_service has no
+ * expected-outcome or outcome-tracking capability today (Part 4's backend
+ * capability audit) -- there is genuinely nothing to draw on yet, so
+ * nothing is fabricated here.
+ */
 export function ExpectedOutcome({ isLoading = false }: ExpectedOutcomeProps) {
   return (
     <RecommendationSection id="expected-outcome" title="Expected Outcome" description="What should improve?">
-      <Grid minColumnWidth={220}>
-        {OUTCOMES.map((outcome) => (
-          <OutcomeCard key={outcome.id} outcome={outcome} isLoading={isLoading} />
-        ))}
-      </Grid>
+      <FutureCapabilityPlaceholder
+        title="Expected outcome tracking is a future capability"
+        description="What should improve once this recommendation is acted on will appear here once the platform begins tracking expected and actual outcomes."
+        isLoading={isLoading}
+        loadingLabel="Loading expected outcome"
+      />
     </RecommendationSection>
   )
 }

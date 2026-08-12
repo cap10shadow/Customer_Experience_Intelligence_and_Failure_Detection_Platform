@@ -98,6 +98,24 @@ class FakeBusinessImpactRepository:
         return results
 
 
+class NoopEventPublisher:
+    """
+    In-memory stand-in for BusinessImpactEventPublisher -- same async
+    `publish(event)` contract, records what it was given rather than
+    performing any real HTTP delivery. Used by tests (Part 6) that drive
+    `create_assessment` through the real FastAPI app via ASGITransport
+    (so no `app.state.http_client` exists, unlike a real lifespan run) but
+    don't care about event delivery itself.
+    """
+
+    def __init__(self) -> None:
+        self.published = []
+
+    async def publish(self, event) -> list:
+        self.published.append(event)
+        return []
+
+
 def build_realistic_incident_scenario():
     """
     Builds one realistic, independently hand-computable synthetic Incident +

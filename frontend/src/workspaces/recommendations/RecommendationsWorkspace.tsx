@@ -1,15 +1,19 @@
+import { useParams } from 'react-router-dom'
+
 import { ErrorBoundary } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
 import { AlternativeOptions } from './components/AlternativeOptions'
 import { Decision } from './components/Decision'
 import { ExpectedOutcome } from './components/ExpectedOutcome'
+import { RecommendationSectionErrorGate } from './components/foundation'
 import { RecommendationContent, RecommendationLayout } from './components/layout'
 import { RecommendationOverview } from './components/Overview'
 import { RecommendationRationale } from './components/Rationale'
 import { RecommendationLifecycle } from './components/RecommendationLifecycle'
 import { RiskAssessment } from './components/RiskAssessment'
 import { RecommendationContextProvider } from './context'
+import { useRecommendationData } from './hooks/useRecommendationData'
 import type { DecisionRecord } from './types'
 
 const DECISION: DecisionRecord = {
@@ -31,22 +35,35 @@ const DECISION: DecisionRecord = {
  * decision always visible. Each section is individually error-isolated,
  * exactly like Dashboard and Investigation's sections, so a failure in
  * one never blanks the rest of the memo.
+ *
+ * `recommendationId` comes from the canonical
+ * `/recommendations/:recommendationId` route param -- the resource
+ * identity carried through the data hook, the API call, the Gateway, and
+ * back (Batch 4A SS8/SS9). `incidentId` is real traceability metadata the
+ * fetched Recommendation itself carries -- never a second identity.
  */
 export function RecommendationsWorkspace() {
+  const { recommendationId } = useParams<{ recommendationId: string }>()
+  const { data, isLoading, error, refetch } = useRecommendationData(recommendationId ?? null)
+
   return (
-    <RecommendationContextProvider recommendationId="illustrative-recommendation-id" incidentId="illustrative-incident-id">
+    <RecommendationContextProvider recommendationId={recommendationId ?? null} incidentId={data?.incidentId ?? null}>
       <WorkspaceContainer
         title="Recommendations"
         description="An explainable, governed operational decision -- the platform recommends, you decide."
       >
         <RecommendationLayout decision={DECISION}>
           <RecommendationContent>
-            <ErrorBoundary boundaryLabel="the Recommendation Overview">
-              <RecommendationOverview />
+            <ErrorBoundary boundaryLabel="the Recommendation Overview" onRetry={refetch} resetKeys={[isLoading]}>
+              <RecommendationSectionErrorGate error={error}>
+                <RecommendationOverview overview={data?.overview} isLoading={isLoading} />
+              </RecommendationSectionErrorGate>
             </ErrorBoundary>
 
-            <ErrorBoundary boundaryLabel="the Recommendation Rationale">
-              <RecommendationRationale />
+            <ErrorBoundary boundaryLabel="the Recommendation Rationale" onRetry={refetch} resetKeys={[isLoading]}>
+              <RecommendationSectionErrorGate error={error}>
+                <RecommendationRationale reason={data?.rationale} isLoading={isLoading} />
+              </RecommendationSectionErrorGate>
             </ErrorBoundary>
 
             <ErrorBoundary boundaryLabel="the Alternative Options">

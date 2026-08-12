@@ -20,6 +20,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from backend.services.business_impact_service.app.dependencies.services import (
+    get_business_impact_event_publisher,
     get_business_impact_repository,
     get_incident_read_repository,
     get_root_cause_read_repository,
@@ -40,6 +41,7 @@ from backend.services.business_impact_service.tests.fakes import (
     FakeBusinessImpactRepository,
     FakeIncidentReadRepository,
     FakeRootCauseReadRepository,
+    NoopEventPublisher,
     build_realistic_incident_scenario,
 )
 
@@ -70,6 +72,7 @@ def wired_scenario():
         {incident_id: persisted_root_cause}
     )
     app.dependency_overrides[get_business_impact_repository] = lambda: business_impact_repo
+    app.dependency_overrides[get_business_impact_event_publisher] = lambda: NoopEventPublisher()
 
     yield incident_id, persisted_root_cause
 
@@ -165,6 +168,7 @@ async def test_post_business_impact_404_when_incident_has_no_root_cause_yet():
     )
     app.dependency_overrides[get_root_cause_read_repository] = lambda: FakeRootCauseReadRepository({})
     app.dependency_overrides[get_business_impact_repository] = lambda: FakeBusinessImpactRepository()
+    app.dependency_overrides[get_business_impact_event_publisher] = lambda: NoopEventPublisher()
 
     try:
         transport = ASGITransport(app=app)
