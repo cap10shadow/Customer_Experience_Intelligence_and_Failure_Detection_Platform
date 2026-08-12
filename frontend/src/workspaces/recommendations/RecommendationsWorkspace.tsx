@@ -14,12 +14,6 @@ import { RecommendationLifecycle } from './components/RecommendationLifecycle'
 import { RiskAssessment } from './components/RiskAssessment'
 import { RecommendationContextProvider } from './context'
 import { useRecommendationData } from './hooks/useRecommendationData'
-import type { DecisionRecord } from './types'
-
-const DECISION: DecisionRecord = {
-  status: 'pending-review',
-  note: 'Awaiting review. No action has been taken yet.',
-}
 
 /**
  * Recommendation Workspace -- transforms operational understanding into
@@ -31,10 +25,15 @@ const DECISION: DecisionRecord = {
  * Options → Expected Outcome → Risk Assessment → Decision →
  * Recommendation Lifecycle), with the persistent `RecommendationNavigator`
  * (reusing Investigation's navigation model) keeping every section
- * directly reachable and a calm, persistent reference to the current
- * decision always visible. Each section is individually error-isolated,
- * exactly like Dashboard and Investigation's sections, so a failure in
- * one never blanks the rest of the memo.
+ * directly reachable. Decision and Recommendation Lifecycle currently
+ * render an honest `FutureCapabilityPlaceholder` (Step 7.X A-07): no
+ * backend capability persists a real decision yet (that is Step 7.X
+ * G-01), so no `DecisionRecord` is fabricated here -- carrying forward
+ * a placeholder status through the workspace and its navigator would
+ * misrepresent an unsupported capability as real, already-tracked state.
+ * Each section is individually error-isolated, exactly like Dashboard
+ * and Investigation's sections, so a failure in one never blanks the
+ * rest of the memo.
  *
  * `recommendationId` comes from the canonical
  * `/recommendations/:recommendationId` route param -- the resource
@@ -52,7 +51,7 @@ export function RecommendationsWorkspace() {
         title="Recommendations"
         description="An explainable, governed operational decision -- the platform recommends, you decide."
       >
-        <RecommendationLayout decision={DECISION}>
+        <RecommendationLayout>
           <RecommendationContent>
             <ErrorBoundary boundaryLabel="the Recommendation Overview" onRetry={refetch} resetKeys={[isLoading]}>
               <RecommendationSectionErrorGate error={error}>
@@ -79,11 +78,11 @@ export function RecommendationsWorkspace() {
             </ErrorBoundary>
 
             <ErrorBoundary boundaryLabel="the Decision">
-              <Decision decision={DECISION} />
+              <Decision />
             </ErrorBoundary>
 
             <ErrorBoundary boundaryLabel="the Recommendation Lifecycle">
-              <RecommendationLifecycle decision={DECISION} />
+              <RecommendationLifecycle />
             </ErrorBoundary>
           </RecommendationContent>
         </RecommendationLayout>

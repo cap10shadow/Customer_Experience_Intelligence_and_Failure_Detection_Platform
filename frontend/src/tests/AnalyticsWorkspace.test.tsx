@@ -62,17 +62,16 @@ describe('AnalyticsWorkspace loading (real composition hierarchy)', () => {
     // suppressed, driven by AnalyticsWorkspace's own state -- not a
     // hardcoded `isLoading` prop passed in by the test.
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0)
-    expect(
-      screen.queryByText('Checkout-related complaints tend to recur around provider changes'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryAllByText('billing recorded 18 complaint(s) in the returned trend data.')).toHaveLength(0)
 
     await waitFor(() => {
       expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(0)
     })
 
-    expect(
-      screen.getByText('Checkout-related complaints tend to recur around provider changes'),
-    ).toBeInTheDocument()
+    // Appears twice by design -- once as Executive Overview's condensed
+    // restatement (Step 7.X A-08, verbatim reuse of the same real trend
+    // fact), once as Trend Analysis's own detailed card.
+    expect(screen.getAllByText('billing recorded 18 complaint(s) in the returned trend data.')).toHaveLength(2)
   })
 })
 
@@ -153,12 +152,21 @@ describe('AnalyticsWorkspace composition', () => {
     expect(screen.queryByText(/^empty$/i)).not.toBeInTheDocument()
   })
 
-  it('presents Pattern Discovery with narrative structure, not a bare list (UX-008)', async () => {
+  it('presents Pattern Discovery as an honest future-capability placeholder (Step 7.X G-02), not a fabricated narrative', async () => {
     await renderWorkspace()
 
-    expect(screen.getByText('Checkout-related complaints tend to recur around provider changes')).toBeInTheDocument()
-    expect(screen.getByText(/Supported by recurring correlation/)).toBeInTheDocument()
+    expect(screen.getByText('Pattern discovery is a future capability')).toBeInTheDocument()
+    expect(screen.queryByText('Checkout-related complaints tend to recur around provider changes')).not.toBeInTheDocument()
     expect(screen.queryByRole('list', { name: /patterns/i })).not.toBeInTheDocument()
+  })
+
+  it('Pattern Discovery renders immediately, not tied to the Analytics fetch loading state', () => {
+    mountWorkspace()
+
+    // Unlike Trend Analysis/Executive Overview, Pattern Discovery has no
+    // backend data dependency, so it must not show a busy/loading state
+    // pretending to wait on the fetch (Step 7.X G-02 loading rule).
+    expect(screen.getByText('Pattern discovery is a future capability')).toBeInTheDocument()
   })
 
   it('Executive Overview stays descriptive -- no evaluative or recommending language', async () => {
@@ -184,7 +192,7 @@ describe('AnalyticsWorkspace composition', () => {
   })
 })
 
-describe('Organizational Insights (UX-006: distinct rhythm, never distinct color)', () => {
+describe('Organizational Insights and Strategic Opportunities (Step 7.X G-02: honest placeholders)', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ANALYTICS_RESPONSE)))
   })
@@ -193,21 +201,35 @@ describe('Organizational Insights (UX-006: distinct rhythm, never distinct color
     vi.unstubAllGlobals()
   })
 
-  it('selects an insight via its card, toggling aria-pressed', async () => {
-    const user = userEvent.setup()
+  it('Organizational Insights presents an honest future-capability placeholder, not the old fabricated conclusion', async () => {
     await renderWorkspace()
 
-    const insightCard = screen.getByRole('button', { name: /Payment provider changes are a recurring precursor/ })
-    expect(insightCard).toHaveAttribute('aria-pressed', 'false')
-
-    await user.click(insightCard)
-    expect(insightCard).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Organizational insights are a future capability')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Payment provider changes are a recurring precursor to checkout incidents'),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Payment provider changes/ })).not.toBeInTheDocument()
   })
 
-  it('never renders a critical- or warning-toned element distinguishing it from Strategic Opportunities', async () => {
+  it('Strategic Opportunities presents an honest future-capability placeholder, not the old fabricated opportunities', async () => {
+    await renderWorkspace()
+
+    expect(screen.getByText('Strategic opportunity identification is a future capability')).toBeInTheDocument()
+    expect(screen.queryByText('Review how payment provider changes are communicated internally')).not.toBeInTheDocument()
+    expect(screen.queryByText('Consider investing in more granular checkout monitoring')).not.toBeInTheDocument()
+  })
+
+  it('never renders a critical- or warning-toned element distinguishing Organizational Insights from Strategic Opportunities', async () => {
     const { container } = await renderWorkspace()
 
     expect(container.querySelectorAll('[class*="critical"]')).toHaveLength(0)
     expect(container.querySelectorAll('[class*="warning"]')).toHaveLength(0)
+  })
+
+  it('Organizational Insights and Strategic Opportunities render immediately, not tied to the Analytics fetch loading state', () => {
+    mountWorkspace()
+
+    expect(screen.getByText('Organizational insights are a future capability')).toBeInTheDocument()
+    expect(screen.getByText('Strategic opportunity identification is a future capability')).toBeInTheDocument()
   })
 })

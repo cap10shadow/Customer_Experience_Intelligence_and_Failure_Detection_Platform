@@ -61,8 +61,10 @@ describe('Analytics real Gateway integration', () => {
     renderWorkspace()
     await waitForLoaded()
 
-    expect(screen.getByText(/20 complaint\(s\) were recorded on 2026-08-08/)).toBeInTheDocument()
-    expect(screen.getByText(/billing recorded 18 complaint\(s\) in the returned trend data/)).toBeInTheDocument()
+    // Appears in both Trend Analysis (detail) and Executive Overview
+    // (Step 7.X A-08's verbatim restatement of the same real fact).
+    expect(screen.getAllByText(/20 complaint\(s\) were recorded on 2026-08-08/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/billing recorded 18 complaint\(s\) in the returned trend data/).length).toBeGreaterThan(0)
   })
 
   it('never uses comparative or ranking language anywhere in the rendered Trend Analysis section', async () => {
@@ -112,7 +114,7 @@ describe('Analytics real Gateway integration', () => {
     expect(screen.getByText('No trend data recorded yet')).toBeInTheDocument()
   })
 
-  it('routes a downstream Gateway failure into the Trend Analysis error boundary only -- the other five sections keep rendering', async () => {
+  it('routes a downstream Gateway failure into both real sections (Trend Analysis and Executive Overview) -- the four placeholder sections keep rendering', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -123,12 +125,17 @@ describe('Analytics real Gateway integration', () => {
     renderWorkspace()
     await waitForLoaded()
 
+    // Both Trend Analysis and Executive Overview (Step 7.X A-08) share
+    // the same real fetch, so both show the error fallback.
     expect(screen.getByText(/Something went wrong loading the Trend Analysis/)).toBeInTheDocument()
-    expect(screen.getByText(/Trend data could not be retrieved\./)).toBeInTheDocument()
+    expect(screen.getByText(/Something went wrong loading the Executive Overview/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Trend data could not be retrieved\./).length).toBe(2)
 
     // Sections with no real backend capability are unaffected by the fetch failure.
-    expect(screen.getByText('Checkout-related complaints tend to recur around provider changes')).toBeInTheDocument()
+    expect(screen.getByText('Pattern discovery is a future capability')).toBeInTheDocument()
     expect(screen.getByText('Recommendation effectiveness is a future capability')).toBeInTheDocument()
+    expect(screen.getByText('Organizational insights are a future capability')).toBeInTheDocument()
+    expect(screen.getByText('Strategic opportunity identification is a future capability')).toBeInTheDocument()
   })
 
   it('routes a downstream timeout the same way as any other Gateway failure', async () => {
@@ -160,11 +167,16 @@ describe('Analytics real Gateway integration', () => {
     expect(screen.getByText(/Something went wrong loading the Trend Analysis/)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    // Trend Analysis and Executive Overview (Step 7.X A-08) share the one
+    // fetch, so both show their own "Try again" -- clicking either one
+    // retries the same shared request.
+    const retryButtons = screen.getAllByRole('button', { name: 'Try again' })
+    await user.click(retryButtons[0])
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.getByText(/20 complaint\(s\) were recorded on 2026-08-08/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText(/20 complaint\(s\) were recorded on 2026-08-08/).length).toBeGreaterThan(0))
     expect(screen.queryByText(/Something went wrong loading the Trend Analysis/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Something went wrong loading the Executive Overview/)).not.toBeInTheDocument()
   })
 
   it('Part 7: a failed retry leaves the Trend Analysis error UI correctly visible rather than silently clearing', async () => {
@@ -178,11 +190,12 @@ describe('Analytics real Gateway integration', () => {
     await waitForLoaded()
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    const retryButtons = screen.getAllByRole('button', { name: 'Try again' })
+    await user.click(retryButtons[0])
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     expect(screen.getByText(/Something went wrong loading the Trend Analysis/)).toBeInTheDocument()
-    expect(screen.getByText(/Still unavailable\./)).toBeInTheDocument()
+    expect(screen.getAllByText(/Still unavailable\./).length).toBe(2)
   })
 })
 
@@ -191,18 +204,23 @@ describe('Analytics architecture regression protection', () => {
     vi.unstubAllGlobals()
   })
 
-  it('never fabricates Pattern Discovery, Recommendation Effectiveness, Organizational Insights, or Strategic Opportunities from real Trend data', async () => {
+  it('never fabricates Pattern Discovery, Recommendation Effectiveness, Organizational Insights, or Strategic Opportunities from real Trend data (Step 7.X G-02)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ANALYTICS_RESPONSE)))
 
     renderWorkspace()
     await waitForLoaded()
 
-    // Pattern Discovery/Organizational Insights/Strategic Opportunities remain the same illustrative content as before -- unaffected by real Trend data.
-    expect(screen.getByText('Checkout-related complaints tend to recur around provider changes')).toBeInTheDocument()
-    expect(screen.getByText(/Payment provider changes are a recurring precursor/)).toBeInTheDocument()
-    expect(screen.getByText('Review how payment provider changes are communicated internally')).toBeInTheDocument()
-    // Recommendation Effectiveness remains the shared future-capability placeholder.
+    // All four render an honest future-capability placeholder, unaffected
+    // by real Trend data -- never a narrative/insight/opportunity derived
+    // (or left over) from it.
+    expect(screen.getByText('Pattern discovery is a future capability')).toBeInTheDocument()
     expect(screen.getByText('Recommendation effectiveness is a future capability')).toBeInTheDocument()
+    expect(screen.getByText('Organizational insights are a future capability')).toBeInTheDocument()
+    expect(screen.getByText('Strategic opportunity identification is a future capability')).toBeInTheDocument()
+
+    expect(screen.queryByText('Checkout-related complaints tend to recur around provider changes')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Payment provider changes are a recurring precursor/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Review how payment provider changes are communicated internally')).not.toBeInTheDocument()
   })
 
   it('never introduces recommendation approval, lifecycle, outcome tracking, alerting, or incident-management controls', async () => {

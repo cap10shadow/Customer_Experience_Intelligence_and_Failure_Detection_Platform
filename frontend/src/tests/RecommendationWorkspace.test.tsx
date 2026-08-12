@@ -62,15 +62,23 @@ describe('RecommendationsWorkspace composition', () => {
     expect(overviewLink).not.toHaveAttribute('aria-current')
   })
 
-  it('shows a persistent, calm Decision reference (UX-001) -- never a floating action toolbar', () => {
+  it('shows a persistent, calm Decision reference (UX-001) that honestly states no decision capability exists yet (Step 7.X A-07) -- never a fabricated "Pending Review" status or a floating action toolbar', () => {
     renderWorkspace()
 
     expect(screen.getByText('Current status')).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Recommendation sections' })
-    expect(nav).toHaveTextContent('Pending Review')
+    expect(nav).toHaveTextContent('Decision capability not yet available')
+    expect(nav).not.toHaveTextContent('Pending Review')
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
+  })
+
+  it('presents Decision as a future capability, never a fabricated decision/lifecycle state (Step 7.X A-07)', () => {
+    renderWorkspace()
+
+    expect(screen.getByText('Decision capture is a future capability')).toBeInTheDocument()
+    expect(screen.queryByText('Awaiting review. No action has been taken yet.')).not.toBeInTheDocument()
   })
 
   it('presents Alternative Options as a future capability, never "No Data" or "Empty" (UX-003)', () => {
@@ -81,10 +89,10 @@ describe('RecommendationsWorkspace composition', () => {
     expect(screen.queryByText(/^empty$/i)).not.toBeInTheDocument()
   })
 
-  it('enforces Decision Before Lifecycle: with no decision yet, Lifecycle shows no stage progression', () => {
+  it('enforces Decision Before Lifecycle: with no decision yet, Lifecycle presents an honest future-capability placeholder, never stage progression (Step 7.X A-07)', () => {
     renderWorkspace()
 
-    expect(screen.getByText('Lifecycle begins once a decision is made')).toBeInTheDocument()
+    expect(screen.getByText('Recommendation lifecycle tracking is a future capability')).toBeInTheDocument()
     expect(screen.queryByText('Awaiting Implementation')).not.toBeInTheDocument()
     expect(screen.queryByText('Completed')).not.toBeInTheDocument()
   })

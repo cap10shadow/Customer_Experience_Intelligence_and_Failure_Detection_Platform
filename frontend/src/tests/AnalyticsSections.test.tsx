@@ -34,16 +34,37 @@ describe('Section-level loading (real component hierarchy)', () => {
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(3)
   })
 
+  it('Executive Overview renders real, factual observations built from real trend data (Step 7.X A-08)', () => {
+    const trends = [
+      { id: 'category-trend', trend: 'billing recorded 18 complaint(s) in the returned trend data.', narrative: 'n', evidence: 'e' },
+    ]
+    render(withProviders(<ExecutiveOverview trends={trends} />))
+    expect(screen.getByText('Complaint categories')).toBeInTheDocument()
+    expect(screen.getByText('billing recorded 18 complaint(s) in the returned trend data.')).toBeInTheDocument()
+  })
+
+  it('Executive Overview renders an honest empty state when no trend data is returned', () => {
+    render(withProviders(<ExecutiveOverview trends={[]} />))
+    expect(screen.getByText('No observations available')).toBeInTheDocument()
+    expect(screen.queryByText(/no data/i)).not.toBeInTheDocument()
+  })
+
   it('Trend Analysis suppresses trend narratives while loading', () => {
     render(withProviders(<TrendAnalysis isLoading />))
     expect(screen.queryByText('Complaint volume has remained broadly stable across the period')).not.toBeInTheDocument()
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(2)
   })
 
-  it('Pattern Discovery suppresses pattern narratives while loading', () => {
-    render(withProviders(<PatternDiscovery isLoading />))
+  it('Pattern Discovery suppresses the future-capability copy while loading, inside the same panel container both states share (Step 7.X G-02)', () => {
+    const { container: loadingContainer } = render(withProviders(<PatternDiscovery isLoading />))
+    expect(screen.queryByText('Pattern discovery is a future capability')).not.toBeInTheDocument()
+    const loadingPanel = loadingContainer.querySelector('[aria-busy="true"]')?.parentElement
+    expect(loadingPanel).not.toBeNull()
+    expect(loadingPanel?.children).toHaveLength(1)
+
+    render(withProviders(<PatternDiscovery />))
+    expect(screen.getAllByText('Pattern discovery is a future capability')).toHaveLength(1)
     expect(screen.queryByText('Checkout-related complaints tend to recur around provider changes')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(1)
   })
 
   it('Recommendation Effectiveness suppresses the future-capability copy while loading, inside the same panel container both states share', () => {
@@ -57,15 +78,23 @@ describe('Section-level loading (real component hierarchy)', () => {
     expect(screen.getAllByText('Recommendation effectiveness is a future capability')).toHaveLength(1)
   })
 
-  it('Organizational Insights suppresses insight cards while loading', () => {
+  it('Organizational Insights suppresses the future-capability copy while loading (Step 7.X G-02)', () => {
     render(withProviders(<OrganizationalInsights isLoading />))
-    expect(screen.queryByText(/Payment provider changes are a recurring precursor/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Organizational insights are a future capability')).not.toBeInTheDocument()
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(1)
+
+    render(withProviders(<OrganizationalInsights />))
+    expect(screen.getAllByText('Organizational insights are a future capability')).toHaveLength(1)
+    expect(screen.queryByText(/Payment provider changes are a recurring precursor/)).not.toBeInTheDocument()
   })
 
-  it('Strategic Opportunities suppresses opportunity cards while loading', () => {
+  it('Strategic Opportunities suppresses the future-capability copy while loading (Step 7.X G-02)', () => {
     render(withProviders(<StrategicOpportunities isLoading />))
+    expect(screen.queryByText('Strategic opportunity identification is a future capability')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(1)
+
+    render(withProviders(<StrategicOpportunities />))
+    expect(screen.getAllByText('Strategic opportunity identification is a future capability')).toHaveLength(1)
     expect(screen.queryByText('Review how payment provider changes are communicated internally')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(2)
   })
 })

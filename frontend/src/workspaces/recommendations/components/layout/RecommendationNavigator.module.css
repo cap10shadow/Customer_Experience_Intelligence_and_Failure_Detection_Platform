@@ -57,6 +57,14 @@
   letter-spacing: 0.02em;
 }
 
+/* Step 7.X A-07: an honest "not yet available" note, deliberately as
+   plain and calm as the StatusIndicator it replaces -- never styled to
+   look like an error or a call to action. */
+.decisionReferenceNote {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
 @media (max-width: 1023px) {
   .navigator {
     position: static;

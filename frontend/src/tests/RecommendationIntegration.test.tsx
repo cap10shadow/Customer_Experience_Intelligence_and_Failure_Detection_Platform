@@ -112,9 +112,13 @@ describe('Recommendation real routing + Gateway integration', () => {
     expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /defer/i })).not.toBeInTheDocument()
 
-    // Decision remains the honest, illustrative Pending Review state -- not a fabricated backend decision.
-    // (Appears twice: the persistent Navigator reference and the Decision section itself.)
-    expect(screen.getAllByText('Pending Review').length).toBeGreaterThan(0)
+    // Step 7.X A-07: Decision/Lifecycle present an honest future-capability
+    // placeholder for a real recommendation -- never a fabricated "Pending
+    // Review" status, since no backend capability persists a decision yet.
+    expect(screen.getByText('Decision capture is a future capability')).toBeInTheDocument()
+    expect(screen.getByText('Recommendation lifecycle tracking is a future capability')).toBeInTheDocument()
+    expect(screen.getByText('Decision capability not yet available')).toBeInTheDocument()
+    expect(screen.queryByText('Pending Review')).not.toBeInTheDocument()
   })
 
   it('routes a 404 (recommendation genuinely not found) into the Recommendation error boundaries', async () => {

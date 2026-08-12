@@ -89,4 +89,26 @@ describe('Section-level loading (real component hierarchy)', () => {
     expect(screen.queryByText('Awaiting Implementation')).not.toBeInTheDocument()
     expect(document.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0)
   })
+
+  it('Decision renders an honest future-capability placeholder when no decision exists yet (Step 7.X A-07), suppressing it the same way while loading', () => {
+    const { container: loadingContainer } = render(withProviders(<Decision isLoading />))
+    expect(screen.queryByText('Decision capture is a future capability')).not.toBeInTheDocument()
+    const loadingPanel = loadingContainer.querySelector('[aria-busy="true"]')?.parentElement
+    expect(loadingPanel).not.toBeNull()
+    expect(loadingPanel?.children).toHaveLength(1)
+
+    render(withProviders(<Decision />))
+    expect(screen.getAllByText('Decision capture is a future capability')).toHaveLength(1)
+    expect(screen.queryByText('Pending Review')).not.toBeInTheDocument()
+  })
+
+  it('Recommendation Lifecycle renders an honest future-capability placeholder when no decision exists yet (Step 7.X A-07)', () => {
+    render(withProviders(<RecommendationLifecycle isLoading />))
+    expect(screen.queryByText('Recommendation lifecycle tracking is a future capability')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0)
+
+    render(withProviders(<RecommendationLifecycle />))
+    expect(screen.getAllByText('Recommendation lifecycle tracking is a future capability')).toHaveLength(1)
+    expect(screen.queryByText('Lifecycle begins once a decision is made')).not.toBeInTheDocument()
+  })
 })

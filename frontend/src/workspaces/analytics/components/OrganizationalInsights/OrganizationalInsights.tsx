@@ -1,28 +1,31 @@
-import { AnalyticsSection } from '../foundation'
-import type { OrganizationalInsight } from '../../types'
-import { InsightCard } from './InsightCard'
+import { FutureCapabilityPlaceholder } from '@/shared/components/feedback'
 
-const INSIGHTS: OrganizationalInsight[] = [
-  {
-    id: 'provider-changes-precede-checkout-incidents',
-    headline: 'Payment provider changes are a recurring precursor to checkout incidents',
-    explanation: 'Across the period, checkout-related incidents have repeatedly followed provider-side changes rather than occurring independently of them. This is a supported conclusion drawn from the trend and pattern evidence above, not a new observation on its own.',
-  },
-]
+import { AnalyticsSection } from '../foundation'
 
 export interface OrganizationalInsightsProps {
   isLoading?: boolean
 }
 
-/** "What has the organization learned?" -- supported conclusions only, synthesized from Trend Analysis, Pattern Discovery, and Recommendation Effectiveness above; never a bare observation and never a recommendation. */
+/**
+ * "What has the organization learned?" -- Step 7.X G-02: always a
+ * future-capability placeholder, reusing the exact component
+ * Recommendation Effectiveness already established. Synthesizing a
+ * supported conclusion requires real Pattern Discovery and
+ * Recommendation Effectiveness evidence to draw from -- neither exists
+ * yet, so there is genuinely nothing to synthesize, not an absence of
+ * data for something the platform already computes. `isLoading`
+ * defaults to false and is never wired to a real fetch: this section
+ * has no backend data dependency.
+ */
 export function OrganizationalInsights({ isLoading = false }: OrganizationalInsightsProps) {
   return (
     <AnalyticsSection id="organizational-insights" title="Organizational Insights" description="What has the organization learned?">
-      <div>
-        {INSIGHTS.map((insight) => (
-          <InsightCard key={insight.id} insight={insight} isLoading={isLoading} />
-        ))}
-      </div>
+      <FutureCapabilityPlaceholder
+        title="Organizational insights are a future capability"
+        description="Conclusions synthesized from trend and pattern evidence across the organization will appear here once that evidence exists to draw from."
+        isLoading={isLoading}
+        loadingLabel="Loading organizational insights"
+      />
     </AnalyticsSection>
   )
 }

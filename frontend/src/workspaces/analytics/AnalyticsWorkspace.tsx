@@ -31,16 +31,17 @@ import { useAnalyticsData } from './hooks/useAnalyticsData'
  * rather than restating. Each section is individually error-isolated,
  * exactly like every prior Phase 10 workspace.
  *
- * Only Trend Analysis is backed by a genuine backend capability today
- * (Part 5: anomaly_service's real `/trends` summary, via the Gateway's
- * `GET /api/v1/analytics/trends`) -- Executive Overview, Pattern
- * Discovery, Recommendation Effectiveness, Organizational Insights, and
- * Strategic Opportunities have no backend capability whatsoever and
- * remain exactly as they were (illustrative or FutureCapabilityPlaceholder),
- * unaffected by the fetch outcome. All six still share the same
- * `isLoading`, now driven by the real fetch instead of a fixed timer, so
- * the skeleton -> content transition every section already renders stays
- * wired to something real.
+ * Trend Analysis and, as of Step 7.X A-08, Executive Overview are both
+ * backed by the same genuine backend capability (anomaly_service's real
+ * `/trends` summary, via the Gateway's `GET /api/v1/analytics/trends`) --
+ * Executive Overview restates already-computed real trend facts, never a
+ * new calculation. Pattern Discovery, Recommendation Effectiveness,
+ * Organizational Insights, and Strategic Opportunities have no backend
+ * capability whatsoever and render an honest `FutureCapabilityPlaceholder`
+ * (Step 7.X G-02 for the first and third; Recommendation Effectiveness
+ * already did before Step 7.X). Those four have no data dependency on the
+ * Analytics fetch, so they render immediately rather than sharing
+ * `isLoading` with the two real sections.
  */
 export function AnalyticsWorkspace() {
   return (
@@ -62,8 +63,10 @@ function AnalyticsWorkspaceContent() {
     <WorkspaceContainer title="Analytics" description="What has the organization learned over time?">
       <AnalyticsLayout>
         <AnalyticsContent>
-          <ErrorBoundary boundaryLabel="the Executive Overview">
-            <ExecutiveOverview isLoading={isLoading} />
+          <ErrorBoundary boundaryLabel="the Executive Overview" onRetry={refetch} resetKeys={[isLoading]}>
+            <AnalyticsSectionErrorGate error={error}>
+              <ExecutiveOverview trends={data?.trends} isLoading={isLoading} />
+            </AnalyticsSectionErrorGate>
           </ErrorBoundary>
 
           <ErrorBoundary boundaryLabel="the Trend Analysis" onRetry={refetch} resetKeys={[isLoading]}>
@@ -73,7 +76,7 @@ function AnalyticsWorkspaceContent() {
           </ErrorBoundary>
 
           <ErrorBoundary boundaryLabel="the Pattern Discovery">
-            <PatternDiscovery isLoading={isLoading} />
+            <PatternDiscovery />
           </ErrorBoundary>
 
           <ErrorBoundary boundaryLabel="the Recommendation Effectiveness">
@@ -81,11 +84,11 @@ function AnalyticsWorkspaceContent() {
           </ErrorBoundary>
 
           <ErrorBoundary boundaryLabel="the Organizational Insights">
-            <OrganizationalInsights isLoading={isLoading} />
+            <OrganizationalInsights />
           </ErrorBoundary>
 
           <ErrorBoundary boundaryLabel="the Strategic Opportunities">
-            <StrategicOpportunities isLoading={isLoading} />
+            <StrategicOpportunities />
           </ErrorBoundary>
         </AnalyticsContent>
       </AnalyticsLayout>

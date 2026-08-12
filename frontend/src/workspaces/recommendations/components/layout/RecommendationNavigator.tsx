@@ -15,7 +15,8 @@ const SECTION_LABEL: Record<RecommendationSectionId, string> = {
 }
 
 export interface RecommendationNavigatorProps {
-  decision: DecisionRecord
+  /** Undefined until Step 7.X G-01 provides a real, persisted decision -- never fabricated (Step 7.X A-07). */
+  decision?: DecisionRecord
 }
 
 /**
@@ -26,6 +27,11 @@ export interface RecommendationNavigatorProps {
  * persistent Decision reference: a single calm status line, not a call
  * to action. Never a colored "alarm" tone even for 'rejected' -- a past
  * decision is informational, not a warning to act on.
+ *
+ * Step 7.X A-07: `decision` is undefined until G-01 provides a real,
+ * persisted decision -- no backend capability exists yet, so no status
+ * badge is shown; the reference honestly states the capability isn't
+ * available rather than fabricating a "Pending Review" state.
  */
 export function RecommendationNavigator({ decision }: RecommendationNavigatorProps) {
   const { activeSection, setActiveSection } = useRecommendationContext()
@@ -48,7 +54,11 @@ export function RecommendationNavigator({ decision }: RecommendationNavigatorPro
       </ol>
       <div className={styles.decisionReference}>
         <span className={styles.decisionReferenceLabel}>Current status</span>
-        <StatusIndicator tone={DECISION_STATUS_TONE[decision.status]} label={DECISION_STATUS_LABEL[decision.status]} />
+        {decision ? (
+          <StatusIndicator tone={DECISION_STATUS_TONE[decision.status]} label={DECISION_STATUS_LABEL[decision.status]} />
+        ) : (
+          <span className={styles.decisionReferenceNote}>Decision capability not yet available</span>
+        )}
       </div>
     </nav>
   )
