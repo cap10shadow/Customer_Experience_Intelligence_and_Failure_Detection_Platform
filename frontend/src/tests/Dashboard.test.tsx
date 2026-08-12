@@ -156,6 +156,41 @@ describe('DashboardWorkspace composition', () => {
   })
 })
 
+describe('DashboardWorkspace partial-failure warnings', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders no partial-failure notice when warnings is empty', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_DASHBOARD_RESPONSE)))
+
+    renderDashboard()
+
+    await waitFor(() => expect(screen.getByText('Escalate to payments team')).toBeInTheDocument())
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('renders the Gateway-provided warnings as a non-blocking notice, not a failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...SAMPLE_DASHBOARD_RESPONSE,
+          warnings: ['Complaint volume trend is temporarily unavailable.'],
+        }),
+      ),
+    )
+
+    renderDashboard()
+
+    await waitFor(() => expect(screen.getByText('Escalate to payments team')).toBeInTheDocument())
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.getByText('Complaint volume trend is temporarily unavailable.')).toBeInTheDocument()
+    // A warning is a partial success, not a section failure.
+    expect(screen.queryByText(/Something went wrong loading/)).not.toBeInTheDocument()
+  })
+})
+
 describe('DashboardWorkspace empty results', () => {
   it('renders honest empty states when the Gateway returns no incidents/recommendations', async () => {
     vi.stubGlobal(

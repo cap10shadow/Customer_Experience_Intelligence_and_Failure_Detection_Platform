@@ -1,5 +1,5 @@
 import { Divider, Stack } from '@/shared/components/layout'
-import { ErrorBoundary } from '@/shared/components/feedback'
+import { ErrorBoundary, PartialFailureNotice } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
 import { DashboardContextProvider } from './context'
@@ -54,6 +54,7 @@ function DashboardWorkspaceContent() {
       description="Immediate operational awareness -- what changed, why it matters, and where to go next."
     >
       <Stack gap={10}>
+        <PartialFailureNotice warnings={data?.warnings} />
         <ErrorBoundary boundaryLabel="the Operational Brief" onRetry={refetch} resetKeys={[isLoading]}>
           <DashboardSectionErrorGate error={error}>
             <OperationalBrief

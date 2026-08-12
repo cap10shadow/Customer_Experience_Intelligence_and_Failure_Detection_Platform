@@ -36,6 +36,8 @@ export interface DashboardContextValue extends DashboardGlobalContextValue {
   setTimeRange: (timeRange: DashboardTimeRange) => void
   setRegion: (region: string | null) => void
   setBusinessUnit: (businessUnit: string | null) => void
+  setProductScope: (productScope: string | null) => void
+  setUserScope: (userScope: string | null) => void
 }
 
 export const DEFAULT_DASHBOARD_CONTEXT: DashboardGlobalContextValue = {

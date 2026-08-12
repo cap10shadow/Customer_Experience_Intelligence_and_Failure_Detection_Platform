@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 
-import { ErrorBoundary } from '@/shared/components/feedback'
+import { ErrorBoundary, PartialFailureNotice } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
 import { BusinessImpact } from './components/BusinessImpact'
@@ -64,6 +64,7 @@ function InvestigationsWorkspaceContent() {
       title="Investigations"
       description="The structured investigation of an operational incident -- evidence-driven analysis from observation through to a recommended next step."
     >
+      <PartialFailureNotice warnings={data?.warnings} />
       <InvestigationLayout>
         <InvestigationContent>
           <ErrorBoundary boundaryLabel="the Observation" onRetry={refetch} resetKeys={[isLoading]}>

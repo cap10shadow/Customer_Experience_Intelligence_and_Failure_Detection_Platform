@@ -161,6 +161,34 @@ describe('Investigation real routing + Gateway integration', () => {
     await waitFor(() => expect(screen.getByText('No evidence gathered yet')).toBeInTheDocument())
   })
 
+  it('renders no partial-failure notice when warnings is empty', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_INVESTIGATION_RESPONSE)))
+
+    renderAtIncident(INCIDENT_ID)
+
+    await waitFor(() => expect(screen.getByText('Checkout failures rising')).toBeInTheDocument())
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('renders the Gateway-provided warnings as a non-blocking notice, not a failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...SAMPLE_INVESTIGATION_RESPONSE,
+          warnings: [`Root cause for incident ${INCIDENT_ID} is temporarily unavailable.`],
+        }),
+      ),
+    )
+
+    renderAtIncident(INCIDENT_ID)
+
+    await waitFor(() => expect(screen.getByText('Checkout failures rising')).toBeInTheDocument())
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.getByText(`Root cause for incident ${INCIDENT_ID} is temporarily unavailable.`)).toBeInTheDocument()
+    expect(screen.queryByText(/Something went wrong loading/)).not.toBeInTheDocument()
+  })
+
   it('routes a 404 (incident genuinely not found) into the Investigation error boundaries', async () => {
     vi.stubGlobal(
       'fetch',

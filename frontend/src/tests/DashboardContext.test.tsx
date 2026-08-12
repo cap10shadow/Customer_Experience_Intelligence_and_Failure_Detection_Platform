@@ -5,7 +5,18 @@ import userEvent from '@testing-library/user-event'
 import { DashboardContextProvider, useDashboardContext } from '@/workspaces/dashboard/context'
 
 function ContextProbe({ id }: { id: string }) {
-  const { timeRange, region, businessUnit, productScope, userScope, setTimeRange } = useDashboardContext()
+  const {
+    timeRange,
+    region,
+    businessUnit,
+    productScope,
+    userScope,
+    setTimeRange,
+    setRegion,
+    setBusinessUnit,
+    setProductScope,
+    setUserScope,
+  } = useDashboardContext()
   return (
     <div>
       <span data-testid={`${id}-timeRange`}>{timeRange}</span>
@@ -15,6 +26,18 @@ function ContextProbe({ id }: { id: string }) {
       <span data-testid={`${id}-userScope`}>{userScope ?? 'all'}</span>
       <button type="button" onClick={() => setTimeRange('7d')}>
         Set 7d ({id})
+      </button>
+      <button type="button" onClick={() => setRegion('west')}>
+        Set region ({id})
+      </button>
+      <button type="button" onClick={() => setBusinessUnit('payments')}>
+        Set business unit ({id})
+      </button>
+      <button type="button" onClick={() => setProductScope('checkout')}>
+        Set product scope ({id})
+      </button>
+      <button type="button" onClick={() => setUserScope('enterprise')}>
+        Set user scope ({id})
       </button>
     </div>
   )
@@ -58,5 +81,26 @@ describe('Global Dashboard Context', () => {
 
     expect(screen.getByTestId('brief-timeRange')).toHaveTextContent('7d')
     expect(screen.getByTestId('decisions-timeRange')).toHaveTextContent('7d')
+  })
+
+  it('exposes a setter for every scope dimension (region, businessUnit, productScope, userScope) symmetrically -- none is presentation-only plumbing while the others are writable', async () => {
+    const user = userEvent.setup()
+    render(
+      <DashboardContextProvider>
+        <ContextProbe id="a" />
+      </DashboardContextProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Set region (a)' }))
+    expect(screen.getByTestId('a-region')).toHaveTextContent('west')
+
+    await user.click(screen.getByRole('button', { name: 'Set business unit (a)' }))
+    expect(screen.getByTestId('a-businessUnit')).toHaveTextContent('payments')
+
+    await user.click(screen.getByRole('button', { name: 'Set product scope (a)' }))
+    expect(screen.getByTestId('a-productScope')).toHaveTextContent('checkout')
+
+    await user.click(screen.getByRole('button', { name: 'Set user scope (a)' }))
+    expect(screen.getByTestId('a-userScope')).toHaveTextContent('enterprise')
   })
 })
