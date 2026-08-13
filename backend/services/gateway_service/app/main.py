@@ -19,6 +19,7 @@ from backend.services.gateway_service.app.core.errors import (
 )
 from backend.shared.observability.correlation import CorrelationIdMiddleware
 from backend.shared.observability.metrics import instrument_app
+from backend.shared.observability.tracing import init_tracing, shutdown_tracing
 
 
 @asynccontextmanager
@@ -27,10 +28,13 @@ async def lifespan(app: FastAPI):
     # workspace route modules (Parts 2-5) pull it via
     # app.dependencies.http_client.get_http_client rather than constructing
     # their own. Gateway does not own persistence (Batch 1 §2), so there is
-    # deliberately no database engine here.
+    # deliberately no database engine here -- init_tracing() below is
+    # therefore called with no `engine` argument (no SQLAlchemy
+    # instrumentation), unlike every other service.
     app.state.http_client = httpx.AsyncClient(timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS)
     yield
     await app.state.http_client.aclose()
+    shutdown_tracing()
 
 
 app = FastAPI(title="Gateway Service", lifespan=lifespan)
@@ -60,6 +64,7 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 # §2 of the Phase 10 record), so it has no dependency of its own to
 # check beyond the process being up, which /health below already answers.
 instrument_app(app, service_name="gateway_service")
+init_tracing("gateway_service", app)
 
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(investigations_router, prefix="/api/v1")

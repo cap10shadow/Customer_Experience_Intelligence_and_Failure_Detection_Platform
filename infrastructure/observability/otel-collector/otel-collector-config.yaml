@@ -1,0 +1,30 @@
+# Phase 11 Batch 2 -- OpenTelemetry Collector configuration.
+#
+# One receiver -> processor -> exporter pipeline: receives OTLP traces
+# from every backend service (Phase 11 architecture §3.6) and forwards
+# them to Tempo. Metrics/logs pipelines are deliberately absent -- this
+# collector exists only for traces (Prometheus/Loki remain the metrics
+# and logs systems, per the frozen architecture's explicit boundary).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp]

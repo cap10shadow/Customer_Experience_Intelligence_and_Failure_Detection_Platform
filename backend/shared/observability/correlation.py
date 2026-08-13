@@ -2,6 +2,7 @@ import uuid
 from contextvars import ContextVar
 from typing import Dict, Optional
 
+from opentelemetry import trace
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.types import ASGIApp
@@ -31,6 +32,18 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     every service installs this same middleware now, not just the
     Gateway, so correlation IDs propagate across service boundaries
     rather than existing only at the Gateway edge.
+
+    Phase 11 Batch 2 (minimum additive change, not a redesign): also
+    attaches `request_id` as an attribute on the current OTel span -- the
+    FastAPI instrumentor's inbound server span, when tracing is active
+    (`backend.shared.observability.tracing`). This is the one place
+    application/log correlation (`request_id`) and distributed tracing
+    (`trace_id`, owned entirely by the OTel SDK) intersect: a human
+    reading one structured log line can jump straight to its full trace
+    without the two ever being treated as the same identifier. A no-op,
+    never an error, when tracing is disabled -- `trace.get_current_span()`
+    returns a harmless no-op span in that case, per the OTel API's own
+    documented contract.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -39,6 +52,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get(CORRELATION_HEADER) or str(uuid.uuid4())
         request.state.request_id = request_id
+        trace.get_current_span().set_attribute("request_id", request_id)
         token = _request_id_var.set(request_id)
         try:
             response = await call_next(request)

@@ -1,0 +1,31 @@
+# Phase 11 Batch 2 -- Tempo configuration.
+#
+# Smallest working single-node setup: local filesystem storage, OTLP
+# receiver only (the OTel Collector is Tempo's only client -- Phase 11
+# architecture §3.2/§3.6) -- consistent with Loki's own single-node,
+# local-storage configuration from Batch 1 (no clustering, no
+# object-storage backend, appropriate for this prototype's scale).
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal

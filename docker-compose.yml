@@ -285,7 +285,38 @@ services:
       - loki
     restart: unless-stopped
 
+  # Phase 11 Batch 2 -- Distributed Tracing. Every backend service exports
+  # OTLP traces to otel-collector, which forwards them to tempo. Direct
+  # OTLP export to Tempo was deliberately not used (Phase 11 architecture
+  # §3.2/§5): a Collector is the frozen topology.
+  otel-collector:
+    image: otel/opentelemetry-collector:0.111.0
+    container_name: oi_otel_collector
+    command:
+      - "--config=/etc/otel-collector-config.yaml"
+    # No host port mapping: internal-only -- only backend services (over
+    # the Compose network) send OTLP here.
+    volumes:
+      - ./infrastructure/observability/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    depends_on:
+      - tempo
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: oi_tempo
+    command:
+      - "-config.file=/etc/tempo.yaml"
+    # No host port mapping: internal-only, same convention as Loki --
+    # only the OTel Collector (writer) and Grafana (a later batch, reader)
+    # need to reach Tempo, both over the Compose network.
+    volumes:
+      - ./infrastructure/observability/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   prometheus_data:
   loki_data:
+  tempo_data:
