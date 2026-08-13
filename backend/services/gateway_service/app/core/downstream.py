@@ -36,6 +36,29 @@ async def get_json(client: httpx.AsyncClient, url: str, *, params: Optional[dict
     return response.json()
 
 
+async def post_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None) -> Any:
+    """
+    Issues one bounded POST to a downstream service and returns its
+    parsed JSON body, or None for a 404 -- the same contract as
+    `get_json()`/`patch_json()` (see their docstrings), reused here so
+    every downstream call, regardless of HTTP method, gets identical
+    timeout/connection-failure/non-2xx handling and the same standardized
+    error envelope.
+    """
+    try:
+        response = await client.post(url, json=json, headers=correlation_headers())
+    except httpx.TimeoutException as exc:
+        raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
+    except httpx.RequestError as exc:
+        raise DownstreamUnavailableError(f"Could not reach {url}.") from exc
+
+    if response.status_code == 404:
+        return None
+    if response.status_code >= 400:
+        raise DownstreamServiceError(f"{url} returned status {response.status_code}.")
+    return response.json()
+
+
 async def patch_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None) -> Any:
     """
     Issues one bounded PATCH to a downstream service and returns its

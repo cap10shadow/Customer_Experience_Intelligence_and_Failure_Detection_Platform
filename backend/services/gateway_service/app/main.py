@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.services.gateway_service.app.api.administration import router as administration_router
 from backend.services.gateway_service.app.api.analytics import router as analytics_router
+from backend.services.gateway_service.app.api.copilot import router as copilot_router
 from backend.services.gateway_service.app.api.dashboard import router as dashboard_router
 from backend.services.gateway_service.app.api.investigations import router as investigations_router
 from backend.services.gateway_service.app.api.recommendations import router as recommendations_router
@@ -71,6 +72,7 @@ app.include_router(investigations_router, prefix="/api/v1")
 app.include_router(recommendations_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(administration_router, prefix="/api/v1")
+app.include_router(copilot_router, prefix="/api/v1")
 
 
 @app.get("/health")

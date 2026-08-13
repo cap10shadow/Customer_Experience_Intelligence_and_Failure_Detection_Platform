@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from backend.services.copilot_service.app.api.copilot import router as copilot_router
 from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
 from backend.shared.observability.correlation import CorrelationIdMiddleware
@@ -27,6 +28,8 @@ instrument_app(app, service_name="copilot_service", refresh_readiness=lambda: re
 mount_readiness(app, service_name="copilot_service")
 mount_unhandled_exception_logging(app)
 init_tracing("copilot_service", app, engine=engine)
+
+app.include_router(copilot_router, prefix="/api/v1")
 
 
 @app.get("/health")

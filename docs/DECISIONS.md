@@ -1027,6 +1027,71 @@ The natural, complete version of "record a decision" would include who made it a
 
 ---
 
+## COPILOT-001 — Copilot Tool Boundary, Read-Only Authority, and Investigation/Analytics Composition
+
+**Status:** Accepted
+
+**Date:** 2026-08-13
+
+### Context
+
+An external architecture review of the initial Phase 12 draft (`docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md`) found two P0 contradictions against the actual repository. First, the draft's topology diagram depicted "Analytics Service" and "Investigation Service" as real backend services peer to Root Cause/Business Impact Service; neither exists — `backend/services/` contains 9 services total, and "Investigation"/"Analytics" are Gateway-only aggregation code (`gateway_service/app/services/investigation_aggregator.py`, `analytics_aggregator.py`) composing calls to `anomaly_service`, `root_cause_service`, `business_impact_service`, `recommendation_service`, and `nlp_service`. Second, the draft's tool list named a "Recommendation Decision Tool" while the same document's own tool-security section forbade all decision mutations in Phase 12 — a direct self-contradiction, since the only decision-related endpoint that exists (`PATCH /recommendations/{id}/decision`) is a real mutation.
+
+### Decision
+
+1. **No `investigation_service` or `analytics_service` is introduced.** The Investigation Tool and Analytics/Trend Tool are Copilot-owned, read-only composition adapters that call the real downstream services directly (§8/§9 of the Phase 12 architecture), never the public Gateway. Gateway's existing aggregators remain the sole implementation backing the public API and are unmodified.
+2. **No extraction of Gateway's aggregation logic into `backend/shared/` is performed for Phase 12.** The resulting duplication between Gateway's aggregators and Copilot's tool adapters (both compose the same underlying service calls) is an accepted, conscious tradeoff, not an oversight — revisit only if the two implementations are found to drift in substance, not presentation.
+3. **"Recommendation Decision Tool" is renamed to "Recommendation Decision Status Tool"** and is strictly read-only: it may read `decision`/`decision_note`/`decided_at` from the existing `GET /recommendations/{id}` response; it must never call `PATCH /recommendations/{id}/decision`.
+4. **Every Phase 12 Copilot tool is read-only, as an absolute, cross-batch invariant.** No generic HTTP tool, no arbitrary-URL tool, no direct-database tool, no service-internal execution tool. Every known mutation endpoint on every domain service (`PATCH /recommendations/{id}/decision`, `PATCH /root-causes/{id}/confirm`, `PATCH /root-causes/{id}/reject`, `POST /root-causes/{id}/refresh`) is explicitly, individually excluded from the tool registry.
+
+### Rationale
+
+- **Honesty over convenience:** naming a nonexistent service in the architecture would have propagated a false assumption into every subsequent implementation batch's tool-adapter design.
+- **Read-only is the single load-bearing security property of Phase 12** (no authentication exists yet — Phase 13). An ambiguously-named tool is the most likely way a read-only boundary silently becomes a write boundary during implementation; resolving the name now removes that risk before any code exists.
+- **No premature refactoring:** extracting a shared composition primitive now, before a second real consumer's needs are known in detail, risks building the wrong abstraction — the existing precedent throughout this platform (DATA-002, RCA-001, BI-006) is to accept bounded, service-local duplication over premature cross-service coupling.
+
+### Consequences
+
+**Pros**
+- Every Phase 12 batch can be implemented against a topology and tool registry that actually matches the repository.
+- The read-only boundary is unambiguous and individually verifiable per tool, per endpoint.
+
+**Cons**
+- Gateway's investigation/analytics composition and Copilot's tool adapters are two independent implementations of similar logic; they are not guaranteed to stay in sync automatically and must be kept consistent by convention and test coverage, not shared code.
+
+---
+
+## COPILOT-002 — Copilot Conversation Ownership and Retention
+
+**Status:** Accepted
+
+**Date:** 2026-08-13
+
+### Context
+
+Phase 12's architecture requires short-term conversation persistence for follow-up-question continuity (e.g., a user asking "Why?" after a prior answer). The initial draft required this capability without stating which service owns the resulting data, where it is stored, or how long it is retained — a gap inconsistent with this project's established documentation discipline for every other persisted entity (ARCH-002, DATA-002, RCA-001, BI-006, REC-003 all state persistence ownership explicitly).
+
+### Decision
+
+`copilot_service` owns conversation persistence in the platform's existing shared PostgreSQL instance (ARCH-002), via two service-owned tables (conceptual, not yet implemented): `copilot_conversations` and `copilot_messages`. No other service ever reads or writes these tables. Retention for the prototype is **no automatic expiry** — the same posture every other entity in this platform already has (no service anywhere implements TTL/archival today). Production retention/privacy policy (encryption posture, user-initiated deletion, automatic expiry) is explicitly identified as future production hardening, not a Phase 12 deliverable. Conversation history is explicitly distinct from, and is not a step toward, the long-term "Organizational Knowledge" vision (ARB-002/ARB-005) — it is never aggregated across users or referenced by any domain service.
+
+### Rationale
+
+- **Consistency with ARCH-002:** every service already persists its own entities in the shared database; conversation data is not a special case requiring new infrastructure.
+- **Avoiding speculative design:** inventing a retention/archival subsystem now, before any real usage pattern exists, would be exactly the kind of premature complexity this platform's engineering discipline (see BI-003, ARB-003) consistently avoids elsewhere.
+- **Explicit is better than implicit:** stating "no automatic expiry, revisit under Phase 13" is a real, documented decision a future engineer can find and challenge — silence would have looked like an oversight instead.
+
+### Consequences
+
+**Pros**
+- Conversation persistence has a clear, unambiguous owner and storage location before any table is created.
+- The prototype-vs-production retention distinction is explicit, preventing a future audit from mistaking "no TTL" for a missed requirement.
+
+**Cons**
+- Conversation content persists indefinitely in the prototype with no built-in purge mechanism — acceptable for this stage, but a real gap a production deployment must close (tracked here as future hardening, not deferred silently).
+
+---
+
 ## OBS-002 — Intelligence Pipeline Dashboard Deferred Pending Real Domain Metrics
 
 **Status:** Accepted
