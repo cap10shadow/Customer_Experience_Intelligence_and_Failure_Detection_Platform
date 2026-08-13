@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from backend.shared.logging.logger import get_logger
 from backend.shared.observability.correlation import get_request_id
+from backend.shared.observability.metrics import route_template
 
 logger = get_logger(__name__)
 
@@ -83,7 +84,30 @@ def _envelope_response(*, status_code: int, code: str, message: str, request_id:
     return JSONResponse(status_code=status_code, content=envelope.model_dump())
 
 
+def _log_gateway_error(request: Request, exc: GatewayError) -> None:
+    """
+    Batch 3 error-visibility: every `GatewayError` is now logged, not just
+    unhandled exceptions -- severity follows the same client-vs-server
+    split the HTTP status codes already encode, so an expected 4xx (bad
+    input, not-found, conflict) never appears as an ERROR-level
+    application failure, while a genuine server-side/downstream failure
+    (502/503/504) does. Only safe, bounded context is attached (status
+    code, error code, route template) -- never the raw downstream
+    response body or request payload.
+    """
+    safe_extra = {
+        "status_code": exc.status_code,
+        "error_code": exc.code,
+        "route": route_template(request),
+    }
+    if exc.status_code >= 500:
+        logger.error(exc.message, extra={"safe_extra": safe_extra})
+    else:
+        logger.info(exc.message, extra={"safe_extra": safe_extra})
+
+
 async def gateway_error_handler(request: Request, exc: GatewayError) -> JSONResponse:
+    _log_gateway_error(request, exc)
     return _envelope_response(
         status_code=exc.status_code,
         code=exc.code,

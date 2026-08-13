@@ -1,17 +1,26 @@
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 from fastapi import FastAPI
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from sqlalchemy.ext.asyncio import AsyncEngine
 
 from backend.shared.config.settings import settings
+
+if TYPE_CHECKING:
+    # Type-only: `gateway_service` has no database engine of its own
+    # (Phase 11 architecture §3.7) and its `requirements.txt` correctly
+    # never installs `sqlalchemy` -- `from __future__ import annotations`
+    # (above) makes this a deferred/string annotation, so it's never
+    # evaluated at runtime, keeping this shared module (imported by all 9
+    # services) importable in `gateway_service`.
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 # Process-global instrumentation state (Phase 11 Batch 2). Each of the 9
 # services is its own process, so these guards only need to prevent a
@@ -78,6 +87,14 @@ def init_tracing(service_name: str, app: FastAPI, *, engine: Optional[AsyncEngin
         _httpx_instrumented = True
 
     if engine is not None:
+        # Imported here, not at module scope: `gateway_service` has no
+        # database engine of its own (Phase 11 architecture §3.7) and its
+        # `requirements.txt` correctly never installs
+        # `opentelemetry-instrumentation-sqlalchemy` -- a module-level
+        # import would make this shared module, imported by all 9
+        # services, fail to import at all in `gateway_service`.
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
         sync_engine = engine.sync_engine
         if id(sync_engine) not in _instrumented_sync_engine_ids:
             SQLAlchemyInstrumentor().instrument(engine=sync_engine)

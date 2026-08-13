@@ -8,6 +8,7 @@ from backend.services.anomaly_service.app.api.anomalies import router as anomali
 from backend.services.anomaly_service.app.api.incidents import router as incidents_router
 from backend.services.anomaly_service.app.api.trends import router as trends_router
 from backend.shared.observability.correlation import CorrelationIdMiddleware
+from backend.shared.observability.error_logging import mount_unhandled_exception_logging
 from backend.shared.observability.health import mount_readiness
 from backend.shared.observability.metrics import instrument_app
 from backend.shared.observability.tracing import init_tracing, shutdown_tracing
@@ -27,6 +28,7 @@ app = FastAPI(title="Anomaly Service", lifespan=lifespan)
 app.add_middleware(CorrelationIdMiddleware)
 instrument_app(app, service_name="anomaly_service")
 mount_readiness(app)
+mount_unhandled_exception_logging(app)
 init_tracing("anomaly_service", app, engine=engine)
 
 app.include_router(trends_router, prefix="/api/v1")

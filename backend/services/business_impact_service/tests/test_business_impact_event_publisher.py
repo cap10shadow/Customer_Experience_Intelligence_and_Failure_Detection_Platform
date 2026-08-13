@@ -1,4 +1,6 @@
 import asyncio
+import io
+import json
 import time
 import uuid
 
@@ -20,6 +22,7 @@ from backend.services.business_impact_service.app.services.business_impact_event
 from backend.shared.constants.enums.anomaly import AnomalySeverity
 from backend.shared.constants.enums.business_impact_assessment import BusinessImpactAssessmentStatus
 from backend.shared.constants.enums.root_cause import RootCause
+from backend.shared.logging.logger import get_logger
 
 
 @pytest.fixture
@@ -258,3 +261,61 @@ async def test_5xx_response_is_reported_as_a_failed_delivery():
     results = await publisher.publish(_event())
 
     assert all(result.delivered is False and result.detail == "http_500" for result in results)
+
+
+# ---------------------------------------------------------------------------
+# Batch 3 -- delivery-failure logging visibility / telemetry safety
+# ---------------------------------------------------------------------------
+
+
+_PUBLISHER_LOGGER_NAME = "backend.services.business_impact_service.app.services.business_impact_event_publisher"
+
+
+@pytest.mark.anyio
+async def test_error_response_failure_is_logged_without_leaking_the_raw_response_body():
+    """A downstream error response's raw body (potentially containing
+    sensitive/internal detail) must never be logged verbatim -- only the
+    bounded status code (Phase 11 §3.12 telemetry safety)."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="password=hunter2; sql error near line 12")
+
+    publisher = _publisher(handler)
+    logger = get_logger(_PUBLISHER_LOGGER_NAME)
+    stream = io.StringIO()
+    log_handler = logger.handlers[0]
+    original_stream = log_handler.stream
+    log_handler.stream = stream
+    try:
+        await publisher.publish(_event())
+    finally:
+        log_handler.stream = original_stream
+
+    raw_output = stream.getvalue()
+    assert "hunter2" not in raw_output
+    assert "sql error" not in raw_output
+    payloads = [json.loads(line) for line in raw_output.splitlines() if line.strip()]
+    assert payloads
+    assert all(p.get("status_code") == 500 for p in payloads)
+
+
+@pytest.mark.anyio
+async def test_timeout_failure_is_logged_at_warning_severity():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timed out", request=request)
+
+    publisher = _publisher(handler)
+    logger = get_logger(_PUBLISHER_LOGGER_NAME)
+    stream = io.StringIO()
+    log_handler = logger.handlers[0]
+    original_stream = log_handler.stream
+    log_handler.stream = stream
+    try:
+        await publisher.publish(_event())
+    finally:
+        log_handler.stream = original_stream
+
+    payloads = [json.loads(line) for line in stream.getvalue().splitlines() if line.strip()]
+    assert payloads
+    assert all(p["level"] == "WARNING" for p in payloads)
+    assert all(p.get("failure") == "timeout" for p in payloads)

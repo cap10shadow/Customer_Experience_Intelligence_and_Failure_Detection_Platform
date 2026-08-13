@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List
@@ -11,9 +10,10 @@ from backend.services.business_impact_service.app.models.business_impact_assessm
 )
 from backend.services.business_impact_service.app.repositories.root_cause_read_repository import PersistedRootCause
 from backend.shared.constants.enums.anomaly import AnomalySeverity
+from backend.shared.logging.logger import get_logger
 from backend.shared.observability.correlation import correlation_headers
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _EVENT_PATH = "/internal/events/business-impact-completed"
 
@@ -152,23 +152,31 @@ class BusinessImpactEventPublisher:
         )
 
     async def _deliver(self, destination: str, url: str, body: Dict[str, Any]) -> DeliveryResult:
+        safe_extra = {"destination": destination, "event_path": _EVENT_PATH}
         try:
             response = await self._client.post(
                 url, json=body, timeout=self._timeout_seconds, headers=correlation_headers()
             )
-        except httpx.TimeoutException as exc:
-            logger.warning("BusinessImpactCompleted delivery to %s timed out: %s", destination, exc)
+        except httpx.TimeoutException:
+            logger.warning(
+                "BusinessImpactCompleted delivery timed out.",
+                extra={"safe_extra": {**safe_extra, "failure": "timeout"}},
+            )
             return DeliveryResult(destination=destination, delivered=False, detail="timeout")
         except httpx.HTTPError as exc:
-            logger.warning("BusinessImpactCompleted delivery to %s failed: %s", destination, exc)
+            logger.warning(
+                "BusinessImpactCompleted delivery failed.",
+                extra={"safe_extra": {**safe_extra, "failure": "connection_error", "exception_type": type(exc).__name__}},
+            )
             return DeliveryResult(destination=destination, delivered=False, detail="connection_error")
 
         if response.status_code >= 400:
+            # Never logs `response.text` -- a downstream service's raw
+            # response body is exactly the "unrestricted response body"
+            # the Phase 11 telemetry-safety rules (§3.12) forbid logging.
             logger.warning(
-                "BusinessImpactCompleted delivery to %s returned status %s: %s",
-                destination,
-                response.status_code,
-                response.text,
+                "BusinessImpactCompleted delivery returned an error status.",
+                extra={"safe_extra": {**safe_extra, "status_code": response.status_code}},
             )
             return DeliveryResult(destination=destination, delivered=False, detail=f"http_{response.status_code}")
 

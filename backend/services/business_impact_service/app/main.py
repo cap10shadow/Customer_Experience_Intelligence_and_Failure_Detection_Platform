@@ -9,6 +9,7 @@ from backend.services.business_impact_service.app.core.config import settings
 from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
 from backend.shared.observability.correlation import CorrelationIdMiddleware
+from backend.shared.observability.error_logging import mount_unhandled_exception_logging
 from backend.shared.observability.health import mount_readiness
 from backend.shared.observability.metrics import instrument_app
 from backend.shared.observability.tracing import init_tracing, shutdown_tracing
@@ -37,6 +38,7 @@ app = FastAPI(title="Business Impact Service", lifespan=lifespan)
 app.add_middleware(CorrelationIdMiddleware)
 instrument_app(app, service_name="business_impact_service")
 mount_readiness(app)
+mount_unhandled_exception_logging(app)
 init_tracing("business_impact_service", app, engine=engine)
 
 app.include_router(business_impact_router, prefix="/api/v1")
