@@ -1,6 +1,12 @@
 fastapi==0.109.2
 uvicorn==0.27.1
 httpx==0.27.0
+# Phase 12 Batch 3 -- the bounded LangGraph orchestration graph (§20).
+# No LLM provider SDK is added: the LLM provider adapter (llm_provider.py)
+# calls a configurable OpenAI-compatible HTTP endpoint via the httpx
+# dependency above, never a vendor SDK. Pinned to the version already
+# available in this environment.
+langgraph==1.0.8
 pydantic-settings==2.1.0
 sqlalchemy==2.0.36
 asyncpg==0.29.0

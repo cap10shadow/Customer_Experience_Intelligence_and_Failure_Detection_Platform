@@ -1,8 +1,12 @@
 """
-Tests for Phase 12 Batch 1's copilot_service internal contract --
-`POST /api/v1/copilot/messages`. No tool/LLM logic exists yet; these
-tests verify the honest placeholder response, request validation, and
-conversation-id/request-id behavior only.
+Tests for `POST /api/v1/copilot/messages`'s HTTP-level contract
+(request validation, conversation-id/request-id behavior, response
+shape). As of Phase 12 Batch 3, the route runs the real bounded
+orchestration graph; with no LLM provider configured in this test
+environment (the default `NullLLMProvider`), it deterministically
+produces one honest "no language model configured" answer with no tool
+calls -- see `tests/test_orchestrator_graph.py` for tool-selection/
+evidence/iteration-bound coverage using a scripted `FakeLLMProvider`.
 """
 
 import uuid
@@ -12,15 +16,32 @@ from fastapi.testclient import TestClient
 
 from backend.services.copilot_service.app.main import app
 
+import httpx
+
+from backend.services.copilot_service.app.dependencies.http_client import get_http_client
+
+# Bare (non-`with`) TestClient never runs the app's lifespan, so
+# `app.state.http_client` (constructed there) does not exist -- exactly
+# like gateway_service's own tests, the dependency is overridden directly
+# rather than requiring a live database for lifespan's own readiness
+# check (Phase 12 Batch 3: the orchestrator's tool adapters need a real
+# client parameter; these HTTP-contract tests don't need it to reach a
+# real service, since the default NullLLMProvider never calls a tool).
+app.dependency_overrides[get_http_client] = lambda: httpx.AsyncClient(
+    transport=httpx.MockTransport(lambda request: httpx.Response(404))
+)
+
 client = TestClient(app)
 
 
-def test_minimal_valid_request_returns_200_with_placeholder_answer():
+def test_minimal_valid_request_returns_200_with_honest_no_provider_answer():
     response = client.post("/api/v1/copilot/messages", json={"message": "What is happening in West region?"})
 
     assert response.status_code == 200
     body = response.json()
-    assert body["answer"] == "Copilot tool orchestration is not yet implemented."
+    assert body["answer"] == (
+        "Copilot's language model is not configured in this environment, so this request cannot be interpreted."
+    )
 
 
 def test_missing_message_is_rejected():
@@ -113,12 +134,12 @@ def test_evidence_findings_and_entities_are_empty_and_visualization_hint_is_omit
     assert body["visualization_hint"] is None
 
 
-def test_limitations_states_tool_orchestration_is_not_yet_implemented():
+def test_limitations_honestly_state_no_llm_provider_is_configured():
     response = client.post("/api/v1/copilot/messages", json={"message": "hello"})
 
     limitations = response.json()["limitations"]
     assert len(limitations) == 1
-    assert "not yet implemented" in limitations[0]
+    assert "No LLM provider is configured" in limitations[0]
 
 
 def test_x_request_id_is_echoed_as_request_id():

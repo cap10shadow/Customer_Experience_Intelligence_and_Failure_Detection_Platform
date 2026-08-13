@@ -28,7 +28,26 @@
       "Bash(python -m pytest backend/shared/tests/test_observability_infrastructure.py backend/shared/tests/test_health.py backend/shared/tests/test_metrics.py -q)",
       "Bash(python -m py_compile backend/shared/observability/health.py backend/shared/observability/metrics.py backend/shared/tests/test_health.py backend/shared/tests/test_metrics.py backend/shared/tests/test_observability_infrastructure.py backend/services/anomaly_service/app/main.py backend/services/business_impact_service/app/main.py backend/services/copilot_service/app/main.py backend/services/evaluation_service/app/main.py backend/services/ingestion_service/app/main.py backend/services/nlp_service/app/main.py backend/services/recommendation_service/app/main.py backend/services/root_cause_service/app/main.py)",
       "Bash(python -m flake8 --select=F,E9 backend/shared/observability/health.py backend/shared/observability/metrics.py backend/shared/tests/test_health.py backend/shared/tests/test_metrics.py backend/shared/tests/test_observability_infrastructure.py backend/services/*/app/main.py)",
-      "Bash(echo \"FLAKE8_EXIT=$?\")"
+      "Bash(echo \"FLAKE8_EXIT=$?\")",
+      "Bash(sed -n '/^## 24\\\\. LLM Architecture/,/^## 25/p' docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md)",
+      "Bash(sed -n '/^### 14.3 Conflict Handling/,/^## 15/p' docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md)",
+      "Bash(sed -n '/^## 22\\\\. Failure Strategy/,/^## 23/p' docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md)",
+      "Bash(pip index *)",
+      "Bash(pip show *)",
+      "Bash(python -c \"import langchain_core; print\\(langchain_core.__version__\\)\")",
+      "Bash(python -m py_compile backend/services/copilot_service/app/services/orchestrator/state.py backend/services/copilot_service/app/services/orchestrator/llm_provider.py backend/services/copilot_service/app/services/orchestrator/prompts.py backend/services/copilot_service/app/services/orchestrator/graph.py backend/services/copilot_service/app/services/orchestrator/synthesis.py backend/services/copilot_service/app/services/orchestrator/orchestrator_service.py backend/services/copilot_service/app/services/copilot_query_service.py backend/services/copilot_service/app/dependencies/http_client.py backend/services/copilot_service/app/api/copilot.py backend/services/copilot_service/app/main.py)",
+      "Bash(python -m pytest backend/services/copilot_service/tests/test_copilot_api.py::test_missing_message_is_rejected -q)",
+      "Bash(python -m py_compile backend/services/copilot_service/app/services/orchestrator/*.py)",
+      "Bash(python -m pytest backend/services/copilot_service/tests/test_orchestrator_graph.py -q)",
+      "Bash(python -m pytest backend/services/copilot_service/tests/test_llm_provider.py -q)",
+      "Bash(python -m pytest backend/services/copilot_service/tests/test_orchestrator_synthesis.py -q)",
+      "Bash(python -m pytest backend/services/copilot_service/tests/test_orchestrator_prompts.py -q)",
+      "Bash(python -m pytest backend -q)",
+      "Bash(docker compose *)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/copilot/messages -H 'Content-Type: application/json' -H 'X-Request-ID: batch3-smoke-1' -d '{\"message\": \"What is the status of recommendation X?\"}' -w '\\\\nHTTP:%{http_code}\\\\n')",
+      "Bash(docker exec oi_copilot python -c ' *)",
+      "Bash(docker exec *)",
+      "Bash(curl -s http://localhost:8000/metrics)"
     ]
   }
 }

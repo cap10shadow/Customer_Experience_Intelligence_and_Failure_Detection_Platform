@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
 from backend.services.copilot_service.app.api.copilot import router as copilot_router
+from backend.services.copilot_service.app.services.orchestrator.graph import TOOL_CALL_TIMEOUT_SECONDS
 from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
 from backend.shared.observability.correlation import CorrelationIdMiddleware
@@ -13,10 +15,17 @@ from backend.shared.observability.tracing import init_tracing, shutdown_tracing
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
     if not await check_database_connection():
         raise RuntimeError("Database connectivity check failed on startup.")
+    # One shared client for the app's lifetime (Phase 12 Batch 3) -- the
+    # orchestrator's tool adapters (Batch 2) pull it via
+    # dependencies/http_client.get_http_client, mirroring
+    # gateway_service's identical pattern. Bounded timeout covers every
+    # tool call (architecture §19).
+    app.state.http_client = httpx.AsyncClient(timeout=TOOL_CALL_TIMEOUT_SECONDS)
     yield
+    await app.state.http_client.aclose()
     shutdown_tracing()
     await engine.dispose()
 
