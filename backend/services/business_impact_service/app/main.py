@@ -8,6 +8,9 @@ from backend.services.business_impact_service.app.api.configuration import route
 from backend.services.business_impact_service.app.core.config import settings
 from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
+from backend.shared.observability.correlation import CorrelationIdMiddleware
+from backend.shared.observability.health import mount_readiness
+from backend.shared.observability.metrics import instrument_app
 
 
 @asynccontextmanager
@@ -24,6 +27,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Business Impact Service", lifespan=lifespan)
+
+app.add_middleware(CorrelationIdMiddleware)
+instrument_app(app, service_name="business_impact_service")
+mount_readiness(app)
 
 app.include_router(business_impact_router, prefix="/api/v1")
 app.include_router(configuration_router, prefix="/api/v1")

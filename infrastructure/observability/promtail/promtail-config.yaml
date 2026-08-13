@@ -1,0 +1,41 @@
+# Phase 11 Batch 1 -- Promtail configuration.
+#
+# Ships every container's stdout log (Docker's default json-file driver --
+# no service pushes logs over the network itself) to Loki. Reads directly
+# from the json-file log directory rather than using Docker's API/socket
+# for container discovery, keeping this the smallest working
+# configuration (Phase 11 architecture §F5/§"Logging Architecture").
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker_containers
+    static_configs:
+      - targets: ["localhost"]
+        labels:
+          job: containerlogs
+          __path__: /var/lib/docker/containers/*/*.log
+    pipeline_stages:
+      # Unwraps Docker's json-file wrapper ({"log": "...", "stream": "...",
+      # "time": "..."}) -- every backend service's actual log line (now
+      # structured JSON, per this batch's logger.py rewrite) becomes the
+      # entry content from here on.
+      - docker: {}
+      # Extracts only bounded, safe fields from the app's own JSON log
+      # line as Loki labels -- deliberately NOT request_id (high
+      # cardinality; still fully searchable in the log content itself,
+      # per the same label-discipline principle applied to Prometheus).
+      - json:
+          expressions:
+            level: level
+            service: service
+      - labels:
+          level:
+          service:

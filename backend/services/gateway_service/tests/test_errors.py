@@ -4,7 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from backend.services.gateway_service.app.core.correlation import CorrelationIdMiddleware
+from backend.shared.observability.correlation import CorrelationIdMiddleware
 from backend.services.gateway_service.app.core.errors import (
     ConflictError,
     DownstreamServiceError,

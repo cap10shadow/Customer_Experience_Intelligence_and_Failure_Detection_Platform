@@ -11,13 +11,14 @@ from backend.services.gateway_service.app.api.dashboard import router as dashboa
 from backend.services.gateway_service.app.api.investigations import router as investigations_router
 from backend.services.gateway_service.app.api.recommendations import router as recommendations_router
 from backend.services.gateway_service.app.core.config import settings
-from backend.services.gateway_service.app.core.correlation import CorrelationIdMiddleware
 from backend.services.gateway_service.app.core.errors import (
     GatewayError,
     gateway_error_handler,
     unhandled_error_handler,
     validation_error_handler,
 )
+from backend.shared.observability.correlation import CorrelationIdMiddleware
+from backend.shared.observability.metrics import instrument_app
 
 
 @asynccontextmanager
@@ -53,6 +54,12 @@ app.add_middleware(
 app.add_exception_handler(GatewayError, gateway_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
+
+# Phase 11 Batch 1: common technical HTTP metrics + GET /metrics. No
+# readiness endpoint here -- gateway_service owns no database (Batch 1
+# §2 of the Phase 10 record), so it has no dependency of its own to
+# check beyond the process being up, which /health below already answers.
+instrument_app(app, service_name="gateway_service")
 
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(investigations_router, prefix="/api/v1")

@@ -1,0 +1,58 @@
+# Phase 11 Batch 1 -- Prometheus scrape configuration.
+#
+# Static targets only: one job per real backend service, addressed by its
+# existing Docker Compose service name/port (docker-compose.yml), the same
+# pair every service already answers /health on. No fake/example targets.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: gateway_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gateway_service:8000"]
+
+  - job_name: ingestion_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ingestion_service:8001"]
+
+  - job_name: nlp_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["nlp_service:8002"]
+
+  - job_name: anomaly_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["anomaly_service:8003"]
+
+  - job_name: root_cause_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["root_cause_service:8004"]
+
+  - job_name: business_impact_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["business_impact_service:8005"]
+
+  - job_name: recommendation_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["recommendation_service:8006"]
+
+  - job_name: copilot_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["copilot_service:8007"]
+
+  - job_name: evaluation_service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["evaluation_service:8008"]

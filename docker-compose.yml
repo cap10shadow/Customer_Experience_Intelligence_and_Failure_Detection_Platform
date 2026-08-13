@@ -237,5 +237,55 @@ services:
       - VITE_API_BASE_URL=http://localhost:8000
     restart: unless-stopped
 
+  # ---------------------------------------------------------------------
+  # Phase 11 Batch 1 -- Observability Foundation.
+  # Prometheus (metrics) + Loki/Promtail (logs). Tracing (OTel Collector,
+  # Tempo) and Grafana are later batches (docs/architecture/phase-11/
+  # PHASE_11_ARCHITECTURE.md) -- not added here.
+  # ---------------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: oi_prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infrastructure/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: oi_loki
+    command:
+      - "-config.file=/etc/loki/loki-config.yaml"
+    # No host port mapping: internal-only, same convention as every
+    # backend service that isn't gateway_service -- only Grafana (a later
+    # batch) needs to reach Loki, over the Compose network.
+    volumes:
+      - ./infrastructure/observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: oi_promtail
+    command:
+      - "-config.file=/etc/promtail/promtail-config.yaml"
+    volumes:
+      - ./infrastructure/observability/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      # Read-only access to every container's own Docker json-file log --
+      # the mechanism this batch's structured stdout logging (backend/
+      # shared/logging/logger.py) is shipped through, with zero networking
+      # dependency added to any backend service itself.
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  prometheus_data:
+  loki_data:

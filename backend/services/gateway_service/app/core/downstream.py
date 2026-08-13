@@ -7,6 +7,7 @@ from backend.services.gateway_service.app.core.errors import (
     DownstreamTimeoutError,
     DownstreamUnavailableError,
 )
+from backend.shared.observability.correlation import correlation_headers
 
 
 async def get_json(client: httpx.AsyncClient, url: str, *, params: Optional[dict] = None) -> Any:
@@ -22,7 +23,7 @@ async def get_json(client: httpx.AsyncClient, url: str, *, params: Optional[dict
     DOWNSTREAM_TIMEOUT_SECONDS), not per-call here.
     """
     try:
-        response = await client.get(url, params=params)
+        response = await client.get(url, params=params, headers=correlation_headers())
     except httpx.TimeoutException as exc:
         raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
     except httpx.RequestError as exc:
@@ -50,7 +51,7 @@ async def patch_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict
     client input error the Gateway should re-validate.
     """
     try:
-        response = await client.patch(url, json=json)
+        response = await client.patch(url, json=json, headers=correlation_headers())
     except httpx.TimeoutException as exc:
         raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
     except httpx.RequestError as exc:

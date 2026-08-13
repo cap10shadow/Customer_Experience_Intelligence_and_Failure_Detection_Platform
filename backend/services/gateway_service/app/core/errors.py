@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from fastapi import status
@@ -7,9 +6,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.requests import Request
 
-from backend.services.gateway_service.app.core.correlation import get_request_id
+from backend.shared.logging.logger import get_logger
+from backend.shared.observability.correlation import get_request_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ErrorDetail(BaseModel):

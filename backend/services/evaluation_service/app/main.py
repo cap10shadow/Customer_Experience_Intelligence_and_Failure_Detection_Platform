@@ -8,6 +8,9 @@ from backend.services.evaluation_service.app.presentation.api.evaluations import
 from backend.services.evaluation_service.app.presentation.api.internal_events import (
     router as internal_events_router,
 )
+from backend.shared.observability.correlation import CorrelationIdMiddleware
+from backend.shared.observability.health import mount_readiness
+from backend.shared.observability.metrics import instrument_app
 
 
 @asynccontextmanager
@@ -19,6 +22,10 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Evaluation Service", lifespan=lifespan)
+
+app.add_middleware(CorrelationIdMiddleware)
+instrument_app(app, service_name="evaluation_service")
+mount_readiness(app)
 
 app.include_router(evaluations_router, prefix="/api/v1")
 app.include_router(internal_events_router)

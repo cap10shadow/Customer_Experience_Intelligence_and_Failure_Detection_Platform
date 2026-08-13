@@ -8,6 +8,9 @@ from backend.services.root_cause_service.app.api.root_causes import (
     incidents_router as root_cause_incidents_router,
     router as root_causes_router,
 )
+from backend.shared.observability.correlation import CorrelationIdMiddleware
+from backend.shared.observability.health import mount_readiness
+from backend.shared.observability.metrics import instrument_app
 
 
 @asynccontextmanager
@@ -19,6 +22,10 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Root Cause Service", lifespan=lifespan)
+
+app.add_middleware(CorrelationIdMiddleware)
+instrument_app(app, service_name="root_cause_service")
+mount_readiness(app)
 
 app.include_router(root_causes_router, prefix="/api/v1")
 app.include_router(root_cause_incidents_router, prefix="/api/v1")

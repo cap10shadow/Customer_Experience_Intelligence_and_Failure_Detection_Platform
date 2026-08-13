@@ -3,7 +3,7 @@ import uuid
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.services.gateway_service.app.core.correlation import CORRELATION_HEADER, CorrelationIdMiddleware
+from backend.shared.observability.correlation import CORRELATION_HEADER, CorrelationIdMiddleware
 
 
 def _build_app() -> FastAPI:

@@ -11,6 +11,7 @@ from backend.services.business_impact_service.app.models.business_impact_assessm
 )
 from backend.services.business_impact_service.app.repositories.root_cause_read_repository import PersistedRootCause
 from backend.shared.constants.enums.anomaly import AnomalySeverity
+from backend.shared.observability.correlation import correlation_headers
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,9 @@ class BusinessImpactEventPublisher:
 
     async def _deliver(self, destination: str, url: str, body: Dict[str, Any]) -> DeliveryResult:
         try:
-            response = await self._client.post(url, json=body, timeout=self._timeout_seconds)
+            response = await self._client.post(
+                url, json=body, timeout=self._timeout_seconds, headers=correlation_headers()
+            )
         except httpx.TimeoutException as exc:
             logger.warning("BusinessImpactCompleted delivery to %s timed out: %s", destination, exc)
             return DeliveryResult(destination=destination, delivered=False, detail="timeout")
