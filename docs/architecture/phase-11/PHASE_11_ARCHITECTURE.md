@@ -97,7 +97,7 @@ Only `gateway_service` (existing, unchanged), `postgres` (existing, unchanged), 
 | Component | Responsibility | Host port | Notes |
 |---|---|---|---|
 | Prometheus | Scrapes `/metrics` from all 9 backend services + itself | `9090` (dev convenience, optional) | Standard `docker_sd_configs`-free static scrape config listing the 9 known service:port pairs (mirrors `GatewaySettings.downstream_service_urls`'s existing enumeration) |
-| Grafana | Dashboards over Prometheus/Loki/Tempo | `3001` (F1) | Provisioned datasources + the 3 dashboards (§3.6), version-controlled as JSON |
+| Grafana | Dashboards over Prometheus/Loki/Tempo | `3001` (F1) | Provisioned datasources + the 2 dashboards (§3.9, amended by OBS-002), version-controlled as JSON |
 | Loki | Log storage/query | internal only | Queried by Grafana over the Compose network |
 | Promtail | Tails Docker `json-file` logs, ships to Loki | internal only | Reads `/var/lib/docker/containers` (read-only mount) — zero application code changes (F5) |
 | OTel Collector | Receives OTLP from all services, forwards to Tempo | internal only | One collector, standard `otlp` receiver → `otlp` exporter pipeline |
@@ -135,12 +135,15 @@ Only `gateway_service` (existing, unchanged), `postgres` (existing, unchanged), 
 - Timeouts and downstream-unavailable conditions (Gateway's existing `DownstreamTimeoutError`/`DownstreamUnavailableError`/`DownstreamServiceError`, `core/errors.py`, unchanged) are logged via the shared structured logger (§3.3) at `ERROR` level with the failing downstream URL and status/exception type (never the raw exception object or response body verbatim, per §3.9) and are visible as failed spans in the corresponding trace (§3.6) — a genuine downstream failure is therefore observable through metrics (a 502/503/504 count), logs (one structured error line, correlated by `request_id`), and traces (a span marked as an error) simultaneously, satisfying §9's "verify the failure becomes observable through logs/metrics/traces."
 
 ### 3.9 Grafana Architecture
-Exactly three dashboards, each backed entirely by real, live Prometheus/Loki/Tempo data — no dashboard renders a static or seeded number as if it were live telemetry:
-1. **Platform Health** — per-service `up`/liveness (from Prometheus scrape health), readiness status (from the new `/health/ready` endpoints, scraped or polled the same way), and recent error-rate summary per service.
-2. **API & Service Performance** — request rate, latency percentiles (from the `http_request_duration_seconds` histogram), and error rate, sliceable by service/route, plus a panel linking into Tempo traces for slow/error requests.
-3. **Intelligence Pipeline** — the service-owned domain metrics from §3.5 (anomalies detected, incidents correlated, recommendations generated, business impact assessments by severity, etc.) — exactly the business-facing metrics ARCHITECTURE.md §10 already names, sourced from each service's own instrumentation, never redefined in shared/Grafana-side code.
 
-Any dashboard example/seed panel used during Batch 4 development must be clearly labeled (e.g., a provisioning-time annotation or a dashboard explicitly named "Example — not live") and removed or replaced with real-data panels before Batch 4 closes — no seeded number ships in the final `PlatformHealth`/`APIServicePerformance`/`IntelligencePipeline` dashboards.
+**Amended at Phase 11 closure (OBS-002, `docs/DECISIONS.md`):** the third dashboard below ("Intelligence Pipeline") required domain metrics that no Phase 11 batch's backend scope ever committed to implementing, and which do not exist anywhere in the repository. Rather than fabricate them, Phase 11 ships two dashboards. Intelligence Pipeline is explicitly deferred to a future initiative that first adds real domain-metric instrumentation to the owning services. See OBS-002 for full rationale.
+
+Two dashboards, each backed entirely by real, live Prometheus/Loki/Tempo data — no dashboard renders a static or seeded number as if it were live telemetry:
+1. **Platform Health** — per-service `up`/liveness (from Prometheus scrape health), readiness status (from the `service_readiness` gauge, refreshed on the same cadence as every `/metrics` scrape — added at Phase 11 closure; reuses the existing `check_database_connection()` primitive, no change to `/health` or `/health/ready`'s own contracts), and recent error-rate summary per service.
+2. **API & Service Performance** — request rate, latency percentiles (from the `http_request_duration_seconds` histogram), and error rate, sliceable by service/route, plus a panel linking into Tempo traces for slow/error requests.
+3. ~~**Intelligence Pipeline**~~ — **DEFERRED (OBS-002).** Would have required service-owned domain metrics from §3.5 (anomalies detected, incidents correlated, recommendations generated, business impact assessments by severity, etc.) that do not exist in this repository as of Phase 11 closure. Building this dashboard is deferred until those metrics are genuinely instrumented by their owning services.
+
+Any dashboard example/seed panel used during Batch 4 development must be clearly labeled (e.g., a provisioning-time annotation or a dashboard explicitly named "Example — not live") and removed or replaced with real-data panels before Batch 4 closes — no seeded number ships in the final `PlatformHealth`/`APIServicePerformance` dashboards.
 
 ### 3.10 Frontend Boundary
 No new frontend workspace, no Grafana embedding, no frontend-side OpenTelemetry SDK, no user-behavior telemetry. The frontend's existing `X-Request-ID` generation and `ApiError.requestId` surfacing (`frontend/src/app/api/client.ts`, `errors.ts`) already satisfy "correlation information where already appropriate" and "useful error context where genuinely justified" — Phase 11 confirms this continues to correlate correctly once services propagate the same header (§3.4) but adds no new frontend code.
@@ -183,11 +186,11 @@ Docker Compose only — five new internal-only services (`prometheus`* , `grafan
 **Dependencies on previous batches:** Batch 1 (metrics/logging) required; Batch 2 (traces) used where available but not blocking.
 
 ### Batch 4 — Grafana + Full Verification
-**Purpose:** Ship the three dashboards against real telemetry and close out Phase 11 with end-to-end verification.
+**Purpose:** Ship dashboards against real telemetry and close out Phase 11 with end-to-end verification. **Amended by OBS-002 at closure:** two dashboards (Platform Health, API & Service Performance) shipped; a third ("Intelligence Pipeline") was deferred — see §3.9.
 **Backend:** None (consumes Batches 1–3's output only).
 **Frontend:** None.
-**Infrastructure:** Add `grafana` to `docker-compose.yml` (host port 3001, F1); provision Prometheus/Loki/Tempo datasources and the three dashboards (§3.9) as version-controlled JSON.
-**Tests/Verification:** Each of the 3 dashboards renders real, live data (not a seeded/example panel) end to end, confirmed by generating real traffic (a few real API calls) and observing the corresponding panels update; full `docker compose up` brings up all original 9 services plus the 6 new observability services cleanly; documentation/closure updated per the same discipline Step 7.X's own closure used.
+**Infrastructure:** Add `grafana` to `docker-compose.yml` (host port 3001, F1); provision Prometheus/Loki/Tempo datasources and the two shipped dashboards (§3.9, amended by OBS-002) as version-controlled JSON.
+**Tests/Verification:** Each of the 2 shipped dashboards renders real, live data (not a seeded/example panel) end to end, confirmed by generating real traffic (a few real API calls) and observing the corresponding panels update; full `docker compose up` brings up all original 9 services plus the 6 new observability services cleanly; documentation/closure updated per the same discipline Step 7.X's own closure used.
 **Dependencies on previous batches:** All of Batches 1–3 (dashboards require real metrics, logs, and traces to already exist).
 
 ---
@@ -222,7 +225,7 @@ Phase 11 is complete only when:
 4. Distributed tracing captures, end to end, at least two representative real flows: a Gateway-initiated request through a downstream service and its database operation, and the independent `business_impact_service → recommendation_service`/`evaluation_service` event-delivery hop — both visible as a single connected trace each in Tempo/Grafana.
 5. Liveness (`/health`, unmodified) and readiness (`/health/ready`, new, dependency-checked) are both real and distinguishable on every service where the distinction is meaningful (8 of 9 — all except `gateway_service`).
 6. A representative 4xx, 5xx, timeout, and downstream-unavailable scenario are each demonstrated observable through logs, metrics, and (where applicable) traces, without any fabricated/static number standing in for live data.
-7. Grafana ships exactly three dashboards — Platform Health, API & Service Performance, Intelligence Pipeline — each rendering real, live telemetry only, verified by generating real traffic and observing panels update.
+7. **Amended (OBS-002):** Grafana ships the two dashboards backed by telemetry that exists as of Phase 11 — Platform Health, API & Service Performance — each rendering real, live telemetry only, verified by generating real traffic and observing panels update. Intelligence Pipeline is explicitly deferred pending real domain-metric instrumentation in a future initiative; it does not block Phase 11 closure.
 8. No telemetry surface (log, metric, span, dashboard) exposes any item listed in §3.12.
 9. Full existing verification suite (backend pytest, frontend Vitest, typecheck, lint, production build, `docker compose config`) remains green with the six new observability services added — no regression to any Phase 1–10/Step 7.X capability.
 10. No Phase 12 or Phase 13 capability was introduced (verified by an explicit closure-time check against §5 of this document, mirroring Step 7.X's own closure discipline).

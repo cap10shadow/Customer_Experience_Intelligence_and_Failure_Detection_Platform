@@ -7,7 +7,7 @@ from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
 from backend.shared.observability.correlation import CorrelationIdMiddleware
 from backend.shared.observability.error_logging import mount_unhandled_exception_logging
-from backend.shared.observability.health import mount_readiness
+from backend.shared.observability.health import mount_readiness, readiness_check
 from backend.shared.observability.metrics import instrument_app
 from backend.shared.observability.tracing import init_tracing, shutdown_tracing
 
@@ -24,8 +24,8 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Ingestion Service", lifespan=lifespan)
 
 app.add_middleware(CorrelationIdMiddleware)
-instrument_app(app, service_name="ingestion_service")
-mount_readiness(app)
+instrument_app(app, service_name="ingestion_service", refresh_readiness=lambda: readiness_check("ingestion_service"))
+mount_readiness(app, service_name="ingestion_service")
 mount_unhandled_exception_logging(app)
 init_tracing("ingestion_service", app, engine=engine)
 

@@ -1,0 +1,15 @@
+# Phase 11 Batch 4 -- Grafana dashboard provisioning. Loads every
+# dashboard JSON file from the mounted /etc/grafana/dashboards directory
+# (docker-compose.yml's `grafana` service) -- version-controlled JSON,
+# no manual click-through creation (Phase 11 architecture §3.9/§3.11).
+apiVersion: 1
+
+providers:
+  - name: "Phase 11 Observability"
+    orgId: 1
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards

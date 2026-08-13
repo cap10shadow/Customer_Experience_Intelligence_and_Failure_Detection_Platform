@@ -118,3 +118,35 @@ def test_an_unhandled_exception_is_still_recorded_and_still_propagates():
     assert response.status_code == 500
     after = _counter_value(service, "GET", "/boom", "500")
     assert after == before + 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 11 closure -- optional `refresh_readiness` hook
+# ---------------------------------------------------------------------------
+
+
+def test_metrics_scrape_awaits_the_refresh_readiness_hook_when_provided():
+    calls = []
+
+    async def _refresh():
+        calls.append(1)
+
+    app = FastAPI()
+    instrument_app(app, service_name="test_service_readiness_hook", refresh_readiness=_refresh)
+    client = TestClient(app)
+
+    client.get("/metrics")
+
+    assert calls == [1]
+
+
+def test_metrics_scrape_works_without_a_refresh_readiness_hook():
+    """gateway_service (no database) never passes this hook -- /metrics must
+    keep working exactly as before when it's omitted."""
+    app = FastAPI()
+    instrument_app(app, service_name="test_service_no_hook")
+    client = TestClient(app)
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 200

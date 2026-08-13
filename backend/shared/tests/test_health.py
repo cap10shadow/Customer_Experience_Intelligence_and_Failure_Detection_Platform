@@ -12,12 +12,12 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.shared.observability.health import mount_readiness
+from backend.shared.observability.health import SERVICE_READINESS, mount_readiness
 
 
-def _build_app() -> FastAPI:
+def _build_app(service_name: str = "test_service") -> FastAPI:
     app = FastAPI()
-    mount_readiness(app)
+    mount_readiness(app, service_name=service_name)
 
     @app.get("/health")
     def health():
@@ -61,3 +61,40 @@ def test_liveness_health_endpoint_is_unaffected_by_readiness_addition():
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "test_service"}
+
+
+# ---------------------------------------------------------------------------
+# Phase 11 closure -- `service_readiness` Prometheus gauge
+# ---------------------------------------------------------------------------
+
+
+def test_readiness_endpoint_sets_the_gauge_to_1_when_healthy():
+    app = _build_app(service_name="gauge_test_healthy")
+    client = TestClient(app)
+
+    with patch("backend.shared.observability.health.check_database_connection", new=AsyncMock(return_value=True)):
+        client.get("/health/ready")
+
+    assert SERVICE_READINESS.labels(service="gauge_test_healthy")._value.get() == 1
+
+
+def test_readiness_endpoint_sets_the_gauge_to_0_when_unhealthy():
+    app = _build_app(service_name="gauge_test_unhealthy")
+    client = TestClient(app)
+
+    with patch("backend.shared.observability.health.check_database_connection", new=AsyncMock(return_value=False)):
+        client.get("/health/ready")
+
+    assert SERVICE_READINESS.labels(service="gauge_test_unhealthy")._value.get() == 0
+
+
+def test_readiness_gauge_response_body_is_unchanged_by_the_new_label():
+    """service_name labels the Prometheus gauge only -- it must never appear
+    in the /health/ready JSON response body itself."""
+    app = _build_app(service_name="gauge_test_body")
+    client = TestClient(app)
+
+    with patch("backend.shared.observability.health.check_database_connection", new=AsyncMock(return_value=True)):
+        response = client.get("/health/ready")
+
+    assert response.json() == {"status": "ready", "checks": {"database": "ok"}}

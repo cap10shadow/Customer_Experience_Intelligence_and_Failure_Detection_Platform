@@ -14,7 +14,9 @@ Step 7.X then closed the gap between Step 7's real-data integration and a small 
 
 Still explicitly deferred: Root Cause confirm/reject/refresh (a write capability), `RecommendationStatisticsService` surfacing, full Dashboard dimensional filtering (region/business unit/product/user), Administration User & Access Management, Administration Audit & Change History persistence, editable/persisted Intelligence Configuration, Recommendation Effectiveness/outcome tracking, and an Evaluation Service UI (explicitly decided against — see `docs/architecture/phase-10/STEP_7X_SCOPE_FREEZE.md`). Event delivery remains single-attempt/best-effort (no message broker, Outbox, or durable retry), and there is no authentication/RBAC anywhere in the platform yet — the new `PATCH` decision endpoint is exactly as unauthenticated as every other Gateway route today. See `ROADMAP.md` and `docs/DECISIONS.md` for the full list of what remains deferred.
 
-**Phase 11+ (Observability & Reliability, AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
+**Phase 11 (Observability & Reliability) is COMPLETE.** Structured JSON logging, `X-Request-ID` correlation, Prometheus HTTP metrics, liveness/readiness health, OpenTelemetry distributed tracing (Tempo), and a Grafana operational-visualization layer (two dashboards — Platform Health, API & Service Performance) are live across all 9 backend services, verified against real running services. A third dashboard originally scoped ("Intelligence Pipeline") was explicitly deferred rather than built on fabricated data — it requires domain metrics (anomalies detected, recommendations generated, etc.) that no Phase 11 batch ever implemented; see `docs/DECISIONS.md` (OBS-002). This is an internal operator/infrastructure surface only — no frontend workspace, Gateway route, or user-facing feature was added.
+
+**Phase 12+ (AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
 
 The Evaluation Service (Phase 8) is an independent Intelligence Assurance Service, not part of the linear pipeline below: it observes completed intelligence out-of-band, event-driven, and never modifies or blocks any upstream service.
 

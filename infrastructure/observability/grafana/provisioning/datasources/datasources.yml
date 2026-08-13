@@ -1,0 +1,45 @@
+# Phase 11 Batch 4 -- Grafana datasource provisioning.
+#
+# All three URLs use Docker Compose service names/ports (never
+# localhost), matching every other observability component's existing
+# internal-only convention (docker-compose.yml). No credentials are
+# configured -- none of Prometheus/Loki/Tempo has auth enabled in this
+# prototype stack (Phase 11 architecture §5).
+apiVersion: 1
+
+datasources:
+  - uid: prometheus
+    name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  - uid: loki
+    name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+
+  - uid: tempo
+    name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    # No `tracesToLogsV2`/derived-field automation configured: Loki's own
+    # bounded labels (Batch 1) never include `trace_id`, nor does any
+    # structured log line contain the trace ID as text, so an automatic
+    # Loki<->Tempo link would silently resolve to nothing -- configuring
+    # one anyway would be exactly the kind of feature that looks wired up
+    # but never surfaces real data (Phase 11 §22 "no-fabrication").
+    # Human trace/log correlation already exists via `request_id`
+    # instead (Phase 11 architecture §3.4): every structured log line
+    # carries it, and it is attached as a span attribute on the active
+    # trace (backend/shared/observability/correlation.py), so a human can
+    # search Tempo directly with TraceQL (`{span.request_id="..."}`) from
+    # a `request_id` seen in a log line -- the "minimum required
+    # relationship" already satisfied without any additional data or
+    # configuration.

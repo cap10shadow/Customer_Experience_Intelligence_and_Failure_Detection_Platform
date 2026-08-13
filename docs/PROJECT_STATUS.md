@@ -13,7 +13,7 @@
 
 # Overall Progress
 
-**Estimated Completion:** ~85%
+**Estimated Completion:** ~88%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -21,11 +21,11 @@
 
 # Current Development Status
 
-**Current Phase:** Phase 10 – Executive Dashboard
+**Current Phase:** Phase 11 – Observability & Reliability
 
-**Current Step:** Step 7.X – Intermediate Capability Completion
+**Current Step:** Batch 4 (Grafana + Full Verification) — Complete, including final closure review
 
-**Status:** Complete
+**Status:** Complete (2 of 3 Grafana dashboards shipped; Intelligence Pipeline dashboard explicitly deferred — see Phase 11 Completion Summary below and `docs/DECISIONS.md` OBS-002)
 
 ---
 
@@ -43,9 +43,53 @@
 | ✅ Phase 8 – Intelligence Evaluation      | Complete    |
 | ✅ Phase 9 – Recommendation Engine        | Complete    |
 | ✅ Phase 10 – Executive Dashboard         | Complete    |
-| ⬜ Phase 11 – Observability & Reliability | Pending     |
+| ✅ Phase 11 – Observability & Reliability | Complete (2/3 dashboards; 1 explicitly deferred) |
 | ⬜ Phase 12 – AI Copilot                  | Pending     |
 | ⬜ Phase 13 – Production Hardening        | Pending     |
+
+---
+
+# Phase 11 Progress
+
+| Batch                                      | Status      |
+| ------------------------------------------- | ----------- |
+| ✅ Batch 1 – Observability Foundations      | Complete    |
+| ✅ Batch 2 – Distributed Tracing            | Complete    |
+| ✅ Batch 3 – Reliability & Error Visibility | Complete    |
+| ✅ Batch 4 – Grafana + Full Verification    | Complete (amended scope) |
+
+---
+
+# Phase 11 – Completion Summary
+
+**Observability & Reliability — Structured Logging, Correlation, Metrics, Tracing, Reliability Visibility, and Grafana — Implemented and Verified**
+
+### Verified (real, running-service evidence)
+- Structured JSON logging on all 9 services, shipped to Loki via Promtail.
+- `X-Request-ID` correlation, generated/reused at every service, forwarded on every inter-service call.
+- Prometheus HTTP metrics (`http_requests_total`, `http_request_duration_seconds`, `http_requests_in_progress`) on all 9 services; `up{job=...}` confirmed live per service.
+- Liveness (`/health`) and readiness (`/health/ready`, 8 DB-backed services) both real and distinguishable; a genuine Postgres outage produced a real `503` and a real `service_readiness` gauge drop to `0`, recovering to `1` after Postgres returned.
+- Distributed tracing: real, connected traces (Gateway → downstream service → DB) observed in Tempo, including a real errored span for a genuine `503` downstream-unavailable failure.
+- Grafana (host port `3001`, frontend unaffected on `3000`) with file-provisioned Prometheus/Loki/Tempo datasources, all confirmed reachable with live data.
+- Two Grafana dashboards — **Platform Health** (liveness, readiness, 4xx/5xx rate) and **API & Service Performance** (request rate, latency percentiles, error rate, Tempo trace-search panel) — both rendering real telemetry, confirmed via live PromQL/LogQL queries executed through Grafana's own datasource proxy.
+- Representative 4xx, 5xx/downstream-unavailable, and readiness failures all independently visible across metrics, structured logs, and traces simultaneously.
+- No forbidden telemetry (secrets, raw payloads, high-cardinality labels) present in any log, metric, span, or dashboard.
+
+### Known Prototype Limitations
+- **Intelligence Pipeline dashboard (explicitly deferred, not implemented):** required service-owned domain metrics (anomalies detected, recommendations generated, etc.) that do not exist anywhere in the repository as of Phase 11 closure. See `docs/DECISIONS.md` OBS-002 for the full architecture amendment and rationale.
+- **"Recent Slow/Errored Traces" Tempo panel (API & Service Performance dashboard):** the panel's TraceQL query is valid and Tempo genuinely contains matching traces (verified directly against Tempo and via Grafana's raw datasource proxy), but executing it through Grafana's own dashboard query engine consistently fails with "unsupported query type," reproduced identically on both `grafana:10.4.2` and `grafana:11.3.0` — ruling out a simple version gap. Root cause undetermined after extensive testing; documented as an open, real limitation rather than worked around or hidden.
+
+### Explicitly Deferred
+- Intelligence Pipeline dashboard and its underlying domain metrics (anomalies/recommendations/business-impact counters) — future initiative, not scheduled.
+- `business_impact_service → recommendation_service/evaluation_service` event-delivery trace hop — verified in Batch 2, not re-exercised at Phase 11 closure (reused evidence, no implementation change since).
+
+### Future Production Hardening (not part of Phase 11)
+- Production alerting, SLO/SLI management, incident management tooling.
+- Grafana/observability-stack authentication, RBAC, mTLS.
+- Kubernetes/Helm, HA/multi-region, cloud-managed observability.
+
+### Outcome
+Phase 11 closes with an honest, fully real observability foundation — logging, correlation, metrics, tracing, reliability visibility, and two verified Grafana dashboards — and two explicitly documented, non-fabricated limitations rather than silently-scoped-down or fabricated capability. No Phase 12 (Copilot) or Phase 13 (security/production hardening) capability was pulled forward.
 
 ---
 

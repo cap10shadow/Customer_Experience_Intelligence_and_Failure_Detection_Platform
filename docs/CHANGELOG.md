@@ -7,6 +7,41 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-13 (Phase 11 closure)
+
+## Phase 11 – Observability & Reliability (Batches 1–4, Final Closure)
+
+Phase 11 delivered structured logging, request correlation, HTTP metrics, distributed tracing, reliability/error visibility, and a Grafana operational visualization layer across all 9 backend services, closed out by a final architecture-reconciliation review. Delivered across four implementation batches plus this closure pass, which resolved two contradictions Batch 4 identified between the frozen architecture and repository reality before Phase 11 could be declared complete.
+
+### Added
+
+- **Logging & correlation (Batch 1)** — structured JSON logging (`backend/shared/logging/logger.py`) on all 9 services, shipped to Loki via Promtail; `X-Request-ID` correlation generated/reused at every service and forwarded on every inter-service call (`backend/shared/observability/correlation.py`).
+- **Metrics (Batch 1)** — `http_requests_total`/`http_request_duration_seconds`/`http_requests_in_progress` on all 9 services (`backend/shared/observability/metrics.py`), scraped by Prometheus; `/health` (liveness) and `/health/ready` (readiness, 8 DB-backed services) both real and distinguishable.
+- **Distributed tracing (Batch 2)** — OpenTelemetry auto-instrumentation (FastAPI/httpx/SQLAlchemy) on all 9 services, exporting via an OTel Collector to Tempo; W3C trace-context propagation end to end.
+- **Reliability & error visibility (Batch 3)** — every `GatewayError` now logged at status-appropriate severity (client 4xx at `INFO`, server 5xx at `ERROR`); unhandled exceptions on all 9 services now logged via a shared handler (`backend/shared/observability/error_logging.py`) with the original response contract unchanged; a raw-response-body telemetry-safety leak in `business_impact_service`'s event publisher fixed.
+- **Grafana (Batch 4 + closure)** — `grafana` service added to `docker-compose.yml` (host port `3001`, frontend unaffected on `3000`), file-provisioned Prometheus/Loki/Tempo datasources, and two dashboards: **Platform Health** and **API & Service Performance** (`infrastructure/observability/grafana/`).
+- **`service_readiness` Prometheus gauge (closure)** — one bounded gauge (`service` label only) added to `backend/shared/observability/health.py`, refreshed on the same cadence as each service's own `/metrics` scrape (no new scrape target, no change to `/health`/`/health/ready`'s response contracts); backs Platform Health's new readiness panel.
+
+### Verified
+
+- Full backend suite green (972 passed, 41 pre-existing skips, 0 failures); frontend typecheck/lint/build green; one frontend test (`AdministrationIntegration.test.tsx`) confirmed pre-existing/flaky (fails only under full-suite load, passes 6/6 isolated, zero frontend files touched by Phase 11).
+- Real running-service evidence (not configuration-only): a genuine Postgres outage produced a real `503` from `/health/ready` and a real `service_readiness` drop to `0`, recovering after Postgres returned; a genuine downstream-unavailable failure (`recommendation_service` stopped) produced a real `503`, visible simultaneously in Prometheus, Loki, and Tempo; real traces observed end to end (Gateway → downstream service → DB).
+- Both shipped Grafana dashboards confirmed rendering real, live telemetry via direct query execution through Grafana's own datasource proxy.
+
+### Architecture Amendment
+
+- **OBS-002** (`docs/DECISIONS.md`): the originally-specified third dashboard, "Intelligence Pipeline," required service-owned domain metrics (anomalies detected, recommendations generated, etc.) that were never implemented in any Phase 11 batch and do not exist anywhere in the repository. Rather than fabricate them, Phase 11 ships two dashboards; Intelligence Pipeline is deferred to a future initiative that first adds real domain-metric instrumentation. `docs/architecture/phase-11/PHASE_11_ARCHITECTURE.md` §3.9 and its Definition of Done (§7, item 7) amended accordingly.
+
+### Known Limitation (documented, not fabricated)
+
+- The API & Service Performance dashboard's "Recent Slow/Errored Traces" Tempo panel uses a valid TraceQL query, and Tempo genuinely contains matching traces (verified directly and via Grafana's raw proxy), but executing it through Grafana's own dashboard query engine fails with "unsupported query type" — reproduced identically on `grafana:10.4.2` and `grafana:11.3.0`, ruling out a simple version gap. Root cause undetermined after extensive testing; left as an open, disclosed limitation.
+
+### Explicitly Deferred
+
+Intelligence Pipeline dashboard and its underlying domain metrics; `business_impact_service → recommendation_service/evaluation_service` event-delivery trace re-verification (evidence reused from Batch 2, unchanged). Production alerting, SLO/SLI management, authentication/RBAC on any observability endpoint, mTLS/service mesh, Kubernetes/Helm, and HA/multi-region remain out of scope for Phase 11 — see `ROADMAP.md` and `docs/DECISIONS.md`.
+
+---
+
 # 2026-08-13
 
 ## Phase 10 – Step 7.X (Intermediate Capability Completion)

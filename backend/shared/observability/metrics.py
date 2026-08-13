@@ -1,4 +1,5 @@
 import time
+from typing import Awaitable, Callable, Optional
 
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
@@ -87,7 +88,12 @@ def metrics_response() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-def instrument_app(app: FastAPI, service_name: str) -> None:
+def instrument_app(
+    app: FastAPI,
+    service_name: str,
+    *,
+    refresh_readiness: Optional[Callable[[], Awaitable[object]]] = None,
+) -> None:
     """
     Mounts the shared HTTP metrics middleware and a `GET /metrics`
     endpoint on `app`. Called once per service, in main.py -- the one
@@ -95,9 +101,20 @@ def instrument_app(app: FastAPI, service_name: str) -> None:
     (the same string each service's own `/health` route already returns
     as `"service"`). `/metrics` is a real backend-only endpoint; it is
     never routed through the frontend workspace architecture.
+
+    `refresh_readiness` (Phase 11 closure): an optional zero-arg async
+    callable -- each of the 8 database-backed services passes
+    `backend.shared.observability.health.readiness_check` (bound to
+    their own service name) here, so the `service_readiness` gauge it
+    sets is refreshed on the exact same cadence Prometheus already
+    scrapes `/metrics` on (no second scrape target, no polling loop).
+    `gateway_service` (no database) passes nothing, matching its
+    existing exemption from `/health/ready` entirely.
     """
     app.add_middleware(PrometheusMiddleware, service_name=service_name)
 
     @app.get("/metrics", include_in_schema=False)
-    def _metrics() -> Response:
+    async def _metrics() -> Response:
+        if refresh_readiness is not None:
+            await refresh_readiness()
         return metrics_response()

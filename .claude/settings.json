@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"c:\\\\USers\\\\DELL\\\\Desktop\\\\ME\\\\Customer_Experience_Intelligence_and_Failure_Detection_Platform\" 2>/dev/null *)",
+      "Read(//c/USers/DELL/Desktop/ME/Customer_Experience_Intelligence_and_Failure_Detection_Platform/**)",
+      "Bash(curl -s -u admin:admin -X POST http://localhost:3001/api/ds/query -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(python -c ' *)",
+      "Bash(curl -s -G http://localhost:3001/api/datasources/proxy/uid/tempo/api/search --data-urlencode 'q={resource.service.name=\"gateway_service\"}' --data-urlencode limit=5 -u admin:admin)",
+      "Bash(curl -s -G http://localhost:3001/api/datasources/proxy/uid/tempo/api/search --data-urlencode 'q={resource.service.name=~\"gateway_service\" && \\(status=error || duration>500ms\\)}' --data-urlencode limit=5 -u admin:admin)",
+      "Bash(docker restart *)",
+      "Bash(curl -s -o /dev/null -w \"\" http://localhost:3001/api/health)",
+      "Bash(curl -s -X POST -u admin:admin http://localhost:3001/api/ds/query -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(curl -s -u admin:admin \"http://localhost:3001/api/dashboards/uid/phase11-api-service-performance\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3001/api/frontend/settings\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3001/api/plugins/tempo/settings\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('info',{}\\).get\\('version'\\), d.get\\('id'\\)\\)\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3001/api/datasources/proxy/uid/prometheus/api/v1/query?query=up%7Bjob!%3D%22prometheus%22%7D\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(npm run *)",
+      "Bash(python -m pytest backend/shared/tests/test_health.py backend/shared/tests/test_metrics.py -q)",
+      "Bash(python -c \"import json; json.load\\(open\\('infrastructure/observability/grafana/dashboards/platform-health.json'\\)\\); print\\('OK'\\)\")",
+      "Bash(docker pull *)",
+      "Bash(curl -s -o /dev/null -w '4xx: %{http_code}\\\\n' http://localhost:8000/api/v1/investigations/22222222-2222-2222-2222-222222222222)",
+      "Bash(curl -s -o /dev/null -w \"5xx: %{http_code}\\\\n\" http://localhost:8000/api/v1/administration/intelligence-configuration)",
+      "Bash(curl -s -u admin:admin \"http://localhost:3001/api/plugins?core=1\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3001/api/datasources/proxy/uid/prometheus/api/v1/query?query=service_readiness\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3001/api/datasources/proxy/uid/prometheus/api/v1/query?query=service_readiness%7Bservice%3D%22anomaly_service%22%7D\")",
+      "Bash(python -m pytest backend/shared/tests/test_observability_infrastructure.py backend/shared/tests/test_health.py backend/shared/tests/test_metrics.py -q)",
+      "Bash(python -m py_compile backend/shared/observability/health.py backend/shared/observability/metrics.py backend/shared/tests/test_health.py backend/shared/tests/test_metrics.py backend/shared/tests/test_observability_infrastructure.py backend/services/anomaly_service/app/main.py backend/services/business_impact_service/app/main.py backend/services/copilot_service/app/main.py backend/services/evaluation_service/app/main.py backend/services/ingestion_service/app/main.py backend/services/nlp_service/app/main.py backend/services/recommendation_service/app/main.py backend/services/root_cause_service/app/main.py)",
+      "Bash(python -m flake8 --select=F,E9 backend/shared/observability/health.py backend/shared/observability/metrics.py backend/shared/tests/test_health.py backend/shared/tests/test_metrics.py backend/shared/tests/test_observability_infrastructure.py backend/services/*/app/main.py)",
+      "Bash(echo \"FLAKE8_EXIT=$?\")"
+    ]
+  }
+}

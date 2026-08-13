@@ -1024,3 +1024,35 @@ The natural, complete version of "record a decision" would include who made it a
 **Cons**
 - A decision cannot currently answer "who approved this" or "was this an authorized approval" — genuinely absent until Phase 13. Any consumer of this data must not assume attribution exists.
 - Because there is no conflict detection, two people editing the same recommendation's decision in quick succession will silently overwrite one another. This is an accepted, documented limitation of the prototype stage, not an oversight.
+
+---
+
+## OBS-002 — Intelligence Pipeline Dashboard Deferred Pending Real Domain Metrics
+
+**Status:** Accepted
+
+**Date:** 2026-08-13
+
+### Context
+
+The frozen Phase 11 architecture (`docs/architecture/phase-11/PHASE_11_ARCHITECTURE.md` §3.9) specified a third Grafana dashboard, "Intelligence Pipeline," backed by "service-owned domain metrics... anomalies detected, incidents correlated, recommendations generated, business impact assessments by severity, etc." At Batch 4 closure, a repository-wide check confirmed zero `Counter`/`Histogram`/`Gauge` domain metrics exist anywhere in any service — only the shared HTTP metrics (Batch 1) exist. No Phase 11 batch's backend scope (Batch 1: logging/correlation/metrics-foundation/health; Batch 2: tracing; Batch 3: reliability/error-visibility; Batch 4: "Backend: None — consumes Batches 1–3's output only") ever committed to implementing these metrics. The top-level `ARCHITECTURE.md` §10 that originally named them uses only aspirational language ("may include," "should support") without specifying exact semantics, ownership, or instrumentation points.
+
+### Decision
+
+Dashboard 3 ("Intelligence Pipeline") is deferred out of Phase 11. Phase 11 closes with two Grafana dashboards — Platform Health and API & Service Performance — both backed entirely by real, already-implemented telemetry. Building Intelligence Pipeline is deferred to a future initiative that first adds real domain-metric instrumentation to the owning services (anomaly_service, root_cause_service/anomaly correlation, recommendation_service, business_impact_service), each service defining and incrementing its own metric via the existing shared `Counter`/`Histogram`/`Gauge` factory (`backend/shared/observability/metrics.py`), exactly as §3.5 already describes. The Phase 11 Definition of Done (§7, item 7 of the frozen architecture) is amended: "Grafana ships exactly three dashboards" becomes "Grafana ships the two dashboards backed by telemetry that exists as of Phase 11 (Platform Health, API & Service Performance); Intelligence Pipeline is explicitly deferred pending domain-metric instrumentation."
+
+### Rationale
+
+- **No-fabrication principle:** instrumenting these metrics now, without any batch ever having specified their exact semantics (what precisely counts as "an anomaly detected," at which pipeline stage), would mean inventing business semantics to satisfy a dashboard — exactly what Phase 11's own dashboard-honesty rules (§3.9, "no dashboard renders a static or seeded number as if it were live telemetry") exist to prevent, generalized to metric *definition*, not just display.
+- **Scope discipline:** Batch 4 was explicitly scoped as "Backend: None (consumes Batches 1–3's output only)" — a Grafana/visualization-only batch. Adding new domain instrumentation to four business services is backend/business-service work that was never part of any Phase 11 batch's committed scope.
+- **This is the frozen architecture's own unsupported assumption**, not a missing implementation task: §3.9 assumed these metrics would exist by Batch 4 close, but no batch's plan ever built them.
+
+### Consequences
+
+**Pros**
+- Phase 11 closes honestly, with every shipped dashboard panel backed by real, verified telemetry — no panel that can only ever show empty data.
+- The eventual Intelligence Pipeline work is cleanly scoped: add real domain metrics to the owning services first, then build the dashboard against them — the same two-step pattern every other Phase 11 dashboard already followed (Batch 1–3 built the telemetry; Batch 4 visualized it).
+
+**Cons**
+- Phase 11 ships without a business-facing intelligence dashboard. Operators wanting anomaly/recommendation/business-impact volume visibility must wait for the future domain-metrics initiative.
+- The frozen architecture's Definition of Done item 7 required a documented amendment rather than being met as originally written.

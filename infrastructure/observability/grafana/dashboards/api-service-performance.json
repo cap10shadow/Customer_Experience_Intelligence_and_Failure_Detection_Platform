@@ -1,0 +1,121 @@
+{
+  "uid": "phase11-api-service-performance",
+  "title": "API & Service Performance",
+  "tags": ["phase-11", "operational"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": { "query": "label_values(http_requests_total, service)", "refId": "service" },
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "route",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": { "query": "label_values(http_requests_total{service=~\"$service\"}, route)", "refId": "route" },
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate",
+      "description": "sum by (service, route) (rate(http_requests_total{...}[5m])) -- real request volume, sliceable by the existing bounded service/route labels (Batch 1).",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service, route) (rate(http_requests_total{service=~\"$service\", route=~\"$route\"}[5m]))",
+          "legendFormat": "{{service}} {{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "title": "Latency Percentiles (p50 / p95 / p99)",
+      "description": "histogram_quantile(...) over the real http_request_duration_seconds histogram (Batch 1) -- never a fabricated SLA number.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{service=~\"$service\", route=~\"$route\"}[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service=~\"$service\", route=~\"$route\"}[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{service=~\"$service\", route=~\"$route\"}[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "title": "Error Rate (4xx vs 5xx)",
+      "description": "Client-facing (4xx) vs. server-side/downstream (5xx) failure rate, kept as separate series per Batch 3's severity distinction -- both from the real http_requests_total counter.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service, route) (rate(http_requests_total{service=~\"$service\", route=~\"$route\", status_code=~\"4..\"}[5m]))",
+          "legendFormat": "4xx {{service}} {{route}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service, route) (rate(http_requests_total{service=~\"$service\", route=~\"$route\", status_code=~\"5..\"}[5m]))",
+          "legendFormat": "5xx {{service}} {{route}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "title": "Recent Slow / Errored Traces (Tempo)",
+      "description": "Real Tempo TraceQL search for the selected service(s) -- errored spans or spans slower than 500ms -- the panel this batch's frozen architecture requires 'linking into Tempo traces for slow/error requests' (§3.9). No exemplar wiring exists in the shared metrics middleware, so this queries Tempo's own search directly rather than a metrics-panel exemplar link.",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceqlSearch",
+          "query": "{resource.service.name=~\"$service\" && (status=error || duration>500ms)}",
+          "limit": 20,
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
