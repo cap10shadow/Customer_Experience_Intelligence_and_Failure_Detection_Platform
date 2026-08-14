@@ -1121,3 +1121,214 @@ Dashboard 3 ("Intelligence Pipeline") is deferred out of Phase 11. Phase 11 clos
 **Cons**
 - Phase 11 ships without a business-facing intelligence dashboard. Operators wanting anomaly/recommendation/business-impact volume visibility must wait for the future domain-metrics initiative.
 - The frozen architecture's Definition of Done item 7 required a documented amendment rather than being met as originally written.
+
+---
+
+## AD-1 — Gateway-Owned Project Identity
+
+**Status:** Accepted
+
+**Date:** 2026-08-14
+
+### Context
+
+Phase 13's Step 0 audit (see `docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md`) confirmed zero authentication, authorization, or identity concept exists anywhere in the platform — backend or frontend, partial or abandoned. `ARCHITECTURE.md` §5/§D already name authentication as a `gateway_service`/API-Layer responsibility (frozen since Phase 1, never implemented), and `gateway_service` today is a pure BFF/aggregator with no database connection, no ORM models, and no Alembic migrations of its own — every other backend service already owns its persistence per ARCH-002/DATA-002.
+
+### Decision
+
+Authentication and identity persistence are a `gateway_service`-owned capability. `gateway_service` gains its own SQLAlchemy models (`users`, `roles`, `user_roles`) and Alembic migrations, in the platform's existing shared PostgreSQL instance (ARCH-002), following exactly the same instance/directory the other 9 migrations already use (`backend/migrations/versions/`, single linear head). No new identity microservice and no second database are introduced. A minimal `AuthenticatedUser` (`user_id`, `email`, `roles`) is the only representation of identity that crosses `gateway_service`'s authentication boundary; JWT parsing/validation logic stays inside that boundary and is never duplicated in downstream services (see AD-5 for how identity propagates downstream).
+
+### Rationale
+
+- Consistent with the frozen, never-contradicted architectural intent (`ARCHITECTURE.md` §5, §D, §11).
+- Consistent with ARCH-002 (shared Postgres, logical service ownership) and DATA-002 (no cross-service ORM imports) — `gateway_service` becomes an owning service like every other, not a special case.
+- Avoids a new microservice, a new database, or new infrastructure the current single-host, low-traffic prototype does not justify (matches ROADMAP.md §1's rejection of premature complexity).
+
+### Consequences
+
+**Pros**
+- No new service boundary, no new database, no new deployment unit.
+- `gateway_service` requires new but well-precedented infrastructure (DB session/engine wiring matching `backend/shared/database/database.py`'s existing pattern, plus copying `alembic.ini` into its Dockerfile the way `ingestion_service`'s already does) — a bounded, scoped addition, not a redesign.
+
+**Cons**
+- `gateway_service` was previously stateless; it now has its own persistence lifecycle (migrations must run before it can serve authenticated traffic) — a first for this service, requiring the migration-ordering care noted in the Phase 13 architecture document's Implementation Constraints.
+
+---
+
+## AD-2 — Separate Production Docker Compose Configuration
+
+**Status:** Accepted — RESOLVED (supersedes the 2026-08-14 "Hardened Docker Compose Deployment" draft, which left the dev-vs-prod question explicitly open)
+
+**Date:** 2026-08-14 (resolved same-day, after architecture-review follow-up)
+
+### Context
+
+Repository verification confirmed a single `docker-compose.yml` (no `docker-compose.prod.yml`, no Kubernetes/Helm manifests, `infrastructure/deployment` and `infrastructure/docker` empty) on one flat default bridge network (no `networks:` key at all), with every backend service's Dockerfile bind-mounting `./backend:/app/backend` and running `uvicorn --reload`, and `frontend/Dockerfile` running `npm run dev` as its production `CMD`. This is a development-shaped compose file being asked to also serve as the production deployment target.
+
+The prior draft of this decision correctly identified that "harden it" is ambiguous between two options — modify `docker-compose.yml` in place (affecting local development for everyone) or introduce a separate production-oriented file — and left the question open rather than guessing. That sub-decision is now resolved.
+
+### Decision
+
+**Use a separate production Docker Compose configuration.** `docker-compose.yml` remains the development/local-development configuration, unchanged in its developer ergonomics (bind mounts, `uvicorn --reload`, Vite dev server). Phase 13 introduces a second, production-oriented Compose configuration — `docker-compose.prod.yml` — used as a Compose override (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up`) or, if implementation finds a fully standalone file clearer, a self-contained file; that packaging detail is left to the implementation batch, not this architecture decision. No repository convention (naming or otherwise) already exists for a second compose file, so `docker-compose.prod.yml` — Compose's own idiomatic override-file convention — is adopted rather than an invented alternative.
+
+Both configurations represent the **same** application/service topology (the same 15 services, the same names, the same internal/external port split) unless a documented, architecture-approved difference is necessary. The production configuration does not introduce any new application capability, service, or route — it only changes *how* the existing services are built and run. Specifically, the production configuration:
+
+1. Builds the frontend via a real multi-stage Dockerfile (build stage + static-serve stage) — no Vite dev server, no `npm run dev`.
+2. Runs every backend service without `--reload` and without a source bind mount (the image's own `COPY`ed source is authoritative, not a live-mounted host directory).
+3. Does not publish `postgres:5432` to the host (or, if host access is operationally required, binds it to `127.0.0.1` only) with a rotated, non-default credential.
+4. Preserves the internal/external network split already established in the base file's port-mapping comments (only `gateway_service`, `frontend`, and — if kept — the observability UIs are host-reachable) and layers Compose-native network segmentation (a `public` network for `gateway_service`/`frontend`, an `internal` network for the 8 backend services + `postgres`, with `gateway_service` joining both) on top of it — still plain Compose functionality, not a mesh.
+5. Keeps Grafana/Prometheus's exposure scoped and their credentials rotated, consistent with §19 of the Phase 13 architecture document.
+6. Injects runtime secrets/configuration the same way the base file already does (`env_file`), with real (non-default) values supplied at deploy time — no committed secrets, no new secret-manager dependency.
+7. Uses the same named Docker volumes for persistent data (`postgres_data` and the observability volumes) — persistence is not weakened or reshaped by the production override.
+8. Keeps every existing `/health`/`/health/ready` liveness/readiness check exactly as Phase 11 built them — the production configuration changes how containers are built and networked, never what they answer on their health routes.
+
+### Why a separate file, not an in-place edit
+
+- **Preserves the existing development workflow.** Bind mounts and `--reload` are genuine developer productivity features already in active use; removing them from the only compose file every contributor already runs would be a real, unnecessary regression to local iteration speed.
+- **Matches Compose's own idiomatic pattern** (a base file + a purpose-specific override), rather than inventing a bespoke mechanism or duplicating the entire topology into an unrelated file.
+- **Keeps the two environments honestly distinguishable.** A single file trying to serve both purposes (as today's does) is exactly the "development-shaped file also asked to be the production target" problem this decision exists to fix.
+- **Bounded scope.** This is Compose functionality already in the platform's own toolchain — no new deployment technology, no Kubernetes/Helm/mesh/mTLS/cloud-managed-database/external-identity-provider, consistent with `ROADMAP.md` §1's rejection of premature infrastructure complexity.
+
+### Consequences
+
+**Pros**
+- No new infrastructure category introduced; every hardening item is a Compose-native or Dockerfile-native change.
+- Local development is entirely unaffected — no contributor's day-to-day workflow changes because this ADR was adopted.
+- The Docker/runtime-hardening implementation batch is now fully unblocked; no architecture ambiguity remains.
+
+**Cons**
+- Two Compose files must be kept in topological sync (same services, same names) going forward — a maintenance discipline, not a design risk, and explicitly called out in the decision itself (point 5 above: any deliberate difference must be documented).
+
+---
+
+## AD-3 — Recommendation Decision Attribution and History
+
+**Status:** Accepted
+
+**Date:** 2026-08-14
+
+### Context
+
+REC-003 (2026-08-12) deliberately omitted any decision-owner/actor field because no identity existed to attribute a decision to, and explicitly anticipated this exact follow-up: *"adding an actor/owner column later, once Phase 13 authentication exists, is a pure additive migration — nothing about this design needs to be reworked or reversed to support it."* AD-1 now provides that identity.
+
+### Decision
+
+`RecommendationModel` (`backend/services/recommendation_service/app/infrastructure/persistence/models/recommendation_model.py:80-114`) gains one new nullable column, `decided_by` (references `gateway_service`'s `users.id`, nullable to preserve every pre-Phase-13 decision row that has no known actor). A new, service-owned, append-only table `recommendation_decision_history` (`id`, `recommendation_id`, `decision`, `decision_note`, `actor_id`, `created_at`) records every decision event; the existing `recommendations.decision`/`decision_note`/`decided_at` columns keep their current unconditional-overwrite semantics for fast current-state queries, exactly as REC-003 designed. The `PATCH /recommendations/{recommendation_id}/decision` handler must derive `decided_by`/`actor_id` from the Gateway-attested authenticated principal (see AD-5's principal-propagation header), never from the client-supplied request body — the same "server-set, never client-supplied" discipline `decided_at` already follows (`backend/services/recommendation_service/app/presentation/api/recommendations.py:124-147`).
+
+A cross-service database-level foreign key from `recommendation_decision_history.actor_id` to `gateway_service`'s `users.id` table, both living in the one shared PostgreSQL instance, is precedented by DATA-001 (referential integrity enforced at the database level across service-owned tables, without ORM/Python-level coupling) and does not violate DATA-002 (no ORM class is imported across the service boundary — only a raw Alembic FK constraint is added).
+
+### Rationale
+
+- Directly fulfills REC-003's own explicitly stated forward-compatibility design — no rework, no reversal.
+- Preserves recommendation-generation/scoring domain semantics untouched; this is attribution metadata only.
+- The append-only history table, rather than mutating the existing overwrite-on-PATCH columns, avoids inventing a generic enterprise audit platform while still answering "who decided, and what did they overwrite."
+
+### Consequences
+
+**Pros**
+- Zero change to recommendation domain logic, scoring, or the existing fast-read decision columns.
+- `recommendation_decision_history`'s migration must attach after both the current Alembic head (`b3c8e5a1f204`) and AD-1's new `users` table migration — a sequencing constraint, not a design risk.
+
+**Cons**
+- Pre-Phase-13 decisions remain permanently unattributed (`decided_by IS NULL`) — an accepted, honest gap, not backfilled retroactively (no reliable source of truth exists for who made those decisions).
+
+---
+
+## AD-4 — Copilot Ownership and Retention Policy
+
+**Status:** Accepted
+
+**Date:** 2026-08-14
+
+### Context
+
+COPILOT-002 (2026-08-13) established `copilot_service`-owned conversation persistence with explicitly no `user_id`/`owner_id`/`tenant_id` field and no automatic expiry, both deliberately deferred to Phase 13. Repository verification confirmed `_resolve_conversation()` (`backend/services/copilot_service/app/services/conversation_service.py:88-117`) grants full read/append access to any conversation to any caller who supplies its UUID — a genuine data-exposure path now that real identity exists to close it.
+
+### Decision
+
+`copilot_conversations` gains a nullable `owner_id` column (nullable to preserve any pre-Phase-13 rows; every conversation created after Phase 13 ships must have one, enforced at the application layer in `copilot_service`). `copilot_service` receives `owner_id` from `gateway_service` via the same Gateway-attested internal principal header used for AD-3 (never a client-supplied field) and rejects any read/append against a conversation whose `owner_id` does not match the caller's. A new Gateway-routed `DELETE /api/v1/copilot/conversations/{conversation_id}` endpoint is added (no such route exists today — Copilot's only existing route is `POST /api/v1/copilot/messages`), scoped to the owning user only; no admin-override route is introduced. The Phase 12 read-only tool boundary (COPILOT-001) is untouched — none of the seven tools gain any new capability, and this decision adds no new tool.
+
+Retention is separated into three distinct concepts, per this review's explicit instruction not to invent a business/legal policy: **(1) technical mechanism** — an optional, configurable age-based purge job operating on `last_message_at`, requiring a new index on that column (added in the same migration as the purge mechanism, not before); **(2) prototype default** — mechanism ships disabled/unbounded by default, preserving COPILOT-002's "no automatic expiry" prototype posture unless explicitly turned on; **(3) future business/compliance policy** — the actual retention duration is explicitly out of this ADR's scope and deferred to a real compliance decision. User-initiated deletion (the DELETE endpoint above) is independent of and available regardless of the automatic-purge mechanism's configuration.
+
+### Rationale
+
+- Closes a genuine, concrete data-exposure path (any UUID holder could read/continue any conversation) with the least new surface area — one column, one new endpoint, no change to the read-only tool boundary.
+- Keeps JWT/token validation logic inside `gateway_service` (AD-1's boundary) — `copilot_service` never parses a token, only trusts a Gateway-attested header, consistent with COPILOT-001's precedent of keeping `copilot_service` structurally simple and read-only-safe.
+- Does not conflate "we could delete old data" with "we know how long to keep it" — the three-way retention split prevents Phase 13 from silently inventing a compliance policy nobody has actually decided.
+
+### Consequences
+
+**Pros**
+- `copilot_conversations`'s owner_id and the new DELETE route directly resolve the audit's highest-severity Copilot finding.
+- No change to Copilot's orchestration, tool registry, or answer-synthesis logic.
+
+**Cons**
+- Pre-Phase-13 conversations remain unowned (`owner_id IS NULL`) and, until a decision is made about them, are neither deletable by a specific user nor covered by the new access check — treated as orphaned prototype data, not migrated retroactively.
+
+---
+
+## AD-5 — Internal Service Authentication and Principal Propagation
+
+**Status:** Accepted
+
+**Date:** 2026-08-14
+
+### Context
+
+User trust (browser ↔ Gateway) and service trust (Gateway/service ↔ internal service) are separate domains. Repository verification found exactly two genuine internal mutation boundaries requiring protection — `POST /internal/events/business-impact-completed` on `recommendation_service` and on `evaluation_service` (`business_impact_service`'s event fan-out, `business_impact_event_publisher.py:131-183`) — both currently protected only by the absence of a host-published port, with no application-layer credential of any kind. Separately, AD-3 and AD-4 both require the authenticated user's identity to reach `recommendation_service` and `copilot_service` respectively, without either service re-implementing JWT validation.
+
+### Decision
+
+Two distinct internal mechanisms, not one:
+
+1. **Internal event-route credential**: every `/internal/events/*` route (currently 2, on `recommendation_service` and `evaluation_service`) requires a shared internal secret header, validated via `Depends()`, sourced from the same env-injection mechanism every other secret already uses. This does **not** extend to Gateway → service or `copilot_service` → service read calls (see below) — those remain protected by network topology alone, consistent with the Step 0 audit's explicit instruction not to protect arbitrary internal functions that are not genuine internal mutation boundaries.
+2. **Principal propagation**: when `gateway_service` has already authenticated a request (AD-1) and needs the authenticated identity to reach a downstream service (`recommendation_service` for AD-3's `decided_by`, `copilot_service` for AD-4's `owner_id`), it forwards a Gateway-attested internal header set (e.g. `X-Authenticated-User-Id`, `X-Authenticated-User-Roles`) alongside the same internal secret from (1). Downstream services trust this header only because it arrives with a valid internal secret — they never parse a JWT or validate a token themselves. `copilot_service`'s tool registry (COPILOT-001) and its calls to `anomaly_service`/`root_cause_service`/`business_impact_service`/`recommendation_service`/`nlp_service` remain exactly as read-only as today; principal propagation adds an identity header to existing read calls, never a new mutation capability.
+
+No mTLS, service mesh, SPIFFE, or Kubernetes identity is introduced, consistent with AD-2 and the current single-host Docker Compose topology.
+
+### Rationale
+
+- Protects the two boundaries that are genuine internal mutation endpoints today, without inventing protection for endpoints that were never designed to need it — matches the Step 0 audit's own scoping discipline.
+- Keeps token-parsing logic confined to `gateway_service` (AD-1's stated goal: "do not leak token parsing logic throughout the project") by having every downstream service trust an attested header rather than re-validate a JWT.
+- Matches the repository's actual internal topology (verified: internal-only services have no host port; the only real internal *mutation* surface is the two event routes) rather than a hypothetical one.
+
+### Consequences
+
+**Pros**
+- Minimal new surface: one shared secret, one small attested-header convention, reused everywhere principal propagation is needed.
+- `copilot_service`'s Phase 12 read-only tool boundary is provably untouched — no tool gains a new HTTP verb or a new capability.
+
+**Cons**
+- The attested-header convention requires each downstream service that needs identity (currently only `recommendation_service` and `copilot_service`) to add a small amount of header-reading code — bounded, but not zero.
+
+---
+
+## AD-6 — HttpOnly JWT Authentication Cookie (Cross-Origin Correction Required)
+
+**Status:** Accepted, with a required correction to the originally proposed design
+
+**Date:** 2026-08-14
+
+### Context
+
+The originally proposed design (short-lived JWT in an HttpOnly cookie, issued by `gateway_service`, never read by frontend JavaScript) was verified against the platform's actual runtime origins. `docker-compose.yml:237` sets `VITE_API_BASE_URL=http://localhost:8000` (an absolute URL), which the frontend's shared `fetch`-based API client (`frontend/src/app/api/client.ts:96-105`) uses as-is, with no `credentials` option set (defaulting to `'same-origin'`). The frontend serves from `http://localhost:3000` and the Gateway from `http://localhost:8000` — different ports, therefore different origins under the same-origin policy. As designed, a cookie set by the Gateway would never be sent back by the browser on any frontend API call: the fetch client doesn't request it (no `credentials: 'include'`), and even if it did, a same-site cookie (default `SameSite=Lax`) is not delivered cross-origin at all without `SameSite=None; Secure`. This is a genuine F1 contradiction between the proposed design and the platform's verified runtime behavior, not a hypothetical risk.
+
+### Decision
+
+The frontend and Gateway are made same-origin in every environment, closing the gap without weakening cookie security. `vite.config.ts` already proxies `/api` → `http://gateway_service:8000` (`vite.config.ts:20-25`) — this proxy is adopted as the actual runtime path (removing `docker-compose.yml`'s absolute-URL override of `VITE_API_BASE_URL`, restoring the relative `/api` default already defined in `frontend/src/app/configuration/env.ts:9-11`) for local/dev, and an equivalent same-origin reverse-proxy path is required for any hardened/production Compose target under AD-2. With same-origin restored, the cookie is issued as `HttpOnly; Secure (in production); SameSite=Lax`, and the frontend API client adds `credentials: 'include'` (or `'same-origin'`, sufficient once same-origin is restored) to every request. CSRF strategy: `SameSite=Lax` already blocks the cookie from being sent on cross-site requests (including classic form-triggered CSRF); combined with the platform's existing requirement that every mutating endpoint accepts only `application/json` bodies (already true for every FastAPI route in this repository, which blocks the simple/no-preflight form-based CSRF vector), no separate CSRF token is required for the prototype. A double-submit CSRF token remains a documented, deferred hardening option if a future cross-origin admin client is ever introduced.
+
+Logout invalidates the cookie (clears it via `Set-Cookie` with immediate expiry) and does not require a server-side token blocklist given short-lived tokens (the token's own expiry is the primary defense). Expired/invalid tokens on any authenticated route return a `401` with the platform's existing standardized error envelope (`code`/`message`/`requestId`/`details`, per Phase 10 Step 7's Gateway conventions) — never a silent 200 or a redirect baked into the API layer, consistent with this platform's error-envelope-everywhere convention.
+
+### Rationale
+
+- The alternative (keep cross-origin, add `SameSite=None; Secure` and `credentials: 'include'`) works but requires HTTPS in every environment (the `Secure` flag) and a materially larger CSRF surface (`SameSite=None` cookies are sent on genuinely cross-site requests) for no benefit this platform's topology needs — the Gateway is already the frontend's sole backend dependency, and a same-origin reverse-proxy path already exists in the repository (`vite.config.ts`'s own proxy), unused only because of the current absolute-URL override.
+- Resolves the contradiction with a specific, evidence-grounded engineering answer rather than leaving it as an open product decision — there is no legitimate reason for this platform's frontend and Gateway to be cross-origin in the first place.
+
+### Consequences
+
+**Pros**
+- Simpler, stronger cookie security posture (`SameSite=Lax`, no `SameSite=None`/`Secure` HTTPS dependency in dev).
+- Reuses `vite.config.ts`'s existing, already-written proxy configuration — no new frontend infrastructure invented.
+
+**Cons**
+- Requires changing `docker-compose.yml`'s `VITE_API_BASE_URL` value for local development, and standing up an equivalent same-origin path (e.g., the Gateway serving the built frontend, or a shared reverse proxy) inside AD-2's `docker-compose.prod.yml` production configuration — a real, if small, piece of implementation work, now unblocked since AD-2 is resolved.
