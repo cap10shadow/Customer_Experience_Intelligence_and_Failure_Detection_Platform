@@ -22,7 +22,7 @@ itself failed, and no orphaned user-only turn is ever left behind.
 """
 
 import uuid
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,13 +31,28 @@ from backend.services.copilot_service.app.models.conversation import CopilotConv
 from backend.services.copilot_service.app.repositories.conversation_repository import CopilotConversationRepository
 from backend.services.copilot_service.app.repositories.message_repository import CopilotMessageRepository
 from backend.services.copilot_service.app.schemas.copilot import CopilotQueryRequest, CopilotQueryResponse
+from backend.services.copilot_service.app.services.orchestrator.llm_provider import LLMProvider
 from backend.services.copilot_service.app.services.orchestrator.orchestrator_service import run_orchestration
 from backend.shared.constants.enums.copilot import CopilotMessageRole
 
 
 async def handle_persisted_query(
-    request: CopilotQueryRequest, *, client: httpx.AsyncClient, request_id: str, session: AsyncSession
+    request: CopilotQueryRequest,
+    *,
+    client: httpx.AsyncClient,
+    request_id: str,
+    session: AsyncSession,
+    llm_provider: Optional[LLMProvider] = None,
 ) -> CopilotQueryResponse:
+    """
+    Phase 12 Batch 6: `llm_provider` is an optional, additive override
+    (default `None` -> unchanged existing behavior) threaded straight
+    through to `run_orchestration`, for the same reason documented on
+    that function -- lets `app/evaluation/runner.py` exercise this exact
+    real, persisted conversation path with a deterministic provider. The
+    real API route (`api/copilot.py` -> `copilot_query_service.py`)
+    never passes this; production behavior is unchanged.
+    """
     conversation_repository = CopilotConversationRepository(session)
     message_repository = CopilotMessageRepository(session)
 
@@ -56,6 +71,7 @@ async def handle_persisted_query(
         request_id=request_id,
         conversation_id=str(conversation_id),
         history=history,
+        llm_provider=llm_provider,
     )
 
     await message_repository.append(

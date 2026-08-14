@@ -7,6 +7,41 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-14 (Phase 12 closure)
+
+## Phase 12 – AI Copilot (Batches 1–6, Final Closure)
+
+Phase 12 delivered a read-only, evidence-grounded AI Copilot: natural-language interpretation over intelligence the platform already produces, never new domain intelligence. Delivered across six implementation batches plus this closure pass. Full detail and the complete Definition-of-Done table: `docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md` §36.
+
+### Added
+
+- **Copilot API foundation (Batch 1)** — `copilot_service` (internal-only) and a new Gateway-routed `/api/v1/copilot/*` surface; the frozen `CopilotResponse` contract (`answer`/`keyFindings`/`evidenceReferences`/`relatedEntities`/`visualizationHint`/`limitations`/`conversationId`/`requestId`), camelCase (Gateway) and snake_case (`copilot_service`) kept strictly separate.
+- **Read-only tool registry (Batch 2)** — seven tools (Recommendation, Recommendation Decision Status, Root Cause, Business Impact, Investigation, Analytics/Trend, Administration/Configuration Read), each calling real domain services directly, never the public Gateway; every known mutation endpoint on every domain service explicitly, individually excluded (`docs/DECISIONS.md`, COPILOT-001).
+- **LLM orchestration (Batch 3)** — a provider-agnostic LLM adapter (`NullLLMProvider` honest default; `OpenAICompatibleProvider` opt-in), a bounded (≤3-round) LangGraph orchestration graph, a layered prompt architecture with prompt-injection resistance, and evidence-grounded synthesis — a claimed-but-fake evidence id is always dropped before reaching a response.
+- **Conversation persistence (Batch 4)** — `copilot_conversations`/`copilot_messages`, owned entirely by `copilot_service` on the platform's existing shared PostgreSQL instance (`docs/DECISIONS.md`, COPILOT-002); deterministic message ordering, bounded conversation history fed back into the prompt, and no automatic retention (a deliberate, documented prototype choice, not an oversight).
+- **Frontend Copilot experience (Batch 5)** — a floating, non-full-screen launcher/panel mounted once in `AppShell.tsx`; consumes the real Gateway API only; renders evidence, related entities, limitations, and a safely-mapped `visualizationHint` (never executable model output, never a fabricated chart); retains and reuses the backend-issued `conversationId` across turns.
+- **Evaluation harness (Batch 6)** — a `copilot_service`-owned agent-evaluation harness (`app/evaluation/`) covering all nine architecture-defined measures (tool selection, answer grounding, citation correctness, hallucination, conflict handling, unsupported-request handling, scope preservation, safety/read-only, completeness); a deterministic, versioned dataset of clearly-labeled synthetic fixtures; runs through the real orchestration/persistence path, never a second implementation; strictly independent of the Phase 8 `evaluation_service` (verified by AST-level import checks in both directions).
+
+### Verified
+
+- Full backend suite green (1203 passed) at closure; frontend suite green (321 passed) as of Batch 5, unchanged since (no frontend file touched by Batch 6).
+- Real running-service evidence throughout: a real two-turn Copilot conversation through the actual Gateway → `copilot_service` → PostgreSQL path; a real browser session showing the panel open without covering the workspace; the evaluation harness run live inside the real `copilot_service` container, 8/8 cases passing, including genuine (non-fixture) evidence grounding against a live `anomaly_service` trend query.
+- Gateway's 7 pre-existing public routes/5 aggregators confirmed byte-for-byte unchanged (`git diff` across the full Phase 12 commit range).
+- No mutation capability reachable from any Copilot tool, verified structurally (no mutating HTTP verb helper exists anywhere in `copilot_service`'s domain-facing code) and via a live evaluation-harness case that scripted a mutation-shaped tool name and confirmed the real tool registry rejected it without executing anything.
+
+### Known Limitations (documented, not fabricated)
+
+- No real LLM provider is configured in this environment; every verification used the honest `NullLLMProvider` fallback or, for evaluation cases, a deterministic scripted stand-in — never real model reasoning.
+- Copilot's launch context never includes `filters`/`timeRange` (mounted outside every workspace's own React Context provider tree; both fields are optional on the frozen contract).
+- No tool-running state distinct from generic loading exists in the frontend — the frozen backend contract has no streaming signal to honestly drive one.
+- Two pre-existing, unrelated issues remain untouched: `business_impact_service`'s missing `httpx` direct dependency; the pre-Phase-12 recommendation-decision migration's enum-creation bug. The frontend's pre-existing base-path mismatch remains present in every workspace other than Copilot's own module.
+
+### Explicitly Deferred
+
+Production retention/TTL for conversation data, authentication/RBAC (Phase 13), a public evaluation UI or Gateway evaluation endpoint, and the platform's long-term "Organizational Knowledge" vision (ARB-002/ARB-005) — see `ROADMAP.md` and `docs/DECISIONS.md`.
+
+---
+
 # 2026-08-13 (Phase 11 closure)
 
 ## Phase 11 – Observability & Reliability (Batches 1–4, Final Closure)

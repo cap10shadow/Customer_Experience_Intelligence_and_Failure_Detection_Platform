@@ -708,3 +708,120 @@ Six batches, dependency-ordered. **No batch is implemented by this document** �
 ## 35. ADR Numbering Convention
 
 This repository's `docs/DECISIONS.md` uses category-prefixed sequential IDs (`ARCH-*`, `DATA-*`, `ANOMALY-*`, `INCIDENT-*`, `RCA-*`, `BI-*`, `ARB-*`, `EVAL-*`, `REC-*`, `FE-*`, `OBS-*`). `COPILOT-*` follows this existing convention directly; no new numbering scheme is introduced.
+
+---
+
+## 36. Phase 12 Final Closure
+
+**Status:** Phase 12 is **COMPLETE**, verified against this frozen architecture, and approved for closure.
+**Date:** 2026-08-14
+**Closure review scope:** All six implementation batches, reviewed together against this document and the whole-project architecture (Phases 1–11, Phase 13 boundary), using live repository/runtime evidence, not only prior batch reports.
+
+This section is additive only — it records the final outcome of the plan §34 already established. No architectural decision recorded elsewhere in this document (§1–§35) was changed, weakened, or reinterpreted during closure.
+
+### 36.1 Six-Batch Completion Summary
+
+| Batch | Delivered | Status |
+|---|---|---|
+| 1 — Foundation + Contracts | `copilot_service`/Gateway skeleton, §23 `CopilotResponse` contract, camelCase/snake_case boundary | Complete |
+| 2 — Read-Only Tool Adapters | All 7 §13 tools, evidence normalization (§14.1), structural read-only enforcement (no mutating HTTP verb reachable from any tool) | Complete |
+| 3 — LLM Orchestration | `NullLLMProvider`/`OpenAICompatibleProvider` adapter, bounded (≤3-round) LangGraph orchestration, prompt architecture (§24.1), evidence-grounded synthesis, prompt-injection resistance | Complete |
+| 4 — Conversation Persistence | `copilot_conversations`/`copilot_messages` (COPILOT-002), deterministic ordering, bounded history, transactional turn boundary | Complete |
+| 5 — Frontend Experience | Floating launcher + non-full-screen panel mounted once in `AppShell.tsx`, real Gateway integration, evidence/related-entity/visualization-hint rendering, accessibility | Complete |
+| 6 — Evaluation Harness | `copilot_service`-owned harness (§26), all 9 dimensions, deterministic scripted-provider execution through the real orchestration/persistence path, strict `evaluation_service` independence | Complete |
+
+### 36.2 Final Definition of Done (§31)
+
+Statuses use PASS / PASS WITH LIMITATION / DEFERRED / FAIL. No criterion is marked PASS without direct repository or live-runtime evidence gathered during closure.
+
+**Product**
+| Criterion | Status | Evidence |
+|---|---|---|
+| Copilot accessible from the application shell, mounted once | PASS | `frontend/src/app/layouts/AppShell.tsx` — single `<Copilot/>` sibling of `<Outlet/>`; test asserts exactly one launcher instance |
+| Compact-by-default, expandable chat experience | PASS | Real-browser screenshots (Batch 5 verification): launcher visible, panel opens without covering the workspace |
+| Contextual entry from all 5 workspaces, real fields only | PASS WITH LIMITATION | `workspace`/`incidentId`/`recommendationId` derived from the real route (Batch 5 review confirmed this is the same source `InvestigationsWorkspace.tsx` itself uses); `filters`/`timeRange` are never sent — both optional on the frozen contract, honestly omitted rather than fabricated (see §36.4) |
+| Every workspace remains usable with Copilot closed | PASS | Copilot adds a floating button only; no existing workspace file was modified beyond the one-line `AppShell.tsx` mount |
+
+**AI**
+| Criterion | Status | Evidence |
+|---|---|---|
+| Tool selection matches intent in representative cases | PASS WITH LIMITATION | No real LLM is configured in this environment (verified: `.env`/`.env.example` — `LLM_PROVIDER=none`); tool-selection correctness is verified deterministically via Batch 6's `ScriptedLLMProvider` against the real tool registry/orchestrator, not against a real model's judgment |
+| Tool iteration bounded (≤3 rounds), stops early | PASS | `MAX_TOOL_ROUNDS = 3` (`orchestrator/state.py`), structurally enforced in `graph.py`, unchanged since Batch 3 |
+| Answers grounded — every claim traces to a real evidenceId | PASS | `synthesis.py`'s real filtering (unchanged since Batch 3); re-verified live via Batch 6's `hallucination_rejection` case |
+| No fabricated evidence/timestamp/metric in any tested scenario | PASS | Batch 6 harness run (`8/8` live, inside `oi_copilot`, 2026-08-14): `hallucination` dimension PASS |
+| Conflicting evidence disclosed, never silently resolved | PASS WITH LIMITATION | The disclosure *mechanism* (`FinalAnswerDecision.conflicts` → `limitations`) is verified live via Batch 6's `conflict_disclosure` case; exercised with scripted, clearly-labeled synthetic conflict text rather than genuinely conflicting real domain data, since fabricating such data was deliberately avoided |
+| Unsupported filter/request produces clarification/refusal | PASS | Batch 6 `unsupported_request_refusal` case, live PASS |
+
+**Backend**
+| Criterion | Status | Evidence |
+|---|---|---|
+| Gateway's 7 public routes/5 aggregators byte-for-byte unchanged | PASS | `git diff f8f17f0 HEAD -- backend/services/gateway_service/app/api/{dashboard,investigations,recommendations,analytics,administration}.py` — empty diff (verified during closure) |
+| `copilot_service` implements exactly the 7 §10 tools | PASS | 7 `TOOL_NAME` constants confirmed directly in `app/services/*.py` during closure |
+| Every tool verified read-only | PASS | Repository-wide grep during closure: the only `.post(` call in `copilot_service`'s services/core code is the LLM provider's own call to the LLM API — every domain-service call goes through `get_json` (a GET-only helper) |
+| Conversation persistence per §17 | PASS | `copilot_conversations`/`copilot_messages`, single linear Alembic head `b3c8e5a1f204` (reconfirmed during closure) |
+| Service ownership unchanged everywhere | PASS | No domain service file modified by any Phase 12 batch |
+
+**Frontend**
+| Criterion | Status | Evidence |
+|---|---|---|
+| `CopilotResponse` renders correctly, including partial/degraded | PASS | Batch 5 tests + live screenshots (limitations rendered distinctly, error banner with retry) |
+| Evidence references render/resolve against real evidence | PASS | `CopilotMessage.tsx` renders only backend-returned fields, no invented metadata (Batch 5 review) |
+| `visualizationHint` renders only through existing renderers | PASS | Fixed lookup table to a neutral badge only; `CopilotResponse` carries no chart-data field at all (confirmed by schema inspection) |
+| Loading/tool-running/partial-failure/empty/error/retry states | PASS WITH LIMITATION | All implemented except a **tool-running state distinct from generic loading** — the frozen §23 contract is single synchronous request/response with no streaming/intermediate-status signal, so this specific sub-requirement cannot be honestly satisfied without either a backend streaming capability (not built in any batch) or a fabricated status (explicitly prohibited by §21's no-fabrication rule). Documented as an architecture-contract tension in the Batch 5 review, not a coding defect. |
+
+**Observability**
+| Criterion | Status | Evidence |
+|---|---|---|
+| Copilot request traceable end-to-end | PASS | Inherits Phase 11's `CorrelationIdMiddleware`/tracing unchanged; no new telemetry system introduced |
+| Structured logs carry required ids, no prohibited content | PASS | No new log call site added beyond the bounded fields §27 already specifies |
+| `/metrics`/`/health`/`/health/ready` behave identically | PASS | Unchanged; existing Batch 1 tests remain green |
+
+**Evaluation**
+| Criterion | Status | Evidence |
+|---|---|---|
+| Harness runs and reports on all 9 measured dimensions | PASS | Live run inside `oi_copilot` (2026-08-14): `8/8` cases passed; all 9 `Dimension` values exercised across the dataset + 30 direct unit tests |
+| ≥1 conflicting-evidence and ≥1 unsupported-request scenario exercised correctly | PASS | `conflict_disclosure` and `unsupported_request_refusal` cases, both live PASS |
+
+**Architecture**
+| Criterion | Status | Evidence |
+|---|---|---|
+| No Phase 13 capability introduced | PASS | Repository-wide grep during closure for auth/JWT/RBAC/session/role patterns across `copilot_service` and `frontend/src/copilot` — no match beyond a comment stating auth is explicitly out of scope |
+| No Step 7.X-deferred capability reintroduced without §18 approval | PASS | Only the pre-approved `GET /recommendations/statistics` instance (§13.1) exists; no new deferred capability was reintroduced |
+| No domain intelligence duplicated or recomputed inside Copilot | PASS | Every tool passes real domain-service output through unchanged |
+| No arbitrary HTTP/DB tool exists anywhere | PASS | Structural grep during closure (see Backend row above) |
+| No mutation capability reachable from any tool | PASS | Structural verification + Batch 6's `forbidden_tool_attempt` case (a scripted mutation-shaped tool name was rejected by the real registry, never executed) |
+
+### 36.3 Final Verification Evidence (gathered at closure, 2026-08-14)
+
+- Full backend suite: **1203/1203 passed** (`python -m pytest backend -q`, `POSTGRES_HOST=localhost`).
+- Full frontend suite: unchanged since Batch 5's own clean **321/321** run (`git diff --stat -- frontend` is empty since that commit — not rerun, per the closure review's own "don't rerun for ceremony" guidance).
+- `copilot_service` evaluation harness, run for real inside the running `oi_copilot` container against the real Docker network: **8/8 cases passed**, including genuine (non-fixture) cross-service evidence grounding against a live `anomaly_service` `/trends` call.
+- Live Gateway smoke test (`POST /api/v1/copilot/messages`) at closure: correct, honest `NullLLMProvider` fallback response, valid `conversationId`/`requestId`.
+- Alembic: single linear head (`b3c8e5a1f204`), reconfirmed at closure.
+- `evaluation_service` independence: reconfirmed via AST-level import checks in both directions (`test_evaluation_service_separation.py`), still passing, no changes to either service since Batch 6.
+
+### 36.4 Known Prototype Limitations (carried into Phase 13 planning, not fixed here)
+
+1. **`filters`/`timeRange` are never sent to Copilot.** `Copilot` is mounted at the `AppShell` level, outside every workspace's own `XContextProvider` tree, so `DashboardContext`'s/`AnalyticsContext`'s pure-`useState` fields are not reachable without prop-drilling through five workspaces or a new duplicate global context — both explicitly discouraged absent an architecture mandate. Both fields are optional on the frozen contract.
+2. **No tool-running state distinct from generic loading.** An architecture-contract tension (§36.2, Frontend row) — the frozen backend contract has no streaming/intermediate-status mechanism to honestly drive one.
+3. **No real LLM provider is configured in this environment.** Every real-runtime verification across all six batches exercised the honest `NullLLMProvider` fallback (or, for Batch 6's evaluation cases, a deterministic scripted stand-in) — never a real model's reasoning. `OpenAICompatibleProvider` exists and is opt-in via `LLM_PROVIDER`/`LLM_API_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`, but was never exercised against a real endpoint.
+4. **Two pre-existing, unrelated issues remain, confirmed still present at closure, correctly left untouched:** `business_impact_service`'s `requirements.txt` does not list `httpx` as a direct dependency despite three files importing it directly (carried since Batch 2); the `add_decision_to_recommendations` migration (`f05ea2afc3ee`, pre-dating Phase 12) uses `sa.Enum(...)` inline in `op.add_column`, which does not auto-create the Postgres enum type the way `create_table` does (discovered during Batch 4).
+5. **The pre-existing, repo-wide frontend base-path mismatch** (every workspace API module's bare path vs. the Gateway's actual `/api/v1` mount) remains present in every workspace *other than* Copilot (discovered and worked around only for `copilotApi.ts` during Batch 5, with your explicit approval; not fixed repo-wide).
+
+None of the above is a Phase 12 blocking defect — each is either an intentional, documented scope boundary, an environment limitation, or a pre-existing issue outside this phase's authority to fix unilaterally.
+
+### 36.5 Explicitly Deferred Capabilities (unchanged from §1–§35, restated for closure)
+
+Production retention/TTL/archival (COPILOT-002), authentication/RBAC/any access-control policy (§28), a public evaluation UI or Gateway evaluation endpoint (§14 of the Batch 6 scope), a second observability stack, and the platform's long-term "Organizational Knowledge" vision (ARB-002/ARB-005) — none of these were started by any Phase 12 batch.
+
+### 36.6 Phase 13 Boundary (restated for closure)
+
+Phase 13 now owns: authentication, authorization/RBAC, user identity, production secrets management, mTLS/service mesh, production retention/privacy policy for `copilot_conversations`/`copilot_messages`, and any access-control policy for the evaluation harness's own CLI. Phase 12 created no architectural debt Phase 13 must undo — the tool/read-only boundary was designed (COPILOT-001) so that adding auth later is a Gateway/Copilot-API concern, not a tool-registry rework.
+
+### 36.7 Final Project Validation (not performed during this closure)
+
+A synthetic-but-realistic full-pipeline dummy-data validation (ingestion → NLP → anomaly → root cause → business impact → recommendation → analytics → Copilot → evaluation → observability) remains a planned final-project validation activity, deliberately not performed during Phase 12 closure.
+
+### 36.8 Approved Architecture Amendments
+
+None. No amendment to §1–§35 was required during implementation or closure — every batch's own "genuine contradiction" checks (Batches 4/5/6) surfaced only implementation-detail-level judgment calls (documented inline in this closure section and in the batch reports), never a frozen-architecture-level contradiction.

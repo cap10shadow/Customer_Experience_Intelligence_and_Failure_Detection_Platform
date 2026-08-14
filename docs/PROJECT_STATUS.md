@@ -7,13 +7,13 @@
 
 # Last Updated
 
-**Date:** 2026-08-13
+**Date:** 2026-08-14
 
 ---
 
 # Overall Progress
 
-**Estimated Completion:** ~88%
+**Estimated Completion:** ~92%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -21,11 +21,11 @@
 
 # Current Development Status
 
-**Current Phase:** Phase 11 – Observability & Reliability
+**Current Phase:** Phase 12 – AI Copilot
 
-**Current Step:** Batch 4 (Grafana + Full Verification) — Complete, including final closure review
+**Current Step:** Batch 6 (Evaluation Harness) — Complete, including final Phase 12 closure review
 
-**Status:** Complete (2 of 3 Grafana dashboards shipped; Intelligence Pipeline dashboard explicitly deferred — see Phase 11 Completion Summary below and `docs/DECISIONS.md` OBS-002)
+**Status:** Complete (all six implementation batches delivered and verified; see Phase 12 Completion Summary below and `docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md` §36 for the full closure record)
 
 ---
 
@@ -44,8 +44,50 @@
 | ✅ Phase 9 – Recommendation Engine        | Complete    |
 | ✅ Phase 10 – Executive Dashboard         | Complete    |
 | ✅ Phase 11 – Observability & Reliability | Complete (2/3 dashboards; 1 explicitly deferred) |
-| ⬜ Phase 12 – AI Copilot                  | Pending     |
+| ✅ Phase 12 – AI Copilot                  | Complete (6/6 batches; see limitations below) |
 | ⬜ Phase 13 – Production Hardening        | Pending     |
+
+---
+
+# Phase 12 Progress
+
+| Batch                                              | Status      |
+| --------------------------------------------------- | ----------- |
+| ✅ Batch 1 – Copilot API Foundation + Contracts     | Complete    |
+| ✅ Batch 2 – Read-Only Tool Adapters                | Complete    |
+| ✅ Batch 3 – LLM Orchestration + LangGraph          | Complete    |
+| ✅ Batch 4 – Conversation Persistence               | Complete    |
+| ✅ Batch 5 – Frontend Copilot Experience            | Complete    |
+| ✅ Batch 6 – Copilot Evaluation Harness             | Complete    |
+
+---
+
+# Phase 12 – Completion Summary
+
+**AI Copilot — Read-Only, Evidence-Grounded Conversational Interface Over Existing Intelligence — Implemented and Verified**
+
+### Verified (real, running-service evidence)
+- A read-only Copilot capability (`copilot_service`) that interprets natural-language operational questions using seven approved, structurally read-only tools (`recommendation`, `recommendation_decision_status`, `root_cause`, `business_impact`, `investigation`, `analytics_trends`, `administration_configuration`) calling real domain services directly — never the public Gateway, never a second domain authority.
+- Bounded (≤3-round) LangGraph orchestration, evidence-grounded answer synthesis (an unrecognized/fabricated evidence id is always dropped before reaching a response, verified live), conflict disclosure, and an honest deterministic fallback (`NullLLMProvider`) when no LLM is configured.
+- Service-owned conversation persistence (`copilot_conversations`/`copilot_messages`, PostgreSQL, single linear Alembic head) with deterministic ordering and bounded history — verified end to end including real two-turn continuity.
+- A floating, expandable Copilot launcher/panel mounted once in the frontend's persistent application shell (`AppShell.tsx`) — secondary and non-full-screen, workspace remains fully usable throughout, verified with real-browser screenshots.
+- A `copilot_service`-owned agent-evaluation harness (`app/evaluation/`) covering all nine architecture-defined measures (tool selection, answer grounding, citation correctness, hallucination, conflict handling, unsupported-request handling, scope preservation, safety/read-only, completeness), run live against the real orchestration/persistence path (8/8 cases passing at closure) — structurally and by AST-level test entirely independent of the Phase 8 `evaluation_service`.
+- Gateway's 7 pre-existing public routes/5 aggregators confirmed byte-for-byte unchanged throughout all six batches.
+
+### Known Prototype Limitations
+- No real LLM provider is configured in this environment — every verification exercised the honest `NullLLMProvider` fallback or (for evaluation-harness cases) a deterministic scripted stand-in, never real model reasoning. An `OpenAICompatibleProvider` adapter exists and is opt-in, never exercised against a real endpoint.
+- Copilot's launch context never includes `filters`/`timeRange` — the panel is mounted outside every workspace's own React Context provider tree; both fields are optional on the frozen contract.
+- No tool-running state distinct from generic loading exists in the frontend — the frozen backend contract is single synchronous request/response with no streaming signal to honestly drive one.
+- Two unrelated pre-existing issues remain, confirmed still present, correctly left untouched: `business_impact_service`'s missing `httpx` direct dependency; the pre-Phase-12 recommendation-decision migration's enum-creation bug.
+- The frontend's pre-existing, repo-wide API base-path mismatch remains present in every workspace other than Copilot's own module (fixed only there, with approval).
+
+Full detail, evidence, and the complete Definition-of-Done table: `docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md` §36 (Phase 12 Final Closure).
+
+### Explicitly Deferred
+Production retention/TTL for conversation data, authentication/RBAC (Phase 13), a public evaluation UI or Gateway evaluation endpoint, and the platform's long-term "Organizational Knowledge" vision (ARB-002/ARB-005).
+
+### Outcome
+Phase 12 closes with a real, evidence-grounded, read-only Copilot capability — orchestration, persistence, frontend, and evaluation all verified against real running services, not mocks — and every remaining limitation honestly disclosed rather than hidden or fabricated. No Phase 13 (authentication/production hardening) capability was pulled forward.
 
 ---
 
@@ -516,7 +558,7 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 | Business Impact Service | Stable; publishes BusinessImpactCompleted (Phase 10 Step 7); confidence classifier and read-only configuration endpoint added (Step 7.X) |
 | Evaluation Service      | Stable; consumes BusinessImpactCompleted (Phase 10 Step 7) |
 | Recommendation Service  | Stable; consumes BusinessImpactCompleted (Phase 10 Step 7); minimal decision persistence added (Step 7.X, REC-003) |
-| Copilot Service         | Scaffolded          |
+| Copilot Service         | Stable; Phase 12 complete — read-only tool registry, bounded LLM orchestration, conversation persistence, evaluation harness |
 
 ---
 
@@ -531,22 +573,23 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 - Analytics Workspace Architecture established (Phase 10 Step 5 Complete); Trend Analysis integrated with real Gateway data (Phase 10 Step 7); Executive Overview now computes real observations, and Pattern Discovery/Organizational Insights/Strategic Opportunities now render honest future-capability placeholders instead of fabricated narrative (Step 7.X); Recommendation Effectiveness remains a placeholder — no outcome-tracking capability exists yet
 - Administration Workspace Architecture established (Phase 10 Step 6 Complete); Platform Overview and read-only Intelligence Configuration are now integrated with real Gateway data (Step 7.X) — User & Access Management, Data Sources & Integrations, Platform Governance, and Audit & Change History remain presentation-only by design
 - Five-workspace architecture (Dashboard, Investigations, Recommendations, Analytics, Administration) following the Action Center consolidation refinement — see `docs/DECISIONS.md` (FE-001)
+- Floating, expandable Copilot launcher/panel mounted once in `AppShell.tsx` (Phase 12 Batch 5) — secondary/contextual, workspace remains usable throughout; consumes the real Gateway Copilot API, never a downstream service directly
 
 ---
 
 # Current Focus
 
-**Phase 11 – Observability & Reliability (not yet started)**
+**Phase 13 – Production Hardening (not yet started)**
 
-> Phase 10 (Executive Dashboard) is complete across all seven steps, followed by Step 7.X (Intermediate Capability Completion), also complete. Step 7.X closed the bounded set of genuine gaps identified after Step 7 — see the Phase 10 Step 7.X Completion Summary above for the full list of what shipped and what remains explicitly deferred. Step 7.X did not begin, and is not a substitute for, Phase 11. The next planned phase per `ROADMAP.md` is Phase 11 (structured logging, metrics, tracing, health monitoring, error tracking); it has not yet been scoped or started.
+> Phase 12 (AI Copilot) is complete across all six batches — see the Phase 12 Completion Summary above and `docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md` §36 for the full closure record. The next planned phase per `ROADMAP.md` is Phase 13 (authentication/RBAC and production hardening); it has not yet been scoped or started.
 
 ---
 
 # Next Milestone
 
-**Phase 11 – Observability & Reliability**
+**Phase 13 – Production Hardening**
 
-> Phase 10 (all seven steps, plus Step 7.X) is complete and approved. No further Phase 10 step is currently defined in `ROADMAP.md`. Root Cause mutation surfacing (G-04), `RecommendationStatisticsService` surfacing (G-03), full Dashboard dimensional filtering (G-09), Administration User & Access Management (G-06), editable Intelligence Configuration, Administration Audit & Change History persistence, and Recommendation Effectiveness/outcome tracking remain explicitly deferred until a future phase scopes them. Authentication/RBAC, a production message broker/Outbox/durable retry, and production observability remain Phase 11–13 scope.
+> Phase 12 (all six batches) is complete and approved. Authentication/RBAC, production secrets management, mTLS/service mesh, production retention/privacy policy for Copilot conversation data, and general production hardening remain entirely unscoped, unstarted Phase 13 work. A final project-wide synthetic-dummy-data validation exercise (ingestion → ... → Copilot → evaluation → observability) also remains planned but not started.
 
 ---
 

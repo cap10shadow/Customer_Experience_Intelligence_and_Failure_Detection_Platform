@@ -16,7 +16,9 @@ Still explicitly deferred: Root Cause confirm/reject/refresh (a write capability
 
 **Phase 11 (Observability & Reliability) is COMPLETE.** Structured JSON logging, `X-Request-ID` correlation, Prometheus HTTP metrics, liveness/readiness health, OpenTelemetry distributed tracing (Tempo), and a Grafana operational-visualization layer (two dashboards — Platform Health, API & Service Performance) are live across all 9 backend services, verified against real running services. A third dashboard originally scoped ("Intelligence Pipeline") was explicitly deferred rather than built on fabricated data — it requires domain metrics (anomalies detected, recommendations generated, etc.) that no Phase 11 batch ever implemented; see `docs/DECISIONS.md` (OBS-002). This is an internal operator/infrastructure surface only — no frontend workspace, Gateway route, or user-facing feature was added.
 
-**Phase 12+ (AI Copilot, Production Hardening) are PLANNED FUTURE PHASES.**
+**Phase 12 (AI Copilot) is COMPLETE across all six implementation batches.** A read-only, evidence-grounded Copilot (`copilot_service`) interprets natural-language operational questions using seven approved tools that call existing domain services directly — it never computes new intelligence, never mutates anything, and the LLM is a synthesizer over real evidence, never a source of truth. Bounded (≤3-round) LangGraph orchestration, service-owned conversation persistence (PostgreSQL, deterministic ordering, bounded history), a floating non-full-screen frontend panel mounted once in the application shell, and a `copilot_service`-owned agent-evaluation harness (nine measured dimensions, strictly independent of the Phase 8 Evaluation Service) are all implemented and verified against real running services. No real LLM provider is configured in this environment — every verification used the honest deterministic fallback, never a fabricated "real AI" result. Full detail: `docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md` §36.
+
+**Phase 13 (Production Hardening) is a PLANNED FUTURE PHASE.**
 
 The Evaluation Service (Phase 8) is an independent Intelligence Assurance Service, not part of the linear pipeline below: it observes completed intelligence out-of-band, event-driven, and never modifies or blocks any upstream service.
 
@@ -44,10 +46,12 @@ The Evaluation Service (Phase 8) is an independent Intelligence Assurance Servic
 - **Recommendation Engine** (Deterministic Rules, Persistence & Lifecycle)
 - ↓
 - **Executive Dashboard** (Steps 1–7 Complete — Gateway/API integration, real workspace data, BusinessImpactCompleted event fan-out; Step 7.X Complete — Recommendation Decision persistence, read-only Intelligence Configuration, and further real-data/honesty completions)
+- ↓
+- **AI Copilot** (Phase 12, all six batches Complete — read-only tool registry, bounded LLM orchestration, conversation persistence, floating frontend panel, agent-evaluation harness)
 
 ### Planned Future Phases
 - ↓
-- **AI Copilot**
+- **Production Hardening** (Phase 13 — authentication/RBAC, production security)
 
 ### Long-Term Vision (Post-MVP, Not Currently Scheduled)
 
@@ -68,9 +72,9 @@ The platform uses a modular, service-based architecture sharing a single reposit
 | root_cause_service | 8004 | Root cause correlation | Stable |
 | business_impact_service | 8005 | Business impact estimation; publishes `BusinessImpactCompleted` | Stable |
 | recommendation_service | 8006 | Recommendation generation; consumes `BusinessImpactCompleted` | Stable |
-| copilot_service | 8007 | AI copilot and natural-language querying | Scaffolded / Planned |
-| evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven); consumes `BusinessImpactCompleted` | Stable |
-| frontend | 3000 | Operational dashboard | Dashboard, Investigation, Recommendation (read + decision persistence), and Analytics (trends) integrated with real Gateway data; Administration integrated for Platform Overview and read-only Intelligence Configuration, otherwise presentation-only |
+| copilot_service | 8007 | Read-only AI Copilot: natural-language querying over existing intelligence, bounded LLM orchestration, conversation persistence, agent-evaluation harness | Stable — Phase 12 complete |
+| evaluation_service | 8008 | Intelligence quality & explainability assurance (out-of-band, event-driven); consumes `BusinessImpactCompleted`. Independent of Copilot's own evaluation harness (Phase 12, COPILOT-001/002) | Stable |
+| frontend | 3000 | Operational dashboard | Dashboard, Investigation, Recommendation (read + decision persistence), and Analytics (trends) integrated with real Gateway data; Administration integrated for Platform Overview and read-only Intelligence Configuration, otherwise presentation-only; floating Copilot launcher/panel mounted once in the application shell (Phase 12) |
 
 Each service exposes a `/health` endpoint.
 
@@ -81,8 +85,8 @@ Each service exposes a `/health` endpoint.
 - **Backend:** FastAPI (Python), REST APIs
 - **Database:** PostgreSQL, SQLAlchemy 2.x, Alembic
 - **Infrastructure:** Docker, Docker Compose
-- **Intelligence:** Deterministic rules, Scikit-learn (planned), LangGraph (planned)
-- **Frontend:** React, TypeScript, React Router — application shell, five-workspace architecture, and centralized Gateway API client, integrated with real backend data for Dashboard, Investigation, Recommendation (read + decision persistence), Analytics (trends), and Administration (Platform Overview + read-only Intelligence Configuration)
+- **Intelligence:** Deterministic rules, Scikit-learn (planned), LangGraph (bounded Copilot orchestration, Phase 12)
+- **Frontend:** React, TypeScript, React Router — application shell, five-workspace architecture, and centralized Gateway API client, integrated with real backend data for Dashboard, Investigation, Recommendation (read + decision persistence), Analytics (trends), and Administration (Platform Overview + read-only Intelligence Configuration); a floating, non-full-screen Copilot panel mounted once in the application shell (Phase 12)
 
 ---
 
