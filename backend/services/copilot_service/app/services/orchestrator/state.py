@@ -70,6 +70,12 @@ class OrchestrationState(TypedDict, total=False):
     workspace_context: Optional[WorkspaceContext]
     conversation_id: str
     request_id: str
+    # Phase 12 Batch 4 -- prior persisted turns for this conversation,
+    # oldest first, each `{"role": "user" | "assistant", "content": ...}`.
+    # Untrusted retrieved data (architecture §24.1/§27): rendered into the
+    # prompt under its own real role, never merged into the system/tool
+    # instruction layers -- see `prompts.py`.
+    history: List[Dict[str, str]]
 
     # Working state.
     rounds_used: int

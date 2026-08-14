@@ -1,4 +1,4 @@
-import uuid
+from typing import Dict, List, Optional
 
 import httpx
 
@@ -11,23 +11,33 @@ from backend.services.copilot_service.app.services import tools_bootstrap  # noq
 
 
 async def run_orchestration(
-    request: CopilotQueryRequest, *, client: httpx.AsyncClient, request_id: str
+    request: CopilotQueryRequest,
+    *,
+    client: httpx.AsyncClient,
+    request_id: str,
+    conversation_id: str,
+    history: Optional[List[Dict[str, str]]] = None,
 ) -> CopilotQueryResponse:
     """
     Phase 12 Batch 3 -- runs one bounded orchestration turn (Question ->
     Tool decision -> Tool call -> Evidence -> Optional next tool (<=3
     rounds) -> Answer, architecture §20) and returns the frozen
-    `CopilotResponse` shape. `conversation_id` minting is unchanged from
-    Batch 1: `copilot_service` owns conversation identity (COPILOT-002);
-    still purely ephemeral here -- no persistence exists until Batch 4.
-    """
-    conversation_id = request.conversation_id or str(uuid.uuid4())
+    `CopilotResponse` shape.
 
+    Phase 12 Batch 4: `conversation_id` resolution (mint-or-reuse) and
+    conversation persistence now live one layer up, in
+    `services/conversation_service.py` -- `copilot_service` still owns
+    conversation identity (COPILOT-002), just no longer inside this
+    orchestration-only function. `history` is the bounded, already-
+    persisted prior turns for this conversation (oldest first); this
+    function does not load or persist anything itself.
+    """
     initial_state: OrchestrationState = {
         "message": request.message,
         "workspace_context": request.workspace_context,
         "conversation_id": conversation_id,
         "request_id": request_id,
+        "history": history or [],
         "rounds_used": 0,
         "tool_calls_made": [],
         "seen_calls": [],

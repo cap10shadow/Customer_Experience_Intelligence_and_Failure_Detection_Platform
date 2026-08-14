@@ -1,24 +1,44 @@
 """
 Tests for `POST /api/v1/copilot/messages`'s HTTP-level contract
 (request validation, conversation-id/request-id behavior, response
-shape). As of Phase 12 Batch 3, the route runs the real bounded
+shape) and, as of Phase 12 Batch 4, real conversation persistence
+behavior. As of Phase 12 Batch 3, the route runs the real bounded
 orchestration graph; with no LLM provider configured in this test
 environment (the default `NullLLMProvider`), it deterministically
 produces one honest "no language model configured" answer with no tool
 calls -- see `tests/test_orchestrator_graph.py` for tool-selection/
 evidence/iteration-bound coverage using a scripted `FakeLLMProvider`.
+
+Batch 4 makes every request go through a real `AsyncSession`
+(`get_db_session`), so this whole module now needs a reachable
+PostgreSQL instance -- connects to `localhost:5432` (the same Postgres
+`docker compose up postgres` exposes) and skips cleanly, module-wide,
+if it is not reachable, the same convention already established by
+`recommendation_service`'s repository tests. Test rows are real,
+committed rows (this exercises the real dependency-injected session,
+not a rolled-back one) -- consistent with this prototype's "no
+automatic expiry" persistence model (architecture §17); nothing here
+depends on any other test's leftover rows.
 """
 
+import asyncio
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from backend.services.copilot_service.app.main import app
 
 import httpx
 
 from backend.services.copilot_service.app.dependencies.http_client import get_http_client
+from backend.services.copilot_service.app.models.conversation import CopilotConversation
+from backend.services.copilot_service.app.models.message import CopilotMessage
+from backend.shared.config.settings import Settings
+from backend.shared.database.session import get_db_session
 
 # Bare (non-`with`) TestClient never runs the app's lifespan, so
 # `app.state.http_client` (constructed there) does not exist -- exactly
@@ -31,7 +51,73 @@ app.dependency_overrides[get_http_client] = lambda: httpx.AsyncClient(
     transport=httpx.MockTransport(lambda request: httpx.Response(404))
 )
 
+# The app's own default DB session (backend.shared.database.session) is
+# bound to `backend.shared.config.settings.settings`, which reads
+# `POSTGRES_HOST=postgres` from the repository's `.env` (correct inside
+# docker-compose, unreachable from a host-run test process) -- overridden
+# here with a `localhost`-bound engine, exactly the same pattern
+# `test_postgresql_recommendation_repository.py` already uses for its
+# own standalone test engine.
+#  `NullPool` (no connection reuse across requests) -- required here,
+# not just tidy: `starlette.testclient.TestClient`'s portal binds each
+# request to its own event loop, and a normal pooled asyncpg connection
+# checked out on one loop cannot be reused on another (`RuntimeError:
+# Event loop is closed`). Same reasoning as
+# `test_postgresql_recommendation_repository.py`'s own standalone engine.
+_test_settings = Settings(POSTGRES_HOST="localhost")
+_test_engine = create_async_engine(_test_settings.database_url, poolclass=NullPool)
+_test_session_maker = async_sessionmaker(_test_engine, expire_on_commit=False, autoflush=False)
+
+
+async def _override_get_db_session():
+    async with _test_session_maker() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+app.dependency_overrides[get_db_session] = _override_get_db_session
+
+
+def _database_available() -> bool:
+    async def _check() -> bool:
+        try:
+            async with _test_engine.connect() as probe:
+                await probe.execute(text("SELECT 1"))
+            return True
+        except Exception:
+            return False
+
+    return asyncio.run(_check())
+
+
+pytestmark = pytest.mark.skipif(
+    not _database_available(),
+    reason="PostgreSQL is not reachable on localhost:5432 -- run `docker compose up postgres` to enable these tests",
+)
+
 client = TestClient(app)
+
+
+async def _fetch_conversation(conversation_id: str) -> CopilotConversation:
+    async with _test_session_maker() as session:
+        result = await session.execute(
+            select(CopilotConversation).where(CopilotConversation.conversation_id == uuid.UUID(conversation_id))
+        )
+        return result.scalar_one()
+
+
+async def _fetch_messages(conversation_id: str):
+    async with _test_session_maker() as session:
+        result = await session.execute(
+            select(CopilotMessage)
+            .where(CopilotMessage.conversation_id == uuid.UUID(conversation_id))
+            .order_by(CopilotMessage.sequence)
+        )
+        return result.scalars().all()
 
 
 def test_minimal_valid_request_returns_200_with_honest_no_provider_answer():
@@ -162,3 +248,121 @@ def test_health_readiness_and_metrics_are_unaffected_by_the_new_route():
     ready_response = client.get("/health/ready")
     assert ready_response.status_code in (200, 503)
     assert "status" in ready_response.json()
+
+
+# --- Phase 12 Batch 4: conversation persistence -----------------------------------
+
+
+def test_absent_conversation_id_persists_a_new_conversation_row():
+    response = client.post("/api/v1/copilot/messages", json={"message": "hello"})
+    conversation_id = response.json()["conversation_id"]
+
+    conversation = asyncio.run(_fetch_conversation(conversation_id))
+
+    assert str(conversation.conversation_id) == conversation_id
+
+
+def test_first_turn_persists_the_user_and_assistant_messages_in_order():
+    response = client.post("/api/v1/copilot/messages", json={"message": "What is happening in West region?"})
+    body = response.json()
+
+    messages = asyncio.run(_fetch_messages(body["conversation_id"]))
+
+    assert [m.role.value for m in messages] == ["user", "assistant"]
+    assert messages[0].content == "What is happening in West region?"
+    assert messages[1].content == body["answer"]
+    assert messages[0].sequence < messages[1].sequence
+
+
+def test_second_turn_with_the_same_conversation_id_appends_to_the_same_conversation():
+    first = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = first["conversation_id"]
+
+    second = client.post(
+        "/api/v1/copilot/messages", json={"message": "why?", "conversation_id": conversation_id}
+    ).json()
+
+    messages = asyncio.run(_fetch_messages(conversation_id))
+    assert [m.content for m in messages] == ["hello", first["answer"], "why?", second["answer"]]
+    assert [m.sequence for m in messages] == sorted(m.sequence for m in messages)
+
+
+def test_unrecognized_supplied_conversation_id_creates_a_conversation_under_that_id():
+    supplied = str(uuid.uuid4())
+
+    response = client.post("/api/v1/copilot/messages", json={"message": "hello", "conversation_id": supplied})
+
+    assert response.json()["conversation_id"] == supplied
+    conversation = asyncio.run(_fetch_conversation(supplied))
+    assert str(conversation.conversation_id) == supplied
+    messages = asyncio.run(_fetch_messages(supplied))
+    assert len(messages) == 2
+
+
+def test_workspace_context_is_snapshotted_only_on_conversation_creation():
+    first = client.post(
+        "/api/v1/copilot/messages",
+        json={"message": "hello", "workspace_context": {"workspace": "dashboard"}},
+    ).json()
+    conversation_id = first["conversation_id"]
+
+    client.post(
+        "/api/v1/copilot/messages",
+        json={
+            "message": "follow up",
+            "conversation_id": conversation_id,
+            "workspace_context": {"workspace": "recommendations"},
+        },
+    )
+
+    conversation = asyncio.run(_fetch_conversation(conversation_id))
+    assert conversation.workspace == "dashboard"
+
+
+def test_evidence_free_response_persists_null_evidence_references():
+    response = client.post("/api/v1/copilot/messages", json={"message": "hello"})
+    conversation_id = response.json()["conversation_id"]
+
+    messages = asyncio.run(_fetch_messages(conversation_id))
+    assistant_message = messages[-1]
+    assert assistant_message.evidence_references is None
+
+
+def test_orchestration_failure_persists_nothing_and_preserves_the_error_contract(monkeypatch):
+    """
+    Architecture §22 / Batch 4 implementation prompt §11: an assistant
+    response must never be persisted as successful when orchestration
+    itself fails, and the existing API error contract must not be lost.
+    One session/transaction spans the whole turn (see
+    `conversation_service.handle_persisted_query`'s docstring) -- an
+    exception here must roll back the conversation-creation and the
+    user-message append too, not just skip the assistant append.
+    """
+    import backend.services.copilot_service.app.services.conversation_service as conversation_service_module
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("simulated orchestration failure")
+
+    monkeypatch.setattr(conversation_service_module, "run_orchestration", _boom)
+
+    # `raise_server_exceptions=False` (same convention as
+    # `gateway_service/tests/test_errors.py`) so the TestClient returns
+    # the real 500 response the registered `Exception` handler produces,
+    # instead of re-raising the exception into the test itself.
+    non_raising_client = TestClient(app, raise_server_exceptions=False)
+    supplied = str(uuid.uuid4())
+    response = non_raising_client.post(
+        "/api/v1/copilot/messages", json={"message": "hello", "conversation_id": supplied}
+    )
+
+    assert response.status_code == 500
+
+    async def _conversation_row_count() -> int:
+        async with _test_session_maker() as session:
+            result = await session.execute(
+                select(CopilotConversation).where(CopilotConversation.conversation_id == uuid.UUID(supplied))
+            )
+            return len(result.scalars().all())
+
+    assert asyncio.run(_conversation_row_count()) == 0
+    assert asyncio.run(_fetch_messages(supplied)) == []

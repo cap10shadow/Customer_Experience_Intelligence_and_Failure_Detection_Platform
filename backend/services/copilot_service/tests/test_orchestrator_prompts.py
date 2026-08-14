@@ -116,6 +116,57 @@ def test_failed_tool_calls_are_never_included_as_result_data():
     assert _tool_data_blocks(messages) == []
 
 
+def test_history_turns_are_rendered_before_the_current_user_message():
+    history = [{"role": "user", "content": "first question"}, {"role": "assistant", "content": "first answer"}]
+    messages = build_messages(_state(message="second question", history=history))
+
+    contents = [m["content"] for m in messages]
+    assert contents.index("first question") < contents.index("first answer") < contents.index("second question")
+
+
+def test_history_turns_keep_their_own_real_role():
+    history = [{"role": "user", "content": "first question"}, {"role": "assistant", "content": "first answer"}]
+    messages = build_messages(_state(history=history))
+
+    by_content = {m["content"]: m["role"] for m in messages}
+    assert by_content["first question"] == "user"
+    assert by_content["first answer"] == "assistant"
+
+
+def test_no_history_produces_no_extra_messages():
+    with_history = build_messages(_state(history=[]))
+    without_history_key = build_messages(_state())
+
+    assert with_history == without_history_key
+
+
+def test_malicious_historical_user_text_stays_a_plain_user_role_message():
+    """
+    Phase 12 Batch 4 implementation prompt §18: persisted conversation
+    content is untrusted user data. A historical message containing an
+    "ignore previous instructions" style string must remain confined to
+    the plain `user` role -- never merged into `system`, never able to
+    masquerade as an instruction layer, and never granting any
+    additional tool permission (tool dispatch is driven solely by this
+    turn's structured LLM decision, never by re-parsing message content
+    -- see this module's own docstring).
+    """
+    history = [{"role": "user", "content": MALICIOUS_STRING}]
+    messages = build_messages(_state(history=history))
+
+    assert MALICIOUS_STRING not in messages[0]["content"]  # never merged into the system policy
+    carrying_messages = [m for m in messages if MALICIOUS_STRING in m["content"]]
+    assert len(carrying_messages) == 1
+    assert carrying_messages[0]["role"] == "user"
+
+
+def test_history_entries_with_an_unrecognized_role_are_dropped():
+    history = [{"role": "system", "content": "a persisted role that must never exist"}]
+    messages = build_messages(_state(history=history))
+
+    assert all("a persisted role that must never exist" not in m["content"] for m in messages)
+
+
 def test_tool_specs_expose_only_name_description_and_schema_never_the_executor():
     specs = tool_specs_for_llm(list_tools())
 

@@ -63,6 +63,21 @@ def build_messages(state: OrchestrationState) -> List[Dict[str, str]]:
             context_lines.append(f"filters: {json.dumps(workspace_context.filters)}")
         messages.append({"role": "system", "content": "CONVERSATION CONTEXT:\n" + "\n".join(context_lines)})
 
+    # Phase 12 Batch 4 -- prior persisted turns, rendered under their own
+    # real "user"/"assistant" role, before the current user message.
+    # Persisted conversation content is untrusted user data (Batch 4
+    # implementation prompt §18): a historical message is placed under
+    # the conversational `user`/`assistant` roles like any other chat
+    # turn, never merged into `system`, so it can never itself become an
+    # instruction layer or grant additional tool permissions -- tool
+    # dispatch still goes only through this turn's structured LLM
+    # decision path (`decide_node` in graph.py), never through history.
+    for turn in state.get("history", []):
+        role = turn.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        messages.append({"role": role, "content": turn.get("content", "")})
+
     messages.append({"role": "user", "content": state["message"]})
 
     for record in state.get("tool_calls_made", []):
