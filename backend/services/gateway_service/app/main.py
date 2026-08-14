@@ -18,7 +18,10 @@ from backend.services.gateway_service.app.core.errors import (
     unhandled_error_handler,
     validation_error_handler,
 )
+from backend.shared.database.database import engine
+from backend.shared.database.health import check_database_connection
 from backend.shared.observability.correlation import CorrelationIdMiddleware
+from backend.shared.observability.health import mount_readiness, readiness_check
 from backend.shared.observability.metrics import instrument_app
 from backend.shared.observability.tracing import init_tracing, shutdown_tracing
 
@@ -28,14 +31,22 @@ async def lifespan(app: FastAPI):
     # One shared client for the app's lifetime, not one per request/route --
     # workspace route modules (Parts 2-5) pull it via
     # app.dependencies.http_client.get_http_client rather than constructing
-    # their own. Gateway does not own persistence (Batch 1 §2), so there is
-    # deliberately no database engine here -- init_tracing() below is
-    # therefore called with no `engine` argument (no SQLAlchemy
-    # instrumentation), unlike every other service.
+    # their own.
+    #
+    # Phase 13 Batch 1 (AD-1): gateway_service now owns identity
+    # persistence (users/roles/user_roles) in the shared PostgreSQL
+    # instance -- its first database dependency, matching every other
+    # backend service's own startup-check/shutdown-dispose pattern
+    # (see ingestion_service/app/main.py). No route in this batch reads
+    # or writes through this engine yet; the check only proves the new
+    # dependency is reachable before the process starts serving traffic.
     app.state.http_client = httpx.AsyncClient(timeout=settings.DOWNSTREAM_TIMEOUT_SECONDS)
+    if not await check_database_connection():
+        raise RuntimeError("Database connectivity check failed on startup.")
     yield
     await app.state.http_client.aclose()
     shutdown_tracing()
+    await engine.dispose()
 
 
 app = FastAPI(title="Gateway Service", lifespan=lifespan)
@@ -60,12 +71,16 @@ app.add_exception_handler(GatewayError, gateway_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 
-# Phase 11 Batch 1: common technical HTTP metrics + GET /metrics. No
-# readiness endpoint here -- gateway_service owns no database (Batch 1
-# §2 of the Phase 10 record), so it has no dependency of its own to
-# check beyond the process being up, which /health below already answers.
-instrument_app(app, service_name="gateway_service")
-init_tracing("gateway_service", app)
+# Phase 11 Batch 1: common technical HTTP metrics + GET /metrics.
+# Phase 13 Batch 1 (AD-1): gateway_service now owns a database
+# dependency (identity persistence), so it gains the same
+# `/health/ready` + `service_readiness` gauge wiring every other
+# DB-owning service already has (backend/shared/observability/health.py)
+# -- reusing the existing Phase 11 primitive verbatim, not a new
+# observability mechanism. `/health` (liveness) below is unchanged.
+instrument_app(app, service_name="gateway_service", refresh_readiness=lambda: readiness_check("gateway_service"))
+mount_readiness(app, service_name="gateway_service")
+init_tracing("gateway_service", app, engine=engine)
 
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(investigations_router, prefix="/api/v1")

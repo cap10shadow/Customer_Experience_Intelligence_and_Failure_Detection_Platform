@@ -25,6 +25,7 @@ from backend.services.ingestion_service.app.models.complaint import Complaint  #
 from backend.services.nlp_service.app.models.complaint_enrichment import ComplaintEnrichment  # noqa: F401
 from backend.services.copilot_service.app.models.conversation import CopilotConversation  # noqa: F401
 from backend.services.copilot_service.app.models.message import CopilotMessage  # noqa: F401
+from backend.services.gateway_service.app.models.identity import Role, User, UserRole  # noqa: F401
 from backend.shared.config.settings import settings
 
 target_metadata = Base.metadata

@@ -8,3 +8,15 @@ opentelemetry-sdk==1.44.0
 opentelemetry-exporter-otlp-proto-grpc==1.44.0
 opentelemetry-instrumentation-fastapi==0.65b0
 opentelemetry-instrumentation-httpx==0.65b0
+# Phase 13 Batch 1 (Gateway identity foundation, AD-1) -- gateway_service
+# gains its own persistence for the first time; these four match the
+# exact versions already used by every other DB-owning service
+# (ingestion_service/requirements.txt).
+sqlalchemy==2.0.36
+asyncpg==0.29.0
+alembic==1.13.3
+opentelemetry-instrumentation-sqlalchemy==0.65b0
+# Password hashing only (hash_password/verify_password, §7/§8 AD-1). No
+# JWT/session library added here -- token issuance is Batch 3 (Auth API)
+# scope, not Batch 1.
+bcrypt==4.1.3

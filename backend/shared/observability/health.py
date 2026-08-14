@@ -41,12 +41,13 @@ async def readiness_check(service_name: str) -> Tuple[bool, Dict[str, str]]:
 def mount_readiness(app: FastAPI, service_name: str) -> None:
     """
     Mounts `GET /health/ready` on `app`. Only for services that own a
-    database (Phase 11 architecture §"Health Architecture") -- of the 9
-    backend services, every one except `gateway_service` (which has no
-    persistence of its own, per Phase 10 Batch 1 §2). Additive only:
-    never replaces or changes the existing `GET /health` liveness route,
-    and the `/health/ready` JSON response shape is unchanged from Batch 1
-    -- `service_name` is used only to label the Prometheus gauge, never
+    database (Phase 11 architecture §"Health Architecture") -- as of
+    Phase 13 Batch 1 (AD-1), that is all 9 backend services, including
+    `gateway_service`, which previously had no persistence of its own
+    (Phase 10 Batch 1 §2) but now owns identity persistence. Additive
+    only: never replaces or changes the existing `GET /health` liveness
+    route, and the `/health/ready` JSON response shape is unchanged from
+    Batch 1 -- `service_name` is used only to label the Prometheus gauge, never
     added to the response body.
     """
 
