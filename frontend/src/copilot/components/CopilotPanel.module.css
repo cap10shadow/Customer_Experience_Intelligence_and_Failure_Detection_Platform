@@ -1,0 +1,101 @@
+.panelWrapper {
+  position: fixed;
+  right: var(--space-6);
+  bottom: calc(52px + var(--space-6) + var(--space-3));
+  z-index: var(--z-index-modal);
+  width: min(380px, calc(100vw - 2 * var(--space-6)));
+  height: min(600px, calc(100vh - 160px));
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.subheading {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background-color: var(--color-surface-sunken);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-status-critical-subtle);
+  background-color: var(--color-status-critical-subtle);
+  color: var(--color-status-critical);
+  font-size: var(--font-size-sm);
+}
+
+.errorBanner p {
+  margin: 0;
+}
+
+.retryButton {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  color: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .panelWrapper {
+    right: var(--space-3);
+    left: var(--space-3);
+    bottom: calc(52px + var(--space-3) + var(--space-3));
+    width: auto;
+    height: min(75vh, 600px);
+  }
+}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { PRIMARY_NAVIGATION } from '@/app/configuration/navigation.config'
+import { Copilot } from '@/copilot'
 import { Sidebar, TopBar } from '@/shared/components/navigation'
 import { useDisclosure } from '@/shared/hooks/useDisclosure'
 
@@ -57,6 +58,9 @@ export function AppShell() {
           </WorkspaceLayout>
         </main>
       </div>
+      {/* Mounted once, application-wide, as a sibling of the routed
+          content -- never per-workspace (architecture §4/§32). */}
+      <Copilot />
     </div>
   )
 }

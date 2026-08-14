@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/recommendations/statistics)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/api/v1/recommendations/statistics)",
+      "Bash(docker compose *)",
+      "Bash(curl -s -o /dev/null -w \"dashboard bare: %{http_code}\\\\n\" http://localhost:8000/dashboard/overview)",
+      "Bash(curl -s -o /dev/null -w \"dashboard prefixed: %{http_code}\\\\n\" http://localhost:8000/api/v1/dashboard/overview)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx vitest *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"frontend index: %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/copilot/messages -H \"Content-Type: application/json\" -d '{\"message\":\"What is happening in West region?\"}')",
+      "Bash(python -m json.tool)",
+      "Read(//c//**)",
+      "Bash(npm ls *)",
+      "Bash(where chromium-cli *)",
+      "Bash(node --experimental-vm-modules -e \"1\")",
+      "Bash(NODE_PATH=\"c:\\\\Users\\\\DELL\\\\Desktop\\\\ME\\\\Customer_Experience_Intelligence_and_Failure_Detection_Platform\\\\frontend\\\\node_modules\" node verify_copilot.mjs)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(node verify_copilot.mjs)",
+      "Bash(node verify_copilot_turn2.mjs)",
+      "Bash(curl -sf http://localhost:3000/)",
+      "Bash(break)",
+      "Bash(git status *)"
+    ]
+  }
+}

@@ -121,6 +121,16 @@ export const ICONS = {
     </>
   ),
   trendFlat: <path d="M3 12h18" />,
+  chat: (
+    <>
+      <path d="M4 4h16v12H8l-4 4Z" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="m3 11 18-7-7 18-2.5-7.5L3 11Z" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof ICONS
