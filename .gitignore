@@ -43,3 +43,8 @@ datasets/*.json
 !datasets/.gitkeep
 notebooks/.ipynb_checkpoints/
 .claude/settings.json
+
+# Phase 13 Batch 7 -- database backup artifacts (pg_dump output).
+# Application data may contain user information, conversation content,
+# and other sensitive operational data -- never committed.
+/backups/
