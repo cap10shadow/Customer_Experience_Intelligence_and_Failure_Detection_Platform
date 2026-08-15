@@ -283,7 +283,7 @@ The following documents are maintained throughout development:
 | ------------------------------- | ----------------------------- |
 | ROADMAP.md                      | Long-term project plan        |
 | ARCHITECTURE.md                 | System architecture           |
-| DATABASE_SCHEMA_ARCHITECTURE.md | Database design               |
+| docs/design/                    | Early, pre-implementation design specifications (historical — see `docs/design/README.md`) |
 | DECISIONS.md                    | Architecture Decision Records |
 | PROJECT_STATUS.md               | Current implementation status |
 | CHANGELOG.md                    | Engineering history           |

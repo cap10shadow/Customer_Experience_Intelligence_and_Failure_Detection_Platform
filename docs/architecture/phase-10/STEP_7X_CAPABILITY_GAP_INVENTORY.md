@@ -44,12 +44,14 @@ This baseline is **not re-audited generically** per the task's instruction to tr
 - **Phase 10 architecture batch documents** (identified by content, not filename, per instructions):
   | File | Batch |
   |---|---|
-  | `docs/architecture/phase-10/Pasted markdown(5).md` (no space) | Batch 1 — Integration Foundation Architecture |
-  | `docs/architecture/phase-10/Pasted markdown (2).md` | Batch 2 — Workspace → API → Backend Integration Architecture |
-  | `docs/architecture/phase-10/Pasted markdown (3).md` | Batch 3 — Cross-Service Pipeline & Communication Architecture |
-  | `docs/architecture/phase-10/Pasted markdown (4).md` | Batch 4A — API & Data Contract Architecture |
-  | `docs/architecture/phase-10/Pasted markdown (5).md` | Batch 4B — Event & Failure Contracts |
-  | `docs/architecture/phase-10/Pasted markdown (6).md` | Batch 4C — Final Integration Readiness Matrix |
+  | `docs/architecture/phase-10/history/batch-1-integration-foundation-architecture.md` | Batch 1 — Integration Foundation Architecture |
+  | `docs/architecture/phase-10/history/batch-2-workspace-api-backend-integration.md` | Batch 2 — Workspace → API → Backend Integration Architecture |
+  | `docs/architecture/phase-10/history/batch-3-cross-service-pipeline-communication.md` | Batch 3 — Cross-Service Pipeline & Communication Architecture |
+  | `docs/architecture/phase-10/history/batch-4a-api-data-contract-architecture.md` | Batch 4A — API & Data Contract Architecture |
+  | `docs/architecture/phase-10/history/batch-4b-event-failure-contracts.md` | Batch 4B — Event & Failure Contracts |
+  | `docs/architecture/phase-10/history/batch-4c-integration-readiness-pass.md` | Batch 4C — Final Integration Readiness Matrix |
+
+  (Renamed and moved to `history/` during the documentation-professionalization pass — these were originally saved with generic "Pasted markdown" filenames.)
 - **Frontend:** `frontend/src/workspaces/{dashboard,investigations,recommendations,analytics,administration}/**` (components, context, hooks, api), `frontend/src/app/**` (routing, shell), `frontend/src/shared/**`.
 - **Gateway:** `backend/services/gateway_service/app/**` (api, core, services, schemas, dependencies).
 - **Backend services:** `anomaly_service`, `root_cause_service`, `business_impact_service`, `recommendation_service`, `evaluation_service`, `ingestion_service`, `nlp_service`, `copilot_service` — routes, domain, persistence models, event publishers/consumers.

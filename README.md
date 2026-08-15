@@ -2,7 +2,7 @@
 
 A modular intelligence platform that turns raw customer complaints into explainable operational decisions. It ingests complaints, enriches them with NLP, detects anomalies and correlates them into incidents, determines root cause and business impact, generates recommendations, and lets an operator act on all of it — with attribution, role-based access control, and an evidence-grounded AI assistant layered on top.
 
-It is an engineering-focused prototype, not a deployed production service: the domain logic, persistence, authentication, and CI are real and independently verified (see [Verification & Current Status](#verification--current-status)), but there is no live traffic, no cloud deployment, and no external customers. Where the system is intentionally incomplete or deferred, this document says so explicitly rather than describing aspirational behavior as shipped.
+It is an engineering-focused prototype, not a deployed production service: the domain logic, persistence, authentication, and CI are real and independently verified (see [Testing](#12-testing) and [Known Limitations](#14-known-limitations)), but there is no live traffic, no cloud deployment, and no external customers. Where the system is intentionally incomplete or deferred, this document says so explicitly rather than describing aspirational behavior as shipped.
 
 ---
 
@@ -22,7 +22,9 @@ It is an engineering-focused prototype, not a deployed production service: the d
 12. [Testing](#12-testing)
 13. [Docker: Development vs. Production-Like](#13-docker-development-vs-production-like)
 14. [Known Limitations](#14-known-limitations)
-15. [Documentation Index](#15-documentation-index)
+15. [Future Work](#15-future-work)
+16. [Documentation Index](#16-documentation-index)
+17. [License](#17-license)
 
 ---
 
@@ -88,7 +90,7 @@ flowchart TB
 
     PG[("PostgreSQL<br/>single shared instance<br/>one Alembic chain")]
 
-    subgraph Obs["Observability (Phase 11)"]
+    subgraph Obs["Observability"]
         PROM["Prometheus"]
         LOKI["Loki / Promtail"]
         OTEL["OTel Collector → Tempo"]
@@ -111,23 +113,23 @@ flowchart TB
 
 **Copilot honesty note:** no real LLM provider is configured in this environment (`LLM_PROVIDER=none` by default). Copilot's architecture, orchestration, tool-calling boundary, and conversation persistence are all real and independently tested — but every verification of its behavior in this repository exercises the honest `NullLLMProvider` fallback ("no language model is configured") or a deterministic `ScriptedLLMProvider` in its evaluation harness, never a live model's judgment. This is disclosed here on purpose, not discovered by a reader later.
 
-**`evaluation_service`** is an independent, out-of-band intelligence-assurance observer (Phase 8) — it consumes `BusinessImpactCompleted` events and computes real quality/explainability scores, but it is architecturally never a blocking step in the pipeline above, and (honestly) nothing in the current Gateway or frontend surfaces its output to a user yet.
+**`evaluation_service`** is an independent, out-of-band intelligence-assurance observer — it consumes `BusinessImpactCompleted` events and computes real quality/explainability scores, but it is architecturally never a blocking step in the pipeline above, and (honestly) nothing in the current Gateway or frontend surfaces its output to a user yet.
 
 ---
 
 ## 4. Architecture Principles
 
-- **Gateway-owned identity.** `gateway_service` is the platform's only public API boundary and its only new persistence responsibility as of Phase 13 — `users`/`roles`/`user_roles` live nowhere else.
+- **Gateway-owned identity.** `gateway_service` is the platform's only public API boundary and the sole owner of identity persistence — `users`/`roles`/`user_roles` live nowhere else.
 - **Same-origin HttpOnly JWT session.** No cross-origin cookie complexity: the frontend and Gateway are same-origin (Vite dev proxy in development, an equivalent path in the production-like configuration), so the session cookie can be `HttpOnly` + `SameSite=Lax` without a `SameSite=None`/HTTPS-everywhere requirement.
 - **RBAC at the Gateway, not the UI.** Every Gateway route enforces `viewer`/`operator`/`admin` server-side; frontend visibility is advisory only, never the authorization boundary.
 - **Internal trust is explicit, not implicit.** The two genuine internal mutation boundaries (`business_impact_service → recommendation_service` / `evaluation_service`) require a shared-secret header; read-only aggregation calls rely on network topology alone (no backend service publishes a host port).
 - **Attribution is server-derived, never client-supplied.** `decided_by` on a recommendation decision and `owner_id` on a Copilot conversation are populated exclusively from a Gateway-attested identity header — a client cannot spoof either, and this is enforced by tests, not just convention.
 - **PostgreSQL is the one system of record.** One shared instance, one linear Alembic migration chain, no per-service database, no ORM coupling across service boundaries (a service reads another service's already-persisted data through its own local read model, never by importing that service's ORM class).
 - **Docker dev/prod-like separation.** `docker-compose.yml` (development: bind mounts, hot reload, Vite dev server) and `docker-compose.prod.yml` (production-like: multi-stage frontend build served by nginx, no source bind mounts, network segmentation, PostgreSQL not host-published) are deliberately separate files so neither compromises the other.
-- **Observability is reused, not reinvented.** Phase 11's structured logging, correlation IDs, Prometheus, and tracing stack are the same infrastructure every later phase's auth/RBAC/Copilot events flow through — no parallel telemetry system was introduced.
+- **Observability is a single, shared foundation.** One structured-logging, correlation-ID, Prometheus, and tracing stack — every service's auth/RBAC/Copilot events flow through it; no parallel telemetry system exists.
 - **Backup/restore is safe by construction.** The restore-verification tool refuses, by a hard-coded guard checked before any Docker command runs, to ever target the real development database container.
 
-Full architecture decision records — including the six original Phase 13 decisions (AD-1–AD-6) and the two closure-phase decisions (AD-7, the corrective-migration mechanism; AD-8, the bootstrap mechanism) — are in [`docs/DECISIONS.md`](docs/DECISIONS.md). The frozen Phase 13 architecture itself is [`docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md`](docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md).
+Full architecture decision records — identity, RBAC, internal trust, recommendation attribution, Copilot ownership, the dev/production-like Compose split, the corrective-migration mechanism, and the first-user bootstrap mechanism (AD-1 through AD-8) — are in [`docs/DECISIONS.md`](docs/DECISIONS.md). The full frozen architecture is [`docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md`](docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md).
 
 ---
 
@@ -189,7 +191,7 @@ Review `.env` and, at minimum, set `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PA
 docker compose up --build
 ```
 
-This starts all 17 Compose services: the 9 backend services, the frontend, PostgreSQL, and the Phase 11 observability stack (Prometheus, Loki, Promtail, OTel Collector, Tempo, Grafana).
+This starts all 17 Compose services: the 9 backend services, the frontend, PostgreSQL, and the observability stack (Prometheus, Loki, Promtail, OTel Collector, Tempo, Grafana).
 
 ### 3. Run database migrations
 
@@ -237,7 +239,7 @@ docker compose exec gateway_service python backend/tooling/seed_data/load_sample
 - **Identity:** `users`, `roles` (seeded: `viewer`/`operator`/`admin`), `user_roles`.
 - **Recommendation attribution:** `recommendations.decided_by` (FK → `users.id`, populated only from the Gateway-attested identity) and an append-only `recommendation_decision_history` table, written in the same transaction as the current-state update — the two cannot diverge.
 - **Copilot:** `copilot_conversations` (with `owner_id`), `copilot_messages`.
-- A fresh, genuinely empty database migrates cleanly end-to-end via `alembic upgrade head` — this was a real, previously-broken case (a PostgreSQL enum-creation-order defect in a historical migration) fixed and directly verified against three independent fresh databases as part of Phase 13 closure ([AD-7](docs/DECISIONS.md)).
+- A fresh, genuinely empty database migrates cleanly end-to-end via `alembic upgrade head` — this was a real, previously-broken case (a PostgreSQL enum-creation-order defect in a historical migration) fixed and directly verified against three independent fresh databases ([AD-7](docs/DECISIONS.md)).
 
 ---
 
@@ -314,16 +316,30 @@ These are tracked, scoped closure items, not undisclosed gaps.
 
 ---
 
-## 15. Documentation Index
+## 15. Future Work
+
+Beyond closing the items in [Known Limitations](#14-known-limitations), the long-term direction — not currently scheduled — extends the pipeline past recommendation generation into a full decision lifecycle (recommendation → human action → outcome → organizational knowledge), and revisits per-organization configurability of the business-impact scoring model. Neither changes current scope; both are recorded in [`docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`](docs/ADR_ARCHITECTURE_REVIEW_BOARD.md).
+
+---
+
+## 16. Documentation Index
 
 | Document | Purpose |
 |---|---|
-| [docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md](docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md) | Frozen Phase 13 architecture (identity, auth, RBAC, internal trust, attribution, ownership, backup/restore, CI, Docker hardening) |
+| [docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md](docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md) | The platform's full frozen architecture (identity, auth, RBAC, internal trust, attribution, ownership, backup/restore, CI, Docker hardening) |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Full architecture decision records, AD-1 through AD-8 |
-| [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | Phase-by-phase implementation status |
+| [docs/ADR_ARCHITECTURE_REVIEW_BOARD.md](docs/ADR_ARCHITECTURE_REVIEW_BOARD.md) | Long-term product/architecture vision, ratified by architecture review |
+| [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | Current implementation status and closure tracking |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Dated engineering changelog |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design and service responsibilities |
 | [REPOSITORY_STRUCTURE.md](REPOSITORY_STRUCTURE.md) | Directory conventions and engineering standards |
 | [PRD.md](PRD.md) | Product requirements |
 | [PRODUCT_EXPERIENCE_GUIDE.md](PRODUCT_EXPERIENCE_GUIDE.md) | Product/UX principles |
 | [ROADMAP.md](ROADMAP.md) | Development roadmap |
 | [PROJECT_BRAIN.md](PROJECT_BRAIN.md) | Engineering context and history |
+
+---
+
+## 17. License
+
+No license file is currently present in this repository. All rights reserved by default until one is added.

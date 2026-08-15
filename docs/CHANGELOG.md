@@ -7,6 +7,40 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-16 (Phase 13 closure)
+
+## Phase 13 – Production Hardening
+
+Gateway-owned identity, authentication, RBAC, internal service trust, recommendation decision attribution, Copilot conversation ownership, database backup/restore, investigation aggregator concurrency, Docker dev/production-like hardening, and CI — delivered across eleven implementation batches, followed by a whole-project audit and two closure-blocking corrections. Full detail: `docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md`; full decision record: `docs/DECISIONS.md` (AD-1 through AD-8).
+
+### Added
+
+- **Identity & authentication** — `users`/`roles`/`user_roles` (gateway-owned), bcrypt password hashing, JWT session in an `HttpOnly`/`SameSite=Lax` cookie, `login`/`logout`/`me`.
+- **RBAC** — `viewer`/`operator`/`admin`, enforced on all 12 Gateway routes; 401-before-403 ordering structurally guaranteed.
+- **Internal service trust** — `X-Internal-Secret` on the two genuine internal mutation routes; Gateway-attested principal propagation for recommendation decisions and Copilot conversations.
+- **Recommendation decision attribution** — `decided_by` (never client-supplied) + an append-only `recommendation_decision_history` table, written atomically with the current-state update.
+- **Copilot ownership** — `owner_id` on conversations, owner-only access and deletion.
+- **Database backup/restore** — real `pg_dump`/`pg_restore` round-trip tooling with isolated-container restore verification.
+- **Docker hardening** — `docker-compose.prod.yml`: multi-stage nginx-served frontend, no source bind mounts, network segmentation, non-root containers, PostgreSQL not host-published.
+- **CI** — GitHub Actions: backend tests against a real Postgres service container, frontend lint/typecheck/test/build, Compose config validation.
+- **First-user bootstrap** — a controlled, idempotent, operator-invoked script (`backend/tooling/seed_data/bootstrap_admin_user.py`); no public registration endpoint exists.
+
+### Fixed
+
+- A fresh-database Alembic migration failure (`f05ea2afc3ee`'s Postgres enum type was never created before use) that blocked `alembic upgrade head` on any genuinely empty database, and consequently CI's first run. Fixed in place after a first attempted fix (a corrective migration positioned after the failing one) was proven, with direct runtime evidence, unable to work — Alembic aborts the whole chain at the first failing migration, so a later migration is never reached. See `docs/DECISIONS.md` AD-7 for the full analysis.
+
+### Verified
+
+- Full backend suite green (1,220+ passed, 0 failed) on a database migrated end-to-end from empty; full frontend suite green (337 passed, 48 files).
+- Real login → `/auth/me` → protected-route → logout → protected-route round trip through a running Gateway, using a bootstrap-created user.
+- Backup/restore round-trip verified with Phase 13's identity and attribution tables present.
+
+### Known Limitations Carried Forward
+
+No real LLM provider is configured (Copilot's fallback behavior is real and tested, never live-model reasoning); root-cause confirm/reject/refresh exists at the service layer but is not yet Gateway-exposed; the frontend does not yet hide controls a user's role can't use (the backend RBAC boundary is authoritative regardless); `evaluation_service`'s output is not yet surfaced anywhere; `ingestion_service` has no dedicated test suite; a twelve-stage, saved synthetic-data validation report has not yet been produced.
+
+---
+
 # 2026-08-14 (Phase 12 closure)
 
 ## Phase 12 – AI Copilot (Batches 1–6, Final Closure)

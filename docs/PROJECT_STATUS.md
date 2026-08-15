@@ -23,9 +23,9 @@
 
 **Current Phase:** Phase 13 – Production Hardening
 
-**Current Step:** Closure Implementation 3 (F03/F04 — documentation and onboarding) — in progress
+**Current Step:** Documentation and repository organization closure
 
-**Status:** In progress. All eleven implementation batches (identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, CI, and the final synthetic-data validation) plus two closure-phase architecture decisions (AD-7, AD-8) are either complete or actively being closed out — see Phase 13 Progress below.
+**Status:** In progress. Ten of the eleven original implementation batches (identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, CI) are complete, along with two closure-phase architecture decisions (AD-7, AD-8) and their implementation. Documentation and repository organization are now current. The eleventh batch — the final synthetic-data validation report — has not started. See Phase 13 Progress below.
 
 ---
 
@@ -107,7 +107,7 @@ Phase 12 closes with a real, evidence-grounded, read-only Copilot capability —
 | ✅ CI (GitHub Actions: backend tests, frontend checks, Compose validation) | Complete |
 | ✅ F01/F09 — Corrective Alembic migration (fresh-database compatibility, AD-7) | Complete |
 | ✅ F02 — Controlled first-user bootstrap (AD-8)                  | Complete    |
-| 🟡 F03/F04 — README, onboarding, and project-status documentation closure | In progress (this update) |
+| ✅ F03/F04 — README, onboarding, and project-status documentation closure | Complete |
 | ⬜ F05/F06 — Final twelve-stage synthetic-data validation report | Not started |
 
 ### Phase 13 — Closure Note
