@@ -5,7 +5,9 @@ import httpx
 from backend.services.gateway_service.app.core.config import settings
 from backend.services.gateway_service.app.core.downstream import get_json, patch_json
 from backend.services.gateway_service.app.core.errors import ResourceNotFoundError
+from backend.services.gateway_service.app.core.principal import AuthenticatedUser
 from backend.services.gateway_service.app.schemas.recommendations import RecommendationResponse, SupportingEvidenceDTO
+from backend.shared.security.internal_auth import PRINCIPAL_USER_ID_HEADER, internal_service_headers
 
 
 async def build_recommendation(client: httpx.AsyncClient, recommendation_id: str) -> RecommendationResponse:
@@ -33,7 +35,7 @@ async def build_recommendation(client: httpx.AsyncClient, recommendation_id: str
 
 
 async def update_recommendation_decision(
-    client: httpx.AsyncClient, recommendation_id: str, *, decision: str, note: Optional[str]
+    client: httpx.AsyncClient, recommendation_id: str, *, decision: str, note: Optional[str], principal: AuthenticatedUser
 ) -> RecommendationResponse:
     """
     Records a decision against one Recommendation (Step 7.X G-01) by
@@ -44,11 +46,20 @@ async def update_recommendation_decision(
     fabricated success data. The Gateway performs no business logic here;
     it validates request shape (via `RecommendationDecisionPatchRequest`)
     and forwards the real request, exactly as G-01's design requires.
+
+    Phase 13 Batch 4 (AD-5, §14): this route is a genuine internal
+    mutation boundary, so it carries the shared internal-service
+    credential, plus the Gateway-attested `principal.user_id` (never
+    `principal.email`/`roles` -- only the field §14 approves) so a
+    future attribution batch can trust it. recommendation_service does
+    not yet persist this value (that is explicitly a later batch's
+    scope); this batch only makes the header trustworthy and available.
     """
     updated = await patch_json(
         client,
         f"{settings.RECOMMENDATION_SERVICE_URL}/api/v1/recommendations/{recommendation_id}/decision",
         json={"decision": decision, "note": note},
+        extra_headers={**internal_service_headers(), PRINCIPAL_USER_ID_HEADER: str(principal.user_id)},
     )
     if updated is None:
         raise ResourceNotFoundError(

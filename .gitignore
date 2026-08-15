@@ -42,3 +42,4 @@ datasets/*.csv
 datasets/*.json
 !datasets/.gitkeep
 notebooks/.ipynb_checkpoints/
+.claude/settings.json

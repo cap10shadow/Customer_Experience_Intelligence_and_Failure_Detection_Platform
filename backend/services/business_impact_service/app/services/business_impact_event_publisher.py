@@ -12,6 +12,7 @@ from backend.services.business_impact_service.app.repositories.root_cause_read_r
 from backend.shared.constants.enums.anomaly import AnomalySeverity
 from backend.shared.logging.logger import get_logger
 from backend.shared.observability.correlation import correlation_headers
+from backend.shared.security.internal_auth import internal_service_headers
 
 logger = get_logger(__name__)
 
@@ -154,8 +155,15 @@ class BusinessImpactEventPublisher:
     async def _deliver(self, destination: str, url: str, body: Dict[str, Any]) -> DeliveryResult:
         safe_extra = {"destination": destination, "event_path": _EVENT_PATH}
         try:
+            # Phase 13 Batch 4 (AD-5, §14): this is a genuine internal
+            # mutation boundary (triggers recommendation/evaluation
+            # generation), so it carries the shared internal-service
+            # credential -- never logged, never in `safe_extra` above.
             response = await self._client.post(
-                url, json=body, timeout=self._timeout_seconds, headers=correlation_headers()
+                url,
+                json=body,
+                timeout=self._timeout_seconds,
+                headers={**correlation_headers(), **internal_service_headers()},
             )
         except httpx.TimeoutException:
             logger.warning(

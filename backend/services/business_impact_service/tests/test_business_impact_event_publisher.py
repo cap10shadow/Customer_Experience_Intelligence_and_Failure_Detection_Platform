@@ -19,10 +19,12 @@ from backend.services.business_impact_service.app.services.business_impact_event
     build_evaluation_payload,
     build_recommendation_payload,
 )
+from backend.shared.config.settings import settings
 from backend.shared.constants.enums.anomaly import AnomalySeverity
 from backend.shared.constants.enums.business_impact_assessment import BusinessImpactAssessmentStatus
 from backend.shared.constants.enums.root_cause import RootCause
 from backend.shared.logging.logger import get_logger
+from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
 
 
 @pytest.fixture
@@ -163,6 +165,22 @@ async def test_publish_delivers_to_both_destinations():
     assert any("recommendation_service" in url for url in calls)
     assert any("evaluation_service" in url for url in calls)
     assert all(result.delivered for result in results)
+
+
+@pytest.mark.anyio
+async def test_publish_attaches_the_internal_service_secret_to_both_destinations():
+    """Phase 13 Batch 4 (AD-5): both recipients are genuine internal mutation boundaries and must receive the shared credential."""
+    received_headers = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        received_headers.append(request.headers.get(INTERNAL_SECRET_HEADER))
+        return httpx.Response(202, json={"outcome": "completed"})
+
+    publisher = _publisher(handler)
+    await publisher.publish(_event())
+
+    assert len(received_headers) == 2
+    assert all(value == settings.INTERNAL_SERVICE_SECRET for value in received_headers)
 
 
 @pytest.mark.anyio

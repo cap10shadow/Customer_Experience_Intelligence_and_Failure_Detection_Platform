@@ -36,7 +36,9 @@ async def get_json(client: httpx.AsyncClient, url: str, *, params: Optional[dict
     return response.json()
 
 
-async def post_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None) -> Any:
+async def post_json(
+    client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None, extra_headers: Optional[dict] = None
+) -> Any:
     """
     Issues one bounded POST to a downstream service and returns its
     parsed JSON body, or None for a 404 -- the same contract as
@@ -44,9 +46,17 @@ async def post_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict]
     every downstream call, regardless of HTTP method, gets identical
     timeout/connection-failure/non-2xx handling and the same standardized
     error envelope.
+
+    `extra_headers` (Phase 13 Batch 4, AD-5): optional, additive headers
+    merged in on top of the correlation header -- used only by the two
+    calls that need the internal-service credential and/or the
+    Gateway-attested principal header (`recommendation_aggregator.
+    update_recommendation_decision`, `copilot_aggregator.
+    send_copilot_message`). Every other caller passes nothing here and
+    is completely unaffected.
     """
     try:
-        response = await client.post(url, json=json, headers=correlation_headers())
+        response = await client.post(url, json=json, headers={**correlation_headers(), **(extra_headers or {})})
     except httpx.TimeoutException as exc:
         raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
     except httpx.RequestError as exc:
@@ -59,7 +69,9 @@ async def post_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict]
     return response.json()
 
 
-async def patch_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None) -> Any:
+async def patch_json(
+    client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None, extra_headers: Optional[dict] = None
+) -> Any:
     """
     Issues one bounded PATCH to a downstream service and returns its
     parsed JSON body, or None for a 404 -- the same contract as
@@ -72,9 +84,11 @@ async def patch_json(client: httpx.AsyncClient, url: str, *, json: Optional[dict
     already validates shape before this call is ever made, so a
     downstream 422 here indicates a genuine contract mismatch, not a
     client input error the Gateway should re-validate.
+
+    `extra_headers` -- see `post_json`'s docstring (Phase 13 Batch 4).
     """
     try:
-        response = await client.patch(url, json=json, headers=correlation_headers())
+        response = await client.patch(url, json=json, headers={**correlation_headers(), **(extra_headers or {})})
     except httpx.TimeoutException as exc:
         raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
     except httpx.RequestError as exc:

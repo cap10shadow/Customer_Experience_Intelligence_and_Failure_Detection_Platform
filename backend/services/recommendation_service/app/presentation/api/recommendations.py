@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from backend.services.recommendation_service.app.application.recommendation_statistics_service import (
     RecommendationStatisticsService,
@@ -20,8 +20,11 @@ from backend.services.recommendation_service.app.presentation.dependencies impor
     get_recommendation_repository,
     get_recommendation_statistics_service,
 )
+from backend.shared.logging.logger import get_logger
+from backend.shared.security.internal_auth import PRINCIPAL_USER_ID_HEADER, require_internal_secret
 
 router = APIRouter(tags=["recommendations"])
+logger = get_logger(__name__)
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
@@ -121,11 +124,16 @@ async def list_latest_recommendations_for_incident(
     return [RecommendationSummaryResponse.from_record(record) for record in records]
 
 
-@router.patch("/recommendations/{recommendation_id}/decision", response_model=RecommendationDetailResponse)
+@router.patch(
+    "/recommendations/{recommendation_id}/decision",
+    response_model=RecommendationDetailResponse,
+    dependencies=[Depends(require_internal_secret)],
+)
 async def update_recommendation_decision(
     recommendation_id: uuid.UUID,
     request: RecommendationDecisionPatchRequest,
     repository: RecommendationRepository = Depends(get_recommendation_repository),
+    x_authenticated_user_id: Optional[str] = Header(default=None, alias=PRINCIPAL_USER_ID_HEADER),
 ):
     """
     Records a human decision against one persisted Recommendation (Step
@@ -135,7 +143,22 @@ async def update_recommendation_decision(
     overwrite the prior decision (see `RecommendationRepository
     .update_decision()`'s own docstring for why that is the correct,
     honest behavior given no decision-owner/actor field exists).
+
+    Phase 13 Batch 4 (AD-5, §14): this route is now a genuine internal
+    mutation boundary, requiring `X-Internal-Secret` -- only
+    gateway_service is a legitimate caller. `x_authenticated_user_id` is
+    the Gateway-attested principal, trustworthy only because it arrives
+    alongside a valid internal secret; it is logged only (a safe,
+    allowed structured-log field per Phase 11 §23) and never persisted
+    -- no `decided_by` column exists yet (explicitly a later batch's
+    scope, REC-003/AD-3). The response contract is unchanged.
     """
+    if x_authenticated_user_id:
+        logger.info(
+            "Recommendation decision recorded with a Gateway-attested principal.",
+            extra={"safe_extra": {"user_id": x_authenticated_user_id, "recommendation_id": str(recommendation_id)}},
+        )
+
     updated = await repository.update_decision(
         recommendation_id,
         decision=request.decision,

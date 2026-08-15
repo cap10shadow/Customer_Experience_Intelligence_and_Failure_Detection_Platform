@@ -72,6 +72,12 @@ from backend.services.recommendation_service.app.presentation.dependencies impor
     get_recommendation_repository,
 )
 from backend.services.recommendation_service.tests.fakes import FakeRecommendationRepository
+from backend.shared.config.settings import settings
+from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
+
+# Phase 13 Batch 4 (AD-5): both internal event routes now require the
+# internal-service credential.
+_INTERNAL_AUTH_HEADERS = {INTERNAL_SECRET_HEADER: settings.INTERNAL_SERVICE_SECRET}
 
 
 @pytest.fixture
@@ -184,7 +190,7 @@ async def test_recommendation_consumer_accepts_the_publishers_real_payload_and_r
     payload = build_recommendation_payload(event)
 
     transport = ASGITransport(app=recommendation_app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         first = await client.post("/internal/events/business-impact-completed", json=payload)
         second = await client.post("/internal/events/business-impact-completed", json=payload)
 
@@ -205,7 +211,7 @@ async def test_evaluation_consumer_accepts_the_publishers_real_payload_and_rejec
     payload = build_evaluation_payload(event)
 
     transport = ASGITransport(app=evaluation_app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         first = await client.post("/internal/events/business-impact-completed", json=payload)
         second = await client.post("/internal/events/business-impact-completed", json=payload)
 
@@ -230,9 +236,9 @@ async def test_the_same_event_id_is_accepted_independently_by_both_real_consumer
     assert recommendation_payload["event_id"] == evaluation_payload["event_id"]
 
     async with AsyncClient(
-        transport=ASGITransport(app=recommendation_app), base_url="http://testserver"
+        transport=ASGITransport(app=recommendation_app), base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS
     ) as recommendation_client, AsyncClient(
-        transport=ASGITransport(app=evaluation_app), base_url="http://testserver"
+        transport=ASGITransport(app=evaluation_app), base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS
     ) as evaluation_client:
         recommendation_response = await recommendation_client.post(
             "/internal/events/business-impact-completed", json=recommendation_payload

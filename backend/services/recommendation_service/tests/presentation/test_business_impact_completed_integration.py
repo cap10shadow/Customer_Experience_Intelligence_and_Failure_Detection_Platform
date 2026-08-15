@@ -38,6 +38,13 @@ from backend.services.recommendation_service.app.presentation.dependencies impor
     get_recommendation_repository,
 )
 from backend.services.recommendation_service.tests.fakes import FakeRecommendationRepository
+from backend.shared.config.settings import settings
+from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
+
+# Phase 13 Batch 4 (AD-5): this route now requires the internal-service
+# credential -- every test client in this file needs it to reach the
+# same "real event delivery" behavior these tests predate and verify.
+_INTERNAL_AUTH_HEADERS = {INTERNAL_SECRET_HEADER: settings.INTERNAL_SERVICE_SECRET}
 
 
 @pytest.fixture
@@ -138,7 +145,7 @@ async def test_happy_path_completes_persists_and_publishes(wired_consumer):
     payload = _valid_payload()
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.post("/internal/events/business-impact-completed", json=payload)
         assert response.status_code == 202
         body = response.json()
@@ -167,7 +174,7 @@ async def test_event_contract_excludes_heavy_payload(wired_consumer):
     payload = _valid_payload()
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         await client.post("/internal/events/business-impact-completed", json=payload)
 
     summary = publisher.published[0].recommendations[0]
@@ -187,7 +194,7 @@ async def test_duplicate_event_is_rejected_and_nothing_new_is_persisted(wired_co
     payload = _valid_payload()
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         first = await client.post("/internal/events/business-impact-completed", json=payload)
         second = await client.post("/internal/events/business-impact-completed", json=payload)
 
@@ -203,7 +210,7 @@ async def test_malformed_payload_is_rejected(wired_consumer):
     del payload["incident"]
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.post("/internal/events/business-impact-completed", json=payload)
 
     assert response.status_code == 202
@@ -230,7 +237,7 @@ async def test_zero_recommendation_execution_still_completes_and_publishes(wired
     )
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.post("/internal/events/business-impact-completed", json=payload)
 
     assert response.status_code == 202
@@ -256,7 +263,7 @@ async def test_persistence_failure_is_reported_as_failed_and_nothing_is_publishe
     app.dependency_overrides[get_business_impact_completed_consumer] = lambda: consumer
     try:
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
             response = await client.post("/internal/events/business-impact-completed", json=_valid_payload())
     finally:
         app.dependency_overrides.clear()
@@ -281,7 +288,7 @@ async def test_publisher_failure_still_completes_and_the_generation_is_retrievab
     app.dependency_overrides[get_recommendation_repository] = lambda: repository
     try:
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
             response = await client.post("/internal/events/business-impact-completed", json=_valid_payload())
             assert response.json()["outcome"] == "completed"
             generation_id = response.json()["generation_id"]

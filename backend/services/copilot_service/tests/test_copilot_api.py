@@ -39,6 +39,7 @@ from backend.services.copilot_service.app.models.conversation import CopilotConv
 from backend.services.copilot_service.app.models.message import CopilotMessage
 from backend.shared.config.settings import Settings
 from backend.shared.database.session import get_db_session
+from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
 
 # Bare (non-`with`) TestClient never runs the app's lifespan, so
 # `app.state.http_client` (constructed there) does not exist -- exactly
@@ -99,7 +100,10 @@ pytestmark = pytest.mark.skipif(
     reason="PostgreSQL is not reachable on localhost:5432 -- run `docker compose up postgres` to enable these tests",
 )
 
-client = TestClient(app)
+# Phase 13 Batch 4 (AD-5): POST /copilot/messages now requires the
+# internal-service credential -- applied here once, for every request
+# this module's shared `client` makes.
+client = TestClient(app, headers={INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET})
 
 
 async def _fetch_conversation(conversation_id: str) -> CopilotConversation:
@@ -349,7 +353,9 @@ def test_orchestration_failure_persists_nothing_and_preserves_the_error_contract
     # `gateway_service/tests/test_errors.py`) so the TestClient returns
     # the real 500 response the registered `Exception` handler produces,
     # instead of re-raising the exception into the test itself.
-    non_raising_client = TestClient(app, raise_server_exceptions=False)
+    non_raising_client = TestClient(
+        app, raise_server_exceptions=False, headers={INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET}
+    )
     supplied = str(uuid.uuid4())
     response = non_raising_client.post(
         "/api/v1/copilot/messages", json={"message": "hello", "conversation_id": supplied}

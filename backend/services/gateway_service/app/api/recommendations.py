@@ -1,7 +1,9 @@
 import httpx
 from fastapi import APIRouter, Depends
 
+from backend.services.gateway_service.app.core.auth_dependency import get_current_user
 from backend.services.gateway_service.app.core.authorization import require_role
+from backend.services.gateway_service.app.core.principal import AuthenticatedUser
 from backend.services.gateway_service.app.dependencies.http_client import get_http_client
 from backend.services.gateway_service.app.schemas.recommendations import (
     RecommendationDecisionPatchRequest,
@@ -43,6 +45,7 @@ async def patch_recommendation_decision(
     recommendation_id: str,
     request: RecommendationDecisionPatchRequest,
     client: httpx.AsyncClient = Depends(get_http_client),
+    principal: AuthenticatedUser = Depends(get_current_user),
 ) -> RecommendationResponse:
     """
     Recommendation decision persistence (Step 7.X G-01): forwards the
@@ -56,7 +59,14 @@ async def patch_recommendation_decision(
     Phase 13 Batch 3 (§12): requires `operator` (not just `viewer`,
     which the router-level dependency already grants access under) --
     the one mutating route this router exposes.
+
+    Phase 13 Batch 4 (AD-5): `principal` here is the exact same resolved
+    `AuthenticatedUser` `require_role("operator")` above already
+    validated -- `Depends(get_current_user)` is cached per-request by
+    FastAPI, so this does not re-decode the JWT; it only exposes the
+    already-computed value to this function so it can be forwarded
+    downstream (see `update_recommendation_decision`'s docstring).
     """
     return await update_recommendation_decision(
-        client, recommendation_id, decision=request.decision, note=request.note
+        client, recommendation_id, decision=request.decision, note=request.note, principal=principal
     )

@@ -4,11 +4,12 @@ from backend.services.evaluation_service.app.infrastructure.messaging.consumers.
     BusinessImpactCompletedConsumer,
 )
 from backend.services.evaluation_service.app.presentation.dependencies import get_business_impact_completed_consumer
+from backend.shared.security.internal_auth import require_internal_secret
 
 router = APIRouter(prefix="/internal/events", tags=["internal-events"])
 
 
-@router.post("/business-impact-completed", status_code=202)
+@router.post("/business-impact-completed", status_code=202, dependencies=[Depends(require_internal_secret)])
 async def handle_business_impact_completed(
     request: Request,
     consumer: BusinessImpactCompletedConsumer = Depends(get_business_impact_completed_consumer),
@@ -25,6 +26,10 @@ async def handle_business_impact_completed(
 
     Not mounted under `/api/v1`: this is an internal execution-lifecycle
     trigger, not part of the public, read-only Evaluation API.
+
+    Phase 13 Batch 4 (AD-5, §14): requires `X-Internal-Secret` --
+    protection is no longer network-topology-only. Missing/invalid
+    credential -> 401, before the Consumer ever runs.
 
     The HTTP status code doubles as the retry signal a future broker
     integration would act on: a 2xx response means a terminal outcome was

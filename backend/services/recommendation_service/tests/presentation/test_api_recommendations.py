@@ -14,6 +14,14 @@ from backend.services.recommendation_service.app.domain.recommendation_priority 
 from backend.services.recommendation_service.app.main import app
 from backend.services.recommendation_service.app.presentation.dependencies import get_recommendation_repository
 from backend.services.recommendation_service.tests.fakes import FakeRecommendationRepository
+from backend.shared.config.settings import settings
+from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
+
+# Phase 13 Batch 4 (AD-5): the PATCH .../decision route in this file now
+# requires the internal-service credential; applied to every client
+# here (GET routes ignore it -- harmless, and keeps this file's own
+# client-construction pattern uniform).
+_INTERNAL_AUTH_HEADERS = {INTERNAL_SECRET_HEADER: settings.INTERNAL_SERVICE_SECRET}
 
 
 @pytest.fixture
@@ -43,7 +51,7 @@ async def test_get_recommendation_by_id_returns_full_detail(wired_repository, ma
     record = saved[0]
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get(f"/api/v1/recommendations/{record.recommendation_id}")
 
     assert response.status_code == 200
@@ -62,7 +70,7 @@ async def test_get_recommendation_by_id_returns_full_detail(wired_repository, ma
 @pytest.mark.anyio
 async def test_get_recommendation_by_id_404_when_missing(wired_repository):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get(f"/api/v1/recommendations/{uuid.uuid4()}")
 
     assert response.status_code == 404
@@ -71,7 +79,7 @@ async def test_get_recommendation_by_id_404_when_missing(wired_repository):
 @pytest.mark.anyio
 async def test_get_recommendation_by_id_422_for_malformed_uuid(wired_repository):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/recommendations/not-a-uuid")
 
     assert response.status_code == 422
@@ -83,7 +91,7 @@ async def test_list_recommendations_returns_everything_by_default(wired_reposito
     await wired_repository.save_many([make_recommendation(incident_id="INC-B")], incident_id="INC-B", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/recommendations")
 
     assert response.status_code == 200
@@ -100,7 +108,7 @@ async def test_list_recommendations_filters_by_category(wired_repository, make_r
     )
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/recommendations", params={"category": "escalate"})
 
     results = response.json()
@@ -118,7 +126,7 @@ async def test_list_recommendations_filters_by_priority(wired_repository, make_r
     )
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/recommendations", params={"priority": "critical"})
 
     results = response.json()
@@ -135,7 +143,7 @@ async def test_list_recommendations_summary_excludes_heavy_payload(wired_reposit
     )
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/recommendations")
 
     body = response.json()[0]
@@ -160,7 +168,7 @@ async def test_get_recommendations_for_incident(wired_repository, make_recommend
     await wired_repository.save_many([make_recommendation(incident_id="INC-B")], incident_id="INC-B", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/incidents/INC-A/recommendations")
 
     results = response.json()
@@ -183,7 +191,7 @@ async def test_get_latest_recommendations_for_incident(wired_repository, make_re
     )
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/incidents/INC-A/recommendations/latest")
 
     results = response.json()
@@ -195,7 +203,7 @@ async def test_get_latest_recommendations_for_incident(wired_repository, make_re
 @pytest.mark.anyio
 async def test_get_latest_recommendations_returns_empty_list_when_none_exist(wired_repository):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/incidents/INC-UNKNOWN/recommendations/latest")
 
     assert response.status_code == 200
@@ -211,7 +219,7 @@ async def test_get_recommendations_by_generation(wired_repository, make_recommen
     await wired_repository.save_many([make_recommendation()], incident_id="INC-OTHER", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get(f"/api/v1/recommendations/generations/{generation_id}")
 
     results = response.json()
@@ -224,7 +232,7 @@ async def test_get_statistics_aggregates_across_recommendations(wired_repository
     await wired_repository.save_many([make_recommendation(), make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/recommendations/statistics")
 
     assert response.status_code == 200
@@ -234,7 +242,7 @@ async def test_get_statistics_aggregates_across_recommendations(wired_repository
 @pytest.mark.anyio
 async def test_get_statistics_with_no_recommendations(wired_repository):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get("/api/v1/recommendations/statistics")
 
     body = response.json()
@@ -253,7 +261,7 @@ async def test_no_write_endpoints_exist(wired_repository):
     resource itself remains unsupported.
     """
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         post_response = await client.post("/api/v1/recommendations", json={})
         put_response = await client.put(f"/api/v1/recommendations/{uuid.uuid4()}", json={})
         patch_response = await client.patch(f"/api/v1/recommendations/{uuid.uuid4()}", json={})
@@ -270,7 +278,7 @@ async def test_get_recommendation_by_id_exposes_null_decision_fields_when_never_
     saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.get(f"/api/v1/recommendations/{saved[0].recommendation_id}")
 
     body = response.json()
@@ -285,7 +293,7 @@ async def test_patch_decision_persists_and_get_reflects_it(wired_repository, mak
     recommendation_id = saved[0].recommendation_id
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         patch_response = await client.patch(
             f"/api/v1/recommendations/{recommendation_id}/decision",
             json={"decision": "approved", "note": "Looks correct."},
@@ -309,7 +317,7 @@ async def test_patch_decision_without_note_is_valid(wired_repository, make_recom
     saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.patch(
             f"/api/v1/recommendations/{saved[0].recommendation_id}/decision", json={"decision": "deferred"}
         )
@@ -323,7 +331,7 @@ async def test_patch_decision_rejects_invalid_decision_value(wired_repository, m
     saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.patch(
             f"/api/v1/recommendations/{saved[0].recommendation_id}/decision", json={"decision": "maybe"}
         )
@@ -334,7 +342,7 @@ async def test_patch_decision_rejects_invalid_decision_value(wired_repository, m
 @pytest.mark.anyio
 async def test_patch_decision_404_when_recommendation_missing(wired_repository):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.patch(
             f"/api/v1/recommendations/{uuid.uuid4()}/decision", json={"decision": "approved"}
         )
@@ -348,7 +356,7 @@ async def test_patch_decision_repeated_calls_overwrite_deterministically(wired_r
     recommendation_id = saved[0].recommendation_id
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         first = await client.patch(
             f"/api/v1/recommendations/{recommendation_id}/decision",
             json={"decision": "approved", "note": "First pass."},
@@ -371,7 +379,7 @@ async def test_patch_decision_never_alters_recommendation_id_or_incident_id(wire
     recommendation_id = saved[0].recommendation_id
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.patch(
             f"/api/v1/recommendations/{recommendation_id}/decision", json={"decision": "approved"}
         )
@@ -386,7 +394,7 @@ async def test_patch_decision_response_never_exposes_actor_or_owner_fields(wired
     saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
         response = await client.patch(
             f"/api/v1/recommendations/{saved[0].recommendation_id}/decision", json={"decision": "approved"}
         )
