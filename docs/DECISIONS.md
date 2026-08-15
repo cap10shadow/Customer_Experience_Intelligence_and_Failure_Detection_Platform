@@ -1332,3 +1332,145 @@ Logout invalidates the cookie (clears it via `Set-Cookie` with immediate expiry)
 
 **Cons**
 - Requires changing `docker-compose.yml`'s `VITE_API_BASE_URL` value for local development, and standing up an equivalent same-origin path (e.g., the Gateway serving the built frontend, or a shared reverse proxy) inside AD-2's `docker-compose.prod.yml` production configuration — a real, if small, piece of implementation work, now unblocked since AD-2 is resolved.
+
+---
+
+## AD-7 — Corrective Alembic Migration for Fresh-Database Compatibility (Revised After Implementation Evidence)
+
+**Status:** Accepted, revised — the originally approved mechanism was implemented, proven non-viable by direct runtime evidence, and replaced
+
+**Date:** 2026-08-15 (original); revised 2026-08-15/16 after a first implementation attempt
+
+### Context
+
+Historical migration `f05ea2afc3ee_add_decision_to_recommendations.py` adds `recommendations.decision` as a native PostgreSQL enum column (`sa.Enum(..., name="recommendationdecision")`) via `op.add_column`. Unlike `op.create_table`, `op.add_column` does not implicitly emit `CREATE TYPE` for the enum before referencing it. Verified live, running `alembic upgrade head` against a genuinely empty database fails at this migration:
+
+```
+sqlalchemy.exc.ProgrammingError: UndefinedObjectError: type "recommendationdecision" does not exist
+[SQL: ALTER TABLE recommendations ADD COLUMN decision recommendationdecision]
+```
+
+This defect's *existence* was already documented as of Phase 12 closure (`docs/PROJECT_STATUS.md:81`, `docs/CHANGELOG.md:37`). What Phase 13's CI batch and the whole-project audit newly established is the full blast radius: it blocks `alembic upgrade head` from completing against a fresh database at all.
+
+The Alembic chain is a single linear chain, verified by walking every `revision`/`down_revision` pair (no branches, no gaps).
+
+### Original Decision (superseded)
+
+The originally approved mechanism (Option B below) was **a new migration positioned after the current head**, guaranteeing the enum/column exist via `checkfirst`, without editing `f05ea2afc3ee`. This was implemented exactly as specified (`9dc895ba2487_ensure_recommendationdecision_enum_and_.py`, `down_revision = "e35a123597e1"`) and verified correct in isolation — then proven, with direct runtime evidence against two independent genuinely-empty databases, **incapable of fixing the fresh-database case**: Alembic executes the chain strictly in `down_revision` order and aborts the entire run the instant `f05ea2afc3ee.upgrade()` raises, so a migration positioned after it is never reached in that same run. The whole transaction rolled back to zero tables both times. This is a category error in mechanism placement, not an implementation bug — no tail-positioned migration, however correctly written, can ever fix a failure in an earlier migration.
+
+### Options Considered (revised analysis)
+
+**Option A — Edit `f05ea2afc3ee` in place.** *Originally rejected, now selected on revised analysis.* The original rejection applied the general "never rewrite a historical migration" caution without examining Alembic's actual revision-tracking semantics for this specific case. On closer analysis: Alembic tracks applied state purely by revision-ID string in `alembic_version` and never re-executes or re-diffs the content of an already-applied migration. Editing `f05ea2afc3ee`'s `upgrade()` body therefore has **zero effect** on any database that has already recorded this revision as applied — for such a database, the edited function simply becomes unreachable code going forward. And because the corrected code produces the *identical* end-state (same enum name, same four values, same column shape) as the original code's intent, any database that ever did get past this revision already has exactly the schema the fix also produces. The general caution does not, in fact, apply to this specific edit.
+
+**Option B — New corrective migration after the current head.** *Originally selected, now rejected — proven non-viable.* See "Original Decision (superseded)" above. Retained here only for record-keeping; the direct runtime evidence is decisive.
+
+**Option C — Insert a migration before `f05ea2afc3ee` by rewriting its `down_revision` pointer.** Rejected. Requires editing `f05ea2afc3ee`'s file content anyway (its `down_revision` line), inheriting every consideration of Option A while adding real branch-creation risk and a less standard resulting chain shape, with no offsetting benefit over Option A.
+
+**Option D — `env.py` preflight** (ensure the enum exists via the live connection already available in `do_run_migrations()`, before `context.run_migrations()`). Technically viable (verified: `env.py`'s `do_run_migrations(connection)` does have a connection in scope before `context.begin_transaction()`) but rejected in favor of Option A: it mixes a single migration's specific defect into generic Alembic environment bootstrap code (architecturally the wrong layer — a future reader of `env.py` has no reason to expect enum-specific domain logic there), runs unconditionally on every future Alembic invocation rather than only where relevant, and is fundamentally awkward in offline (`--sql`) mode, which never obtains a live connection to check against. Option A has none of these costs.
+
+**Option E — Manual/runtime SQL workaround outside Alembic, or a CI/Docker-only preflight.** Rejected, unchanged from the original analysis — optimizes for "CI passes" rather than "the migration is actually correct," and would not apply outside the specific mechanism's own trigger conditions (e.g., a Docker `initdb.d` script never runs against a non-Docker-provisioned Postgres instance).
+
+### Decision
+
+**Option A.** `f05ea2afc3ee_add_decision_to_recommendations.py` is edited, additively: immediately before its existing `op.add_column` call, it now explicitly ensures the `recommendationdecision` Postgres enum type exists (`postgresql.ENUM(..., name="recommendationdecision").create(op.get_bind(), checkfirst=True)`), then proceeds with the column addition exactly as before (`create_type=False` on the column's own enum reference, avoiding a redundant second creation attempt). `revision`, `down_revision`, the enum values/casing, the column definition, and `downgrade()` are all unchanged. The superseded tail migration, `9dc895ba2487`, is removed — restoring `e35a123597e1` as head — since its entire purpose is now handled correctly, four revisions earlier, by the migration that actually needed the fix.
+
+### Implementation Contract
+
+1. **File changed:** `backend/migrations/versions/f05ea2afc3ee_add_decision_to_recommendations.py` only (additive: one `postgresql.ENUM(...).create(bind, checkfirst=True)` call inserted before the existing `add_column`).
+2. **File removed:** `backend/migrations/versions/9dc895ba2487_ensure_recommendationdecision_enum_and_.py` (superseded).
+3. **Unchanged:** `revision`, `down_revision`, `branch_labels`, `depends_on`, the enum values (`PENDING`/`APPROVED`/`REJECTED`/`DEFERRED`), the column name/type/nullability, and `downgrade()`.
+4. **Fresh database:** the enum now exists before the column references it — the migration succeeds in one pass, and the entire remaining chain completes to head.
+5. **Existing database already at/past this revision:** the file's content is never re-executed for a database that already has this revision recorded — no effect, no risk.
+6. **Restored database:** identical to point 5.
+7. **Checkfirst** is used for the enum type; the column addition is unconditional exactly as it always was (safe now that the type is guaranteed to exist first).
+8. **Downgrade:** unchanged from the original — still drops the three columns and the enum type. No new downgrade concern is introduced.
+9. **CI:** no change to `.github/workflows/ci.yml` — its existing "Run database migrations" step now succeeds against a fresh Postgres service container without modification.
+10. **Offline mode (`alembic upgrade --sql`):** verified functional — `checkfirst` against no live connection sensibly falls back to always emitting `CREATE TYPE`, which is the correct behavior for a generated script. This project does not use offline mode in any real workflow today, but the fix does not depend on online-only behavior the way an `env.py`-preflight approach would have.
+11. **Backup/restore compatibility:** unaffected — `restore_verify.py`'s checks are schema-state-based, not migration-mechanism-based.
+
+### Security Implications
+
+None. Schema-shape correction only.
+
+### Compatibility Implications
+
+- **recommendation_service, Gateway, RBAC, recommendation attribution/history, Phase 12 Copilot tools, Phase 11 observability, backup/restore, CI:** all unaffected — verified via full-suite backend test run (1218 passed, 0 failed) against a database migrated end-to-end through the corrected chain.
+
+### Explicit Non-Goals
+
+- Does not rewrite or renumber any other existing migration.
+- Does not change `RecommendationDecision`'s domain/application-layer semantics.
+- Does not introduce a migration-testing framework or a general "test every migration against a fresh DB" CI gate.
+
+---
+
+## AD-8 — Controlled First-User Bootstrap
+
+**Status:** Accepted
+
+**Date:** 2026-08-15
+
+### Context
+
+`gateway_service` owns a complete identity model (`users`, `roles`, `user_roles`) and a complete authentication/RBAC implementation. Migration `12fef1ff2286_seed_gateway_roles.py` already seeds the three canonical roles as data-only, additive rows — but its own docstring is explicit that this is bounded: *"no user account, no password, no role assignment (`user_roles` stays empty; assigning a role to a specific user remains an explicit, separate, out-of-migration action)."* No such separate action exists anywhere in the repository today. `gateway_service/app/api/auth.py` exposes only `login`/`logout`/`me` — no registration route of any kind. `backend/tooling/seed_data/` contains only `load_sample_complaints.py` (domain data, unrelated to identity). Result: on a correctly migrated database, `users` and `user_roles` are both empty, with no documented or scripted way to create the first row in either — the platform is authenticated-but-unenterable.
+
+### Options Considered
+
+**Option A — Public `/auth/register` endpoint.** Rejected — not justified by any product/repository evidence (consistent with §4 Non-Goals of the frozen Phase 13 architecture), and a materially larger, ongoing security surface than a prototype needing only "a way for the platform's own team to log in" justifies.
+
+**Option B — Controlled, project-owned seed/bootstrap script.** Selected.
+
+**Option C — Admin-only creation endpoint.** Not selected for *this* decision, but not rejected as a future capability — it is circular for the very first user on a fresh database (requires an already-authenticated admin to create the first admin), but is a natural, compatible next step once at least one admin exists (§11 of the frozen Phase 13 architecture already reserves `admin` for "future administrative mutation capability").
+
+**Option D — Migration-created default user.** Rejected. Would require either a hardcoded password hash permanently checked into version control (the exact "weak default credential reaching a real deployment" risk §19 of the Phase 13 architecture warns against), or reading a real secret inside a migration file, which conflates schema evolution with deployment-time configuration and contradicts `12fef1ff2286`'s own precedent of keeping fixed/enumerable data (roles) in migrations while keeping deployment-specific/secret data (users, passwords) out of them.
+
+**Option E — Environment-driven bootstrap mechanism.** Folded into Option B — this is Option B's configuration source, not a distinct option.
+
+**Option F — Seed tooling now + future admin-creation endpoint.** This is the decision actually made: Option B now, with Option C explicitly noted as compatible future work.
+
+### Decision
+
+**Option B**, with Option C left open as compatible future work. A controlled, idempotent, project-owned bootstrap script creates (or verifies) exactly one initial user, assigns the `admin` role, and does nothing else. It is not a public endpoint and is never part of the normal authentication flow.
+
+### Implementation Contract
+
+1. **Ownership / location** — `backend/tooling/seed_data/`, alongside the existing `load_sample_complaints.py`; no new top-level convention is introduced.
+2. **Invocation method** — a standalone Python module, run manually by an operator/developer after `alembic upgrade head` succeeds, matching the existing manual-invocation convention already used by `load_sample_complaints.py` and `backend/tooling/backup_restore/`'s scripts. Not a FastAPI route; not wired into any service's startup path.
+3. **Configuration source** — environment variables only, read via this codebase's existing `pydantic-settings`-style convention. Never a CLI-supplied plaintext password.
+4. **Environment variables (direction only — final naming at implementation time)** — `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`. Both required, no default value; the script fails clearly and immediately if either is unset.
+5. **Password handling** — must call the existing `backend.services.gateway_service.app.core.security.hash_password` primitive. No second hashing library, no second credential format. The plaintext password is never logged or printed.
+6. **Role assignment** — looks up the `admin` role by name from the already-seeded `roles` table (never inserts a new role row — role creation remains `12fef1ff2286`'s exclusive responsibility); inserts exactly one `user_roles` row.
+7. **Idempotency** — safe to run more than once. If a user with the configured email already exists, the script must not overwrite that user's password or role assignment; it detects the existing row, leaves it untouched, and exits cleanly.
+8. **Error behavior** — clear, actionable failure messages (missing env vars, unreachable database, role not found because migrations haven't run yet) — never a raw stack trace as the only output.
+9. **Security requirements** — never print the password in any log line, success message, or exception; it is written nowhere except as a bcrypt hash inside `users.password_hash`.
+10. **Tests required (at implementation time)** — idempotency (a second run against an existing user is a safe no-op), the "role not found" failure path, and confirmation the stored value verifies via the existing `verify_password` primitive.
+11. **Documentation required (at implementation time)** — a `.env.example` entry for both variables (alongside the already-identified, separately-tracked `JWT_SECRET_KEY` documentation gap), and a README Quick Start step between "run migrations" and "log in."
+
+### Default Credentials Decision
+
+**Production requires explicit environment variables; missing bootstrap credentials fail clearly, in every environment, with no built-in fallback default.** Unlike `POSTGRES_PASSWORD`/`GF_SECURITY_ADMIN_PASSWORD`/`INTERNAL_SERVICE_SECRET` (read automatically at every container startup, where a missing value would break the whole stack, hence an obviously-fake dev default), a bootstrap admin credential is operator-invoked exactly once and is a real login credential for a real person. Silently defaulting it risks exactly the "weak default credential reaching a real deployment" scenario §19 of the frozen Phase 13 architecture already flags as unacceptable. `.env.example` documents the two variables with an obviously-fake placeholder and an explicit "set your own value" comment, following the same convention already used for `INTERNAL_SERVICE_SECRET` — but the code does not fall back to that placeholder if the real variable is unset.
+
+### Security Implications
+
+- Eliminates the only remaining path to a real, permanent, hardcoded default admin credential (Option D would have created exactly that).
+- The script is not part of the authenticated request surface — no route, not reachable from the frontend or Gateway.
+- Reuses the platform's one existing, audited password-hashing primitive.
+
+### Compatibility Implications
+
+- **Login, `/auth/me`, logout, JWT, roles, RBAC** — unaffected; the resulting user is, at the authentication-code level, indistinguishable from a hypothetically self-registered one.
+- **Frontend login** — unaffected; the frontend has no awareness of how a user came to exist.
+- **Docker / CI** — the script's env-var-driven configuration is consistent with `docker-compose.yml`'s existing per-service `env_file:` convention.
+- **Backup/restore** — database *initialization* (a fresh, empty database needing its first user) is explicitly distinct from database *restoration* (a non-empty database that already has users); bootstrap must never run as part of restore. `restore_verify.py`'s existing `users_count` check already respects this distinction.
+- **Product Experience Guide / onboarding** — directly closes the "Confident / In Control" onboarding gap identified in the whole-project audit, once the corresponding README step (a documentation follow-up, not part of this decision) is written.
+- **Final validation** — the eventual twelve-stage synthetic validation (still open, tracked separately) will need a bootstrapped user to exercise the authentication/authorization stage; this decision is a prerequisite for that closure item, not a duplicate of it.
+
+### CI Contract (direction only)
+
+CI's `backend-tests` job should, after `alembic upgrade head` succeeds, invoke the bootstrap script with test-only credentials supplied as CI-scoped environment variables (not a repository secret, since these are throwaway values scoped to an ephemeral, destroyed-at-job-end database) — never the same values as any real `.env.example` placeholder. Whether any currently-skipped auth/RBAC test should be rewritten to exercise a real bootstrapped login end-to-end, versus continuing to use the existing `get_current_user` dependency-override fixture pattern for unit-level RBAC tests, is an implementation-time decision.
+
+### Explicit Non-Goals
+
+- No public self-service registration, now or as a default.
+- No password-reset flow, no email verification, no MFA, no OAuth/SSO — already Phase 13 non-goals, unaffected.
+- No new secrets-management platform — the two new variables follow the exact `env_file`-injected convention every other secret in this repository already uses.

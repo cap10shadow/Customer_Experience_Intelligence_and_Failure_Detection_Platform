@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "f05ea2afc3ee"
@@ -25,12 +26,35 @@ def upgrade() -> None:
     ever recorded for this Recommendation" rather than a fabricated
     historical decision. No decision-owner/actor column is added -- see
     RecommendationDecision's own docstring for why.
+
+    AD-7 (revised, docs/DECISIONS.md; docs/architecture/phase-13/
+    PHASE_13_ARCHITECTURE.md §34): `op.add_column`, unlike
+    `op.create_table`, does not implicitly `CREATE TYPE` a Postgres enum
+    before referencing it -- against a genuinely empty database the
+    original version of this migration failed here with
+    `UndefinedObjectError: type "recommendationdecision" does not exist`.
+    The enum type is now explicitly ensured first (`checkfirst=True`, a
+    safe no-op if it already exists), then the column is added exactly as
+    before. Values/casing are unchanged. A first attempt at this fix used
+    a separate migration positioned after the current head, but that
+    cannot work: Alembic executes the chain strictly in order and aborts
+    the whole run the moment this migration's own `upgrade()` raises, so
+    a later migration is never reached on a fresh database. Fixing it
+    here, where the defect actually is, is the only mechanism that
+    works for a fresh database in a single pass.
     """
+    recommendation_decision_enum = postgresql.ENUM(
+        "PENDING", "APPROVED", "REJECTED", "DEFERRED", name="recommendationdecision"
+    )
+    recommendation_decision_enum.create(op.get_bind(), checkfirst=True)
+
     op.add_column(
         "recommendations",
         sa.Column(
             "decision",
-            sa.Enum("PENDING", "APPROVED", "REJECTED", "DEFERRED", name="recommendationdecision"),
+            postgresql.ENUM(
+                "PENDING", "APPROVED", "REJECTED", "DEFERRED", name="recommendationdecision", create_type=False
+            ),
             nullable=True,
         ),
     )

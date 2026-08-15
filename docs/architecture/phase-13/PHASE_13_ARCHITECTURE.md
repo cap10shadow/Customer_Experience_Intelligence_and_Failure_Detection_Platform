@@ -1,8 +1,10 @@
 # Phase 13 Architecture — Production Hardening
 
-**Status:** PHASE 13 ARCHITECTURE — FROZEN. READY FOR IMPLEMENTATION. All six architecture decisions (AD-1 through AD-6) are resolved. No unresolved architecture decision, no implementation-blocking architecture question, and no batch blocked by architecture ambiguity remain.
+**Status:** PHASE 13 ARCHITECTURE — FROZEN. READY FOR IMPLEMENTATION. All eight architecture decisions (AD-1 through AD-8) are resolved. No unresolved architecture decision, no implementation-blocking architecture question, and no batch blocked by architecture ambiguity remain.
 
-**Date:** 2026-08-14 (AD-2 resolved same-day, after architecture-review follow-up)
+**Closure note (2026-08-15):** the Whole-Project Completion & Gap Audit and its finding-challenge pass identified six genuine closure blockers. AD-7 and AD-8 (below, §34) resolve the *architecture* questions for two of them (F01/F09 — fresh-database migration; F02 — first-user bootstrap). Implementation of both has not started; the remaining four blockers (F03, F04, F05/F06) are documentation/validation work tracked in §34, not architecture questions.
+
+**Date:** 2026-08-14 (AD-2 resolved same-day, after architecture-review follow-up); AD-7/AD-8 added 2026-08-15
 
 **Scope boundary:** Phases 1–12 are complete and are not reopened by this document. This architecture strengthens the boundaries Phases 1–12 already established; it does not redesign domain logic, intelligence engines, the Gateway/BFF pattern, Phase 11 observability, or Phase 12 Copilot orchestration.
 
@@ -378,6 +380,20 @@ Sequenced last, after every batch above:
 
 ## 33. Architecture Decisions / ADR References
 
-AD-1 (Gateway-Owned Project Identity — resolved), AD-2 (Separate Production Docker Compose Configuration — resolved), AD-3 (Recommendation Decision Attribution and History — resolved), AD-4 (Copilot Ownership and Retention Policy — resolved), AD-5 (Internal Service Authentication and Principal Propagation — resolved), AD-6 (Same-Origin HttpOnly JWT Authentication Cookie — resolved) — all recorded in full in `docs/DECISIONS.md`. Referenced existing decisions, unmodified: ARCH-001, ARCH-002, DATA-001, DATA-002, REC-002, REC-003, COPILOT-001, COPILOT-002, OBS-002, ARB-001 through ARB-008.
+AD-1 (Gateway-Owned Project Identity — resolved), AD-2 (Separate Production Docker Compose Configuration — resolved), AD-3 (Recommendation Decision Attribution and History — resolved), AD-4 (Copilot Ownership and Retention Policy — resolved), AD-5 (Internal Service Authentication and Principal Propagation — resolved), AD-6 (Same-Origin HttpOnly JWT Authentication Cookie — resolved), AD-7 (Corrective Alembic Migration for Fresh-Database Compatibility — resolved), AD-8 (Controlled First-User Bootstrap — resolved) — all recorded in full in `docs/DECISIONS.md`. Referenced existing decisions, unmodified: ARCH-001, ARCH-002, DATA-001, DATA-002, REC-002, REC-003, COPILOT-001, COPILOT-002, OBS-002, ARB-001 through ARB-008.
 
-**PHASE 13 ARCHITECTURE — FROZEN. READY FOR IMPLEMENTATION.** All six architecture decisions are resolved. No unresolved architecture decision, no implementation-blocking architecture question, no pending team decision, and no batch blocked by architecture ambiguity remain.
+## 34. Closure Corrections (Post-Freeze)
+
+Added 2026-08-15, following the Whole-Project Completion & Gap Audit and its finding-challenge pass. This section tracks the six findings that audit identified as genuine project-closure blockers — distinct from the batch-level Definition of Done in §31, which describes what each *implementation batch* delivers. Architecture-only for this update: AD-7 and AD-8 resolve the two items that were architecture questions. The other four are not architecture questions and are not resolved by this section — they are recorded here so closure status stays honest and traceable in one place.
+
+| Blocker | Description | Resolution status | Owning decision |
+|---|---|---|---|
+| F01/F09 | Fresh-database Alembic migration failure (`f05ea2afc3ee`'s enum-creation-order defect) blocks clean install and CI's first run | **Resolved and verified.** AD-7 was revised after a first implementation attempt (a tail-positioned corrective migration) was proven, with direct runtime evidence, incapable of fixing a fresh database — Alembic aborts the whole chain at `f05ea2afc3ee` before any later migration is reached. The revised fix edits `f05ea2afc3ee` itself (additive: an explicit `checkfirst`-guarded enum-type creation before the existing column addition). Verified: fresh database → `alembic upgrade head` → success, full backend suite 1218 passed/0 failed; existing-database and restored-database cases confirmed non-destructive; downgrade behavior unchanged. | AD-7 (revised), `docs/DECISIONS.md` |
+| F02 | No controlled mechanism exists to create the first application user on a correctly migrated database | **Architecture resolved** (AD-8). Implementation not started. | AD-8, `docs/DECISIONS.md` |
+| F03 | README Quick Start never documents running migrations | Not an architecture question. Documentation follow-up, sequenced after AD-7/AD-8 implementation (the corrected migration step and the bootstrap step should be documented together, once both exist). | — |
+| F04 | `README.md` and `docs/PROJECT_STATUS.md` describe Phase 13 as an unstarted future phase and claim no authentication/RBAC exists, contradicting the merged implementation | Not an architecture question. Documentation correction, independent of AD-7/AD-8. | — |
+| F05/F06 | No committed twelve-stage synthetic-data validation report exists (§27); the specific "Root Cause = PARTIAL" status has no traceable evidence | Not an architecture question. Validation-execution work, sequenced after AD-7/AD-8 implementation (a genuine fresh-database run is part of an honest validation) and after F02's bootstrap exists (the authentication/authorization stage requires a real user to test against). | — |
+
+**Explicit scope boundary:** this section records status; it does not authorize implementation. AD-7 and AD-8 define the approved implementation contract for their respective blockers (see `docs/DECISIONS.md`), but no migration file, seed script, README edit, or validation run is part of this architecture update.
+
+**PHASE 13 ARCHITECTURE — FROZEN. READY FOR IMPLEMENTATION.** All eight architecture decisions are resolved. No unresolved architecture decision, no implementation-blocking architecture question, no pending team decision, and no batch blocked by architecture ambiguity remain. Four non-architecture closure items (F03, F04, F05/F06) remain open, tracked in §34 above, pending future implementation/documentation/validation work.
