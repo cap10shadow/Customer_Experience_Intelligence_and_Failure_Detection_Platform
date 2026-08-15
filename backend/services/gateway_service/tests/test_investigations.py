@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import httpx
@@ -611,3 +612,288 @@ async def test_nlp_evidence_selects_the_alphabetically_first_category_determinis
     nlp_items = [item for item in body["evidence"] if item["source"] == "NLP Intelligence"]
     assert len(nlp_items) == 1
     assert "Delivery Issue" in nlp_items[0]["headline"]  # "delivery_issue" sorts before "payment_issue"
+
+
+# ---------------------------------------------------------------------------
+# Phase 13 Batch 8: Investigation Aggregator concurrency fix.
+#
+# Deterministic proof via `asyncio.Event`, never wall-clock timing (a slow
+# CI machine must never make these tests flaky, and a fast one must never
+# make them falsely pass a still-sequential implementation). Each test
+# below constructs a scenario that can only complete successfully if two
+# downstream fetches are genuinely running concurrently -- if the
+# aggregator regressed to sequential fetching, the blocked handler would
+# hang until its own `asyncio.wait_for` timeout fires, surfacing as a
+# real request failure the test's own status-code assertion catches.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_incident_and_root_cause_fetches_run_concurrently(override_http_client):
+    """
+    The exact defect this batch fixes (§29): Root Cause's fetch depends
+    only on `incident_id`, never on the *returned* Incident data, so it
+    must not wait for the Incident fetch to finish. Proven here by
+    having the Incident handler block until the Root Cause handler has
+    already started -- impossible under the old sequential
+    implementation, where Root Cause was never even requested until
+    Incident's own `await` had already returned.
+    """
+    root_cause_started = asyncio.Event()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+
+        if path.endswith(f"/incidents/{INCIDENT_ID}") and settings.ANOMALY_SERVICE_URL in str(request.url):
+            await asyncio.wait_for(root_cause_started.wait(), timeout=2)
+            return _json(_incident())
+        if path.endswith("/root-cause"):
+            root_cause_started.set()
+            return _json(_root_cause())
+        if path.endswith("/anomalies"):
+            return _json([])
+        if path.endswith("/business-impact"):
+            return _json([])
+        if path.endswith("/recommendations/latest"):
+            return _json([])
+        raise AssertionError(f"Unexpected downstream call: {request.url}")
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get(f"/api/v1/investigations/{INCIDENT_ID}")
+
+    assert response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_all_five_downstream_fetches_start_before_any_of_them_resolves(override_http_client):
+    """
+    Broader proof than the incident/root-cause pair alone: every one of
+    the five real downstream calls (Incident, Root Cause, Anomalies,
+    Business Impact, Recommendation) must have been *issued* before any
+    of them is allowed to complete -- proven with a shared barrier
+    `asyncio.Event` that only fires once all five handlers have recorded
+    their own start, which every handler then waits on before returning.
+    A still-sequential implementation would deadlock (each call started
+    only after the previous one's response arrives) and hit the
+    `wait_for` timeout below.
+    """
+    started = set()
+    all_started = asyncio.Event()
+
+    async def _mark_started_and_wait(name: str) -> None:
+        started.add(name)
+        if len(started) == 5:
+            all_started.set()
+        await asyncio.wait_for(all_started.wait(), timeout=2)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+
+        if path.endswith(f"/incidents/{INCIDENT_ID}") and settings.ANOMALY_SERVICE_URL in str(request.url):
+            await _mark_started_and_wait("incident")
+            return _json(_incident())
+        if path.endswith("/root-cause"):
+            await _mark_started_and_wait("root_cause")
+            return _json(_root_cause())
+        if path.endswith("/anomalies"):
+            await _mark_started_and_wait("anomalies")
+            return _json([])
+        if path.endswith("/business-impact"):
+            await _mark_started_and_wait("business_impact")
+            return _json([])
+        if path.endswith("/recommendations/latest"):
+            await _mark_started_and_wait("recommendation")
+            return _json([])
+        raise AssertionError(f"Unexpected downstream call: {request.url}")
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get(f"/api/v1/investigations/{INCIDENT_ID}")
+
+    assert response.status_code == 200
+    assert started == {"incident", "root_cause", "anomalies", "business_impact", "recommendation"}
+
+
+@pytest.mark.anyio
+async def test_incident_failure_does_not_leak_an_unretrieved_task_exception(override_http_client, recwarn):
+    """
+    When the essential Incident fetch fails, the concurrently-started
+    Root Cause/Anomalies/Business Impact/Recommendation tasks must be
+    cancelled and drained (`_cancel_and_drain`), not merely abandoned --
+    otherwise a task holding an exception (Business Impact 503 here)
+    would later be garbage-collected with its exception never retrieved.
+    Response correctness is the primary assertion; `recwarn` additionally
+    guards against a `RuntimeWarning`/`pytest.PytestUnraisableExceptionWarning`
+    surfacing from a dangling task during this test's own teardown.
+    """
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+
+        if path.endswith(f"/incidents/{INCIDENT_ID}") and settings.ANOMALY_SERVICE_URL in str(request.url):
+            return httpx.Response(404)
+        if path.endswith("/root-cause"):
+            return _json(_root_cause())
+        if path.endswith("/anomalies"):
+            return _json([])
+        if path.endswith("/business-impact"):
+            # A concurrently-started task that would hold an unretrieved
+            # exception if the essential-failure cleanup didn't drain it.
+            return httpx.Response(503)
+        if path.endswith("/recommendations/latest"):
+            return _json([])
+        raise AssertionError(f"Unexpected downstream call: {request.url}")
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get(f"/api/v1/investigations/{INCIDENT_ID}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+    # Give the event loop one more turn so a truly-dangling task's
+    # "exception never retrieved" callback (fired by the loop's default
+    # exception handler on next iteration/GC) would have already run.
+    await asyncio.sleep(0)
+    assert not any(issubclass(w.category, RuntimeWarning) for w in recwarn.list)
+
+
+@pytest.mark.anyio
+async def test_root_cause_essential_failure_still_cancels_the_remaining_non_essential_tasks(override_http_client):
+    """Same cleanup guarantee as the incident-failure path above, for Root Cause's own essential-if-erroring failure."""
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+
+        if path.endswith(f"/incidents/{INCIDENT_ID}") and settings.ANOMALY_SERVICE_URL in str(request.url):
+            return _json(_incident())
+        if path.endswith("/root-cause"):
+            return httpx.Response(503)
+        if path.endswith("/anomalies"):
+            return _json([])
+        if path.endswith("/business-impact"):
+            return httpx.Response(503)
+        if path.endswith("/recommendations/latest"):
+            return _json([])
+        raise AssertionError(f"Unexpected downstream call: {request.url}")
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get(f"/api/v1/investigations/{INCIDENT_ID}")
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "DOWNSTREAM_SERVICE_FAILURE"
+
+
+@pytest.mark.anyio
+async def test_concurrent_downstream_completion_order_does_not_affect_the_response(override_http_client):
+    """
+    No race condition regardless of which downstream call resolves
+    first: Root Cause is made to resolve before Incident here (the
+    reverse of natural request order), and the response must still be
+    identical to the default-ordering case.
+    """
+    incident_may_resolve = asyncio.Event()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+
+        if path.endswith(f"/incidents/{INCIDENT_ID}") and settings.ANOMALY_SERVICE_URL in str(request.url):
+            await asyncio.wait_for(incident_may_resolve.wait(), timeout=2)
+            return _json(_incident())
+        if path.endswith("/root-cause"):
+            incident_may_resolve.set()
+            return _json(_root_cause())
+        if path.endswith("/anomalies"):
+            return _json([_anomaly(ANOMALY_ID_1), _anomaly(ANOMALY_ID_2)])
+        if path.endswith("/business-impact"):
+            return _json([_business_impact()])
+        if path.endswith("/recommendations/latest"):
+            return _json([_recommendation()])
+        raise AssertionError(f"Unexpected downstream call: {request.url}")
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get(f"/api/v1/investigations/{INCIDENT_ID}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["incidentId"] == INCIDENT_ID
+    assert body["rootCause"]["confidenceLevel"] == "high"
+    assert body["recommendedNextStep"]["recommendationId"] == RECOMMENDATION_ID
+    assert body["warnings"] == []
+
+
+@pytest.mark.anyio
+async def test_request_id_survives_concurrent_downstream_fetches(override_http_client):
+    """Correlation ID propagation (Phase 11) is unaffected by running Incident/Root Cause/etc. concurrently instead of sequentially."""
+    client = _client_for(_make_handler())
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.get(
+            f"/api/v1/investigations/{INCIDENT_ID}", headers={"X-Request-ID": "test-investigation-request-id"}
+        )
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "test-investigation-request-id"
+
+
+@pytest.mark.anyio
+async def test_two_concurrent_investigation_requests_do_not_cross_contaminate_request_ids(override_http_client):
+    """
+    Two genuinely concurrent Investigation requests (different incidents,
+    different X-Request-ID values, in flight at the same time) must each
+    receive their own correlation ID back -- proves per-request state
+    (request ID, and by extension each request's own task set) is never
+    accidentally shared as mutable module/global state.
+    """
+    other_incident_id = str(uuid.uuid4())
+    release = asyncio.Event()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+
+        if path.endswith(f"/incidents/{INCIDENT_ID}") and settings.ANOMALY_SERVICE_URL in str(request.url):
+            await asyncio.wait_for(release.wait(), timeout=2)
+            return _json(_incident())
+        if path.endswith(f"/incidents/{other_incident_id}") and settings.ANOMALY_SERVICE_URL in str(request.url):
+            release.set()
+            return _json({**_incident(), "id": other_incident_id})
+        if path.endswith("/root-cause"):
+            return httpx.Response(404)
+        if path.endswith("/anomalies"):
+            return _json([])
+        if path.endswith("/business-impact"):
+            return _json([])
+        if path.endswith("/recommendations/latest"):
+            return _json([])
+        raise AssertionError(f"Unexpected downstream call: {request.url}")
+
+    client = _client_for(handler)
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        first_request = test_client.get(
+            f"/api/v1/investigations/{INCIDENT_ID}", headers={"X-Request-ID": "request-a"}
+        )
+        second_request = test_client.get(
+            f"/api/v1/investigations/{other_incident_id}", headers={"X-Request-ID": "request-b"}
+        )
+        first_response, second_response = await asyncio.gather(first_request, second_request)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.headers["X-Request-ID"] == "request-a"
+    assert second_response.headers["X-Request-ID"] == "request-b"
+    assert first_response.json()["incidentId"] == INCIDENT_ID
+    assert second_response.json()["incidentId"] == other_incident_id

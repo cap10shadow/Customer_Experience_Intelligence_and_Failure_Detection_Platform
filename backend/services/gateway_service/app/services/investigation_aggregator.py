@@ -65,16 +65,50 @@ async def build_investigation(client: httpx.AsyncClient, incident_id: str) -> In
     """
     warnings: list[str] = []
 
-    incident = await _fetch_incident(client, incident_id)
-
+    # Phase 13 Batch 8 (§22 of the Step 0 audit / §29's implementation
+    # constraint, docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md):
+    # the Incident and Root Cause fetches were previously sequential
+    # (Root Cause only started once Incident had fully resolved), even
+    # though Root Cause's request depends only on `incident_id` -- the
+    # caller-supplied parameter -- never on any field of the *returned*
+    # `incident` dict (verified by inspection: the URL below is built
+    # from `incident_id` alone). Batch 8 resolves that data-dependency
+    # question the same way the other three downstream calls already
+    # answered it: start all five real, independent downstream fetches
+    # concurrently. Evidence ordering in the final response is
+    # presentational, not causal, and is unaffected by fetch timing --
+    # unchanged from before this batch.
+    incident_task = asyncio.create_task(_fetch_incident(client, incident_id))
+    root_cause_task = asyncio.create_task(
+        get_json(client, f"{settings.ROOT_CAUSE_SERVICE_URL}/api/v1/incidents/{incident_id}/root-cause")
+    )
     anomalies_task = asyncio.create_task(_fetch_anomalies(client, incident_id))
     business_impact_task = asyncio.create_task(_fetch_business_impact(client, incident_id))
     recommendation_task = asyncio.create_task(_fetch_latest_recommendation(client, incident_id))
 
+    try:
+        incident = await incident_task
+    except BaseException:
+        # The Incident is essential (unchanged semantics: its 404/error
+        # fails the whole request). Every other task above was already
+        # started concurrently and is now known to be unnecessary work
+        # -- cancelled and drained here so no task's exception is ever
+        # left "never retrieved" and no orphaned downstream call outlives
+        # this request. The original essential failure (not this
+        # cleanup) is what the caller sees.
+        await _cancel_and_drain(root_cause_task, anomalies_task, business_impact_task, recommendation_task)
+        raise
+
     # Root Cause is essential-if-erroring, legitimate-if-absent -- handled
     # explicitly rather than through await_optional, since a 404 here must
-    # NOT be treated the same as a warning-worthy degradation.
-    root_cause = await get_json(client, f"{settings.ROOT_CAUSE_SERVICE_URL}/api/v1/incidents/{incident_id}/root-cause")
+    # NOT be treated the same as a warning-worthy degradation. Was already
+    # running concurrently with `incident_task` above; this only waits
+    # for whichever of the two hasn't finished yet.
+    try:
+        root_cause = await root_cause_task
+    except BaseException:
+        await _cancel_and_drain(anomalies_task, business_impact_task, recommendation_task)
+        raise
 
     anomalies = await await_optional(
         anomalies_task, warnings, f"Anomaly evidence for incident {incident_id} is temporarily unavailable.", default=[]
@@ -122,6 +156,20 @@ async def build_investigation(client: httpx.AsyncClient, incident_id: str) -> In
         recommendedNextStep=_build_recommended_next_step(recommendations[0] if recommendations else None),
         warnings=warnings,
     )
+
+
+async def _cancel_and_drain(*tasks: "asyncio.Task[Any]") -> None:
+    """
+    Phase 13 Batch 8: cancels every still-pending task and awaits all of
+    them (exceptions included, via `return_exceptions=True`) so none is
+    ever left with an unretrieved exception or an orphaned background
+    execution once an essential downstream failure has already decided
+    this request's outcome. Never raises itself -- the caller re-raises
+    the real essential failure that triggered this cleanup.
+    """
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def _fetch_incident(client: httpx.AsyncClient, incident_id: str) -> dict[str, Any]:
