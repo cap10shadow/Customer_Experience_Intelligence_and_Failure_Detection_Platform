@@ -7,13 +7,13 @@
 
 # Last Updated
 
-**Date:** 2026-08-14
+**Date:** 2026-08-16
 
 ---
 
 # Overall Progress
 
-**Estimated Completion:** ~92%
+**Estimated Completion:** ~96%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -21,11 +21,11 @@
 
 # Current Development Status
 
-**Current Phase:** Phase 12 – AI Copilot
+**Current Phase:** Phase 13 – Production Hardening
 
-**Current Step:** Batch 6 (Evaluation Harness) — Complete, including final Phase 12 closure review
+**Current Step:** Closure Implementation 3 (F03/F04 — documentation and onboarding) — in progress
 
-**Status:** Complete (all six implementation batches delivered and verified; see Phase 12 Completion Summary below and `docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md` §36 for the full closure record)
+**Status:** In progress. All eleven implementation batches (identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, CI, and the final synthetic-data validation) plus two closure-phase architecture decisions (AD-7, AD-8) are either complete or actively being closed out — see Phase 13 Progress below.
 
 ---
 
@@ -45,7 +45,7 @@
 | ✅ Phase 10 – Executive Dashboard         | Complete    |
 | ✅ Phase 11 – Observability & Reliability | Complete (2/3 dashboards; 1 explicitly deferred) |
 | ✅ Phase 12 – AI Copilot                  | Complete (6/6 batches; see limitations below) |
-| ⬜ Phase 13 – Production Hardening        | Pending     |
+| 🟡 Phase 13 – Production Hardening        | In Progress (identity/auth/RBAC/internal-trust/attribution/ownership/backup/CI/docker complete; documentation closure in progress; final validation report outstanding) |
 
 ---
 
@@ -88,6 +88,31 @@ Production retention/TTL for conversation data, authentication/RBAC (Phase 13), 
 
 ### Outcome
 Phase 12 closes with a real, evidence-grounded, read-only Copilot capability — orchestration, persistence, frontend, and evaluation all verified against real running services, not mocks — and every remaining limitation honestly disclosed rather than hidden or fabricated. No Phase 13 (authentication/production hardening) capability was pulled forward.
+
+---
+
+# Phase 13 Progress
+
+| Batch                                                          | Status      |
+| ---------------------------------------------------------------- | ----------- |
+| ✅ Identity Foundation (users/roles/user_roles)                 | Complete    |
+| ✅ Authentication & Session (JWT, HttpOnly cookie, login/logout/me) | Complete |
+| ✅ RBAC (viewer/operator/admin, enforced on all 12 Gateway routes) | Complete |
+| ✅ Internal Service Authentication / Principal Propagation      | Complete    |
+| ✅ Recommendation Decision Attribution / History                | Complete    |
+| ✅ Copilot Ownership / Retention                                 | Complete    |
+| ✅ Database Backup / Restore                                     | Complete    |
+| ✅ Investigation Aggregator Concurrency Fix                      | Complete    |
+| ✅ Docker / Runtime Hardening (production-like configuration)   | Complete    |
+| ✅ CI (GitHub Actions: backend tests, frontend checks, Compose validation) | Complete |
+| ✅ F01/F09 — Corrective Alembic migration (fresh-database compatibility, AD-7) | Complete |
+| ✅ F02 — Controlled first-user bootstrap (AD-8)                  | Complete    |
+| 🟡 F03/F04 — README, onboarding, and project-status documentation closure | In progress (this update) |
+| ⬜ F05/F06 — Final twelve-stage synthetic-data validation report | Not started |
+
+### Phase 13 — Closure Note
+
+An independent whole-project audit (and a subsequent finding-challenge pass) identified six genuine closure blockers before Phase 13 could be honestly called complete: a fresh-database Alembic migration failure (F01, which also blocked CI — F09), a missing first-user bootstrap mechanism (F02), an incomplete onboarding path (F03), stale top-level documentation that had not been updated since Phase 12 (F04, this document and `README.md` both previously described Phase 13 as unstarted and claimed no authentication existed), and a missing final validation artifact (F05/F06). F01/F09 and F02 are complete and independently verified (real fresh-database migrations across three independent databases; real login/`/auth/me`/RBAC verification through a running Gateway; see `docs/DECISIONS.md` AD-7/AD-8). This update resolves F03/F04. F05/F06 remains open — no twelve-stage validation report has been produced yet, and this document does not claim otherwise.
 
 ---
 
@@ -579,17 +604,17 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 # Current Focus
 
-**Phase 13 – Production Hardening (not yet started)**
+**Phase 13 – Production Hardening (closure in progress)**
 
-> Phase 12 (AI Copilot) is complete across all six batches — see the Phase 12 Completion Summary above and `docs/architecture/phase-12/PHASE_12_ARCHITECTURE.md` §36 for the full closure record. The next planned phase per `ROADMAP.md` is Phase 13 (authentication/RBAC and production hardening); it has not yet been scoped or started.
+> Identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, and CI are all implemented and merged. Two closure-blocking defects discovered by a whole-project audit — a fresh-database migration failure and a missing first-user bootstrap mechanism — are now fixed and independently verified (`docs/DECISIONS.md` AD-7/AD-8). This update brings `README.md` and this document into agreement with that reality (F03/F04).
 
 ---
 
 # Next Milestone
 
-**Phase 13 – Production Hardening**
+**F05/F06 — Final twelve-stage synthetic-data validation**
 
-> Phase 12 (all six batches) is complete and approved. Authentication/RBAC, production secrets management, mTLS/service mesh, production retention/privacy policy for Copilot conversation data, and general production hardening remain entirely unscoped, unstarted Phase 13 work. A final project-wide synthetic-dummy-data validation exercise (ingestion → ... → Copilot → evaluation → observability) also remains planned but not started.
+> With F01/F02/F03/F04 closed, the remaining Phase 13 closure item is a saved, honest, twelve-stage synthetic-data validation report (ingestion → NLP → anomaly → incident → root cause → business impact → evaluation → recommendation → analytics → Copilot → observability → authentication/authorization), distinguishing tested-successfully / partially-tested / unavailable / known-limitation for every stage, with no fabricated result. Not yet started.
 
 ---
 
