@@ -163,6 +163,7 @@ class RecommendationRepository(ABC):
         decision: RecommendationDecision,
         note: Optional[str],
         decided_at: datetime,
+        actor_id: Optional[uuid.UUID] = None,
     ) -> Optional[RecommendationRecord]:
         """
         Overwrites the decision state on one persisted Recommendation
@@ -172,10 +173,20 @@ class RecommendationRepository(ABC):
 
         Idempotent/repeated-decision behavior is deliberately simple:
         each call unconditionally overwrites `decision`/`decision_note`/
-        `decided_at`, since there is no decision-owner/actor field to
-        distinguish "the same person changed their mind" from "someone
-        else overwrote it" -- see G-01's scope freeze for why building
-        any conflict/versioning behavior here would require the very
-        attribution this design explicitly excludes.
+        `decided_at`/`decided_by`, matching G-01's original design --
+        distinguishing "the same person changed their mind" from
+        "someone else overwrote it" is exactly what the append-only
+        `recommendation_decision_history` table (Phase 13 Batch 5, AD-3)
+        exists to answer; the current-state row itself keeps its simple
+        overwrite semantics.
+
+        `actor_id` (Phase 13 Batch 5, AD-3) is the Gateway-attested
+        principal, supplied by the caller -- never resolved here, and
+        never derived from anything but the caller-provided value.
+        `None` means "no known actor" (a pre-Phase-13-style call, or one
+        made without a principal header), not an error. Every successful
+        call -- `actor_id` present or not -- appends exactly one row to
+        `recommendation_decision_history`, in the same unit of work as
+        the current-state overwrite.
         """
         raise NotImplementedError

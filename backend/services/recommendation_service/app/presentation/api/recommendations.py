@@ -142,18 +142,33 @@ async def update_recommendation_decision(
     current time; the request never supplies it. Repeated calls simply
     overwrite the prior decision (see `RecommendationRepository
     .update_decision()`'s own docstring for why that is the correct,
-    honest behavior given no decision-owner/actor field exists).
+    honest behavior for the current-state row, and how the append-only
+    history table answers the "who changed what, when" question this
+    row-level overwrite deliberately doesn't).
 
-    Phase 13 Batch 4 (AD-5, §14): this route is now a genuine internal
+    Phase 13 Batch 4 (AD-5, §14): this route is a genuine internal
     mutation boundary, requiring `X-Internal-Secret` -- only
-    gateway_service is a legitimate caller. `x_authenticated_user_id` is
-    the Gateway-attested principal, trustworthy only because it arrives
-    alongside a valid internal secret; it is logged only (a safe,
-    allowed structured-log field per Phase 11 §23) and never persisted
-    -- no `decided_by` column exists yet (explicitly a later batch's
-    scope, REC-003/AD-3). The response contract is unchanged.
+    gateway_service is a legitimate caller.
+
+    Phase 13 Batch 5 (AD-3, §14/§15): `x_authenticated_user_id` is the
+    Gateway-attested principal, trustworthy only because it arrives
+    alongside a valid internal secret. It is now persisted as
+    `decided_by` on the current-state row and as `actor_id` on the new
+    `recommendation_decision_history` row -- derived exclusively from
+    this header, never from `request` (`RecommendationDecisionPatchRequest`
+    accepts no actor/owner field at all). A missing or malformed header
+    persists `None` ("no known actor"), never a fabricated identity, and
+    never fails the request -- the internal-secret check above is the
+    request's actual authorization boundary. The response contract is
+    unchanged: no `decided_by`/`actor_id` field is added to it (AD-3
+    does not require exposing attribution via this API).
     """
+    actor_id: Optional[uuid.UUID] = None
     if x_authenticated_user_id:
+        try:
+            actor_id = uuid.UUID(x_authenticated_user_id)
+        except ValueError:
+            actor_id = None
         logger.info(
             "Recommendation decision recorded with a Gateway-attested principal.",
             extra={"safe_extra": {"user_id": x_authenticated_user_id, "recommendation_id": str(recommendation_id)}},
@@ -164,6 +179,7 @@ async def update_recommendation_decision(
         decision=request.decision,
         note=request.note,
         decided_at=datetime.now(timezone.utc),
+        actor_id=actor_id,
     )
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")

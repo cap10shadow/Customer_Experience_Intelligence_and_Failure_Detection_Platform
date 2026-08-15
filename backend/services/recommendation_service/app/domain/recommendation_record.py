@@ -50,6 +50,13 @@ class RecommendationRecord:
       to `None`, meaning "no decision has ever been recorded" -- this
       Domain-owned envelope is where that distinction lives, not on the
       immutable `Recommendation` aggregate.
+    - `decided_by` (Phase 13 Batch 5, AD-3) is the fourth field in that
+      same exception: the Gateway-attested principal who made the
+      current decision, populated only from `update_decision()`'s
+      `actor_id` parameter -- never from client-supplied request data.
+      Defaults to `None`, meaning either "no decision has ever been
+      recorded" or "a decision was recorded with no known actor"
+      (pre-Phase-13 rows, or a call made without a principal header).
     """
 
     recommendation_id: uuid.UUID
@@ -59,3 +66,4 @@ class RecommendationRecord:
     decision: Optional[RecommendationDecision] = None
     decision_note: Optional[str] = None
     decided_at: Optional[datetime] = None
+    decided_by: Optional[uuid.UUID] = None

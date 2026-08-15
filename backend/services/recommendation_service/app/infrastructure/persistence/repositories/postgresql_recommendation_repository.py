@@ -15,6 +15,9 @@ from backend.services.recommendation_service.app.domain.recommendation_repositor
     DuplicateGenerationEventError,
     RecommendationRepository,
 )
+from backend.services.recommendation_service.app.infrastructure.persistence.models.recommendation_decision_history_model import (
+    RecommendationDecisionHistoryModel,
+)
 from backend.services.recommendation_service.app.infrastructure.persistence.models.recommendation_generation_model import (
     RecommendationGenerationModel,
 )
@@ -177,6 +180,7 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
         decision: RecommendationDecision,
         note: Optional[str],
         decided_at: datetime,
+        actor_id: Optional[uuid.UUID] = None,
     ) -> Optional[RecommendationRecord]:
         stmt = select(RecommendationModel).where(RecommendationModel.recommendation_id == recommendation_id)
         result = await self.session.execute(stmt)
@@ -187,6 +191,23 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
         model.decision = decision
         model.decision_note = note
         model.decided_at = decided_at
+        model.decided_by = actor_id
+
+        # Phase 13 Batch 5 (AD-3): one append-only history row per
+        # successful decision mutation, in the same session/transaction
+        # as the current-state overwrite above -- both are flushed
+        # together here, and committed together by the request-scoped
+        # `get_db_session` dependency (or rolled back together on any
+        # later failure within the same request).
+        self.session.add(
+            RecommendationDecisionHistoryModel(
+                recommendation_id=recommendation_id,
+                decision=decision,
+                decision_note=note,
+                actor_id=actor_id,
+            )
+        )
+
         await self.session.flush()
 
         return RecommendationModelMapper.to_domain(model)

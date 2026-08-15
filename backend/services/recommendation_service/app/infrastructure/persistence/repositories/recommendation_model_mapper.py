@@ -64,6 +64,7 @@ class RecommendationModelMapper:
             decision=model.decision,
             decision_note=model.decision_note,
             decided_at=model.decided_at,
+            decided_by=model.decided_by,
         )
 
     @staticmethod

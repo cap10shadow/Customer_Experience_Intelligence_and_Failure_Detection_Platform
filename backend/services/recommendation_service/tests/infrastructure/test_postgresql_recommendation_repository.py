@@ -26,6 +26,9 @@ from backend.services.recommendation_service.app.domain.recommendation_category 
 from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 from backend.services.recommendation_service.app.domain.recommendation_repository import DuplicateGenerationEventError
 from backend.services.recommendation_service.app.domain.recommendation_priority import RecommendationPriority
+from backend.services.recommendation_service.app.infrastructure.persistence.models.recommendation_decision_history_model import (
+    RecommendationDecisionHistoryModel,
+)
 from backend.services.recommendation_service.app.infrastructure.persistence.models.recommendation_generation_model import (
     RecommendationGenerationModel,
 )
@@ -63,6 +66,7 @@ async def _repository_session() -> AsyncIterator[AsyncSession]:
     async with _test_engine.connect() as conn:
         await conn.run_sync(lambda sync_conn: RecommendationGenerationModel.__table__.create(sync_conn, checkfirst=True))  # type: ignore[attr-defined]
         await conn.run_sync(lambda sync_conn: RecommendationModel.__table__.create(sync_conn, checkfirst=True))  # type: ignore[attr-defined]
+        await conn.run_sync(lambda sync_conn: RecommendationDecisionHistoryModel.__table__.create(sync_conn, checkfirst=True))  # type: ignore[attr-defined]
         await conn.commit()
 
         trans = await conn.begin()
@@ -77,6 +81,26 @@ async def _repository_session() -> AsyncIterator[AsyncSession]:
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+async def _insert_test_user(session: AsyncSession) -> uuid.UUID:
+    """
+    Inserts one real row into gateway_service's `users` table (already
+    present in this database via the full Alembic migration chain --
+    see `test_decided_by_column_exists_and_accepts_null`'s neighbors)
+    so tests can exercise `decided_by`/`actor_id`'s real cross-service
+    FOREIGN KEY constraint honestly, rather than disabling or working
+    around it. Raw SQL only, never `gateway_service`'s ORM model
+    (DATA-001/DATA-002) -- this service's own metadata never registers
+    `users`. Rolled back with everything else at the end of the test's
+    transaction.
+    """
+    user_id = uuid.uuid4()
+    await session.execute(
+        text("INSERT INTO users (id, email, password_hash, is_active) VALUES (:id, :email, :password_hash, TRUE)"),
+        {"id": str(user_id), "email": f"{user_id}@test.invalid", "password_hash": "not-a-real-hash"},
+    )
+    return user_id
 
 
 @pytest.mark.anyio
@@ -537,3 +561,161 @@ async def test_decision_column_exists_and_accepts_null():
         )
         rows = {row[0]: row[1] for row in result.fetchall()}
         assert rows == {"decision": "YES", "decision_note": "YES", "decided_at": "YES"}
+
+
+# --- Phase 13 Batch 5 (AD-3): decision attribution and history --------------------------
+
+
+@pytest.mark.anyio
+async def test_decided_by_column_exists_and_accepts_null():
+    async with _repository_session() as session:
+        result = await session.execute(
+            text(
+                "SELECT is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'recommendations' AND column_name = 'decided_by'"
+            )
+        )
+        assert result.scalar_one() == "YES"
+
+
+@pytest.mark.anyio
+async def test_update_decision_persists_decided_by_from_actor_id(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-ATTRIBUTION", generation_id=uuid.uuid4()
+        )
+        actor_id = await _insert_test_user(session)
+
+        updated = await repository.update_decision(
+            saved[0].recommendation_id,
+            decision=RecommendationDecision.APPROVED,
+            note="Reviewed.",
+            decided_at=datetime.now(timezone.utc),
+            actor_id=actor_id,
+        )
+
+        assert updated is not None
+        assert updated.decided_by == actor_id
+
+        refetched = await repository.get_by_id(saved[0].recommendation_id)
+        assert refetched is not None
+        assert refetched.decided_by == actor_id
+
+
+@pytest.mark.anyio
+async def test_update_decision_without_actor_id_persists_null_decided_by(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-ATTRIBUTION", generation_id=uuid.uuid4()
+        )
+
+        updated = await repository.update_decision(
+            saved[0].recommendation_id,
+            decision=RecommendationDecision.APPROVED,
+            note=None,
+            decided_at=datetime.now(timezone.utc),
+        )
+
+        assert updated is not None
+        assert updated.decided_by is None
+
+
+@pytest.mark.anyio
+async def test_update_decision_creates_exactly_one_history_row_per_call(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-HISTORY", generation_id=uuid.uuid4()
+        )
+        recommendation_id = saved[0].recommendation_id
+        actor_id = await _insert_test_user(session)
+        decided_at = datetime.now(timezone.utc)
+
+        await repository.update_decision(
+            recommendation_id,
+            decision=RecommendationDecision.APPROVED,
+            note="First decision.",
+            decided_at=decided_at,
+            actor_id=actor_id,
+        )
+
+        result = await session.execute(
+            text(
+                "SELECT recommendation_id, decision, decision_note, actor_id, created_at "
+                "FROM recommendation_decision_history WHERE recommendation_id = :rid"
+            ),
+            {"rid": str(recommendation_id)},
+        )
+        rows = result.fetchall()
+
+        assert len(rows) == 1
+        assert str(rows[0].recommendation_id) == str(recommendation_id)
+        assert rows[0].decision == "APPROVED"
+        assert rows[0].decision_note == "First decision."
+        assert str(rows[0].actor_id) == str(actor_id)
+        assert rows[0].created_at is not None
+
+
+@pytest.mark.anyio
+async def test_repeated_decision_calls_each_append_a_separate_history_row(make_recommendation):
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        saved = await repository.save_many(
+            [make_recommendation()], incident_id="INC-HISTORY", generation_id=uuid.uuid4()
+        )
+        recommendation_id = saved[0].recommendation_id
+
+        await repository.update_decision(
+            recommendation_id, decision=RecommendationDecision.APPROVED, note="First.", decided_at=datetime.now(timezone.utc)
+        )
+        await repository.update_decision(
+            recommendation_id, decision=RecommendationDecision.REJECTED, note="Changed.", decided_at=datetime.now(timezone.utc)
+        )
+
+        result = await session.execute(
+            text("SELECT decision FROM recommendation_decision_history WHERE recommendation_id = :rid ORDER BY created_at"),
+            {"rid": str(recommendation_id)},
+        )
+        decisions = [row[0] for row in result.fetchall()]
+
+        assert decisions == ["APPROVED", "REJECTED"]
+
+
+@pytest.mark.anyio
+async def test_update_decision_for_unknown_recommendation_creates_no_history_row():
+    async with _repository_session() as session:
+        repository = PostgreSQLRecommendationRepository(session)
+        unknown_id = uuid.uuid4()
+
+        result = await repository.update_decision(
+            unknown_id, decision=RecommendationDecision.APPROVED, note=None, decided_at=datetime.now(timezone.utc)
+        )
+
+        assert result is None
+        count = await session.execute(
+            text("SELECT COUNT(*) FROM recommendation_decision_history WHERE recommendation_id = :rid"),
+            {"rid": str(unknown_id)},
+        )
+        assert count.scalar_one() == 0
+
+
+@pytest.mark.anyio
+async def test_recommendation_decision_history_table_has_expected_columns():
+    async with _repository_session() as session:
+        result = await session.execute(
+            text(
+                "SELECT column_name, is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'recommendation_decision_history'"
+            )
+        )
+        rows = {row[0]: row[1] for row in result.fetchall()}
+        assert rows == {
+            "id": "NO",
+            "recommendation_id": "NO",
+            "decision": "NO",
+            "decision_note": "YES",
+            "actor_id": "YES",
+            "created_at": "NO",
+        }

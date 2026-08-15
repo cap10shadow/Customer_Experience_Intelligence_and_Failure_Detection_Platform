@@ -110,5 +110,12 @@ class RecommendationModel(Base):
     )
     decision_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    # Phase 13 Batch 5 (AD-3) -- nullable UUID, no ORM ForeignKey (cross-
+    # service reference to gateway_service's users.id; referential
+    # integrity is enforced by a raw Alembic FK constraint only, per
+    # DATA-001/DATA-002 -- see the migration for the full rationale).
+    # Populated exclusively from the Gateway-attested principal header,
+    # never from client-supplied request data.
+    decided_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, default=None)
 
     __table_args__ = (Index("ix_recommendations_incident_id_generation_id", "incident_id", "generation_id"),)

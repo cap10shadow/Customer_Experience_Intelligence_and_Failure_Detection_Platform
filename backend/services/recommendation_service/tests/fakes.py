@@ -36,6 +36,10 @@ class FakeRecommendationRepository(RecommendationRepository):
         self.generations_by_incident: Dict[str, List[tuple]] = {}
         # event_id -> generation_id, mirroring the real UNIQUE(event_id) constraint.
         self.generation_by_event_id: Dict[uuid.UUID, uuid.UUID] = {}
+        # Phase 13 Batch 5 (AD-3): mirrors `recommendation_decision_history`,
+        # one dict per appended row -- in-memory stand-in for tests that
+        # need to assert on history without a database.
+        self.decision_history: List[Dict] = []
 
     async def save_many(
         self,
@@ -113,6 +117,7 @@ class FakeRecommendationRepository(RecommendationRepository):
         decision: RecommendationDecision,
         note: Optional[str],
         decided_at: datetime,
+        actor_id: Optional[uuid.UUID] = None,
     ) -> Optional[RecommendationRecord]:
         existing = self.by_id.get(recommendation_id)
         if existing is None:
@@ -126,6 +131,16 @@ class FakeRecommendationRepository(RecommendationRepository):
             decision=decision,
             decision_note=note,
             decided_at=decided_at,
+            decided_by=actor_id,
         )
         self.by_id[recommendation_id] = updated
+        self.decision_history.append(
+            {
+                "recommendation_id": recommendation_id,
+                "decision": decision,
+                "decision_note": note,
+                "actor_id": actor_id,
+                "created_at": decided_at,
+            }
+        )
         return updated
