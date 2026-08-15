@@ -1,38 +1,103 @@
+# Phase 13 Batch 9 (AD-2, docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md
+# §20; docs/DECISIONS.md AD-2): production-like Docker Compose
+# configuration.
+#
+# `docker-compose.yml` remains the unmodified development configuration
+# (bind mounts, --reload, the Vite dev server, host-published Postgres) --
+# this file changes only *how* the same application topology is built and
+# run, never *what* the platform does. A standalone, self-contained file
+# (not a Compose override): Compose's merge semantics cannot *remove* a
+# base file's bind-mount/port/command entries, only add/replace scalar
+# fields, so an override could not actually achieve "no source bind
+# mount"/"no --reload"/"no host-published Postgres" cleanly -- AD-2's own
+# text explicitly permits "a Compose override or a self-contained file
+# (a packaging detail left to implementation, not architecture)".
+#
+# Distinct project identity (`name:` below) and `oi_prod_*` container
+# names -- this configuration's containers/volumes/networks never collide
+# with the development configuration's, so both can be verified
+# independently (and, if ever genuinely needed, run side by side) without
+# one destroying the other's state.
+#
+# Start:  docker compose -f docker-compose.prod.yml up -d --build
+# Stop:   docker compose -f docker-compose.prod.yml down
+# Config check: docker compose -f docker-compose.prod.yml config --quiet
+
+name: operational_intelligence_prod
+
+networks:
+  # Browser -> frontend/gateway_service only. gateway_service also joins
+  # `internal` (below) so it can reach every backend service and
+  # Postgres -- the one intentional bridge between the two networks,
+  # exactly as AD-2/§20 specifies.
+  public:
+  # gateway_service + the 8 backend services + Postgres + the full
+  # observability stack (Prometheus/Loki/Promtail/OTel Collector/
+  # Tempo/Grafana) -- extended beyond §20's literal "8 backend services
+  # + postgres" wording because Prometheus must reach every backend
+  # service to scrape it, the OTel Collector must be reachable BY every
+  # backend service, and Grafana must reach Prometheus/Loki/Tempo --
+  # none of that existing scrape/log/trace architecture works if those
+  # containers are left off the network that actually holds their real
+  # targets.
+  internal:
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  loki_data:
+  tempo_data:
+  grafana_data:
+
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: oi_postgres
+    container_name: oi_prod_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # Prototype-scope default, identical to the development
+      # configuration's -- §19 of the frozen architecture already
+      # flags this as requiring rotation for any real deployment; this
+      # batch does not invent a secrets-management platform, it reuses
+      # the existing env-injection convention (.env, never committed).
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-operational_intelligence}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    # No `ports:` -- §20: Postgres is not published to the host in the
+    # production-like configuration. Every application service reaches
+    # it over the `internal` network by service name (`postgres`),
+    # never `localhost`. `backend/tooling/backup_restore/` (Batch 7)
+    # already runs `pg_dump`/`pg_restore` via `docker compose exec`,
+    # which needs no host port either way.
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-operational_intelligence}"]
       interval: 5s
       timeout: 5s
       retries: 5
-    # Phase 13 Batch 9 (AD-2, §20): a base-file fix, not production-only --
-    # every other service here already had this; postgres was the one
-    # documented exception. Inherited by both the development and
-    # production-like configurations.
     restart: unless-stopped
 
   gateway_service:
     build:
       context: .
       dockerfile: backend/services/gateway_service/Dockerfile
-    container_name: oi_gateway
-    command: uvicorn backend.services.gateway_service.app.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "${GATEWAY_SERVICE_PORT:-8000}:8000"
+    container_name: oi_prod_gateway
+    # No `command:` override -- the image's own Dockerfile CMD runs
+    # (no --reload). No source bind mount -- the image's own COPYed
+    # source is authoritative, per §20.
+    # No host port published for the API directly -- the frontend's
+    # nginx reverse-proxies `/api/*` to this service over the `public`
+    # network (same-origin architecture, AD-6/§9), the production
+    # equivalent of the development Vite proxy. Gateway remains the
+    # sole public API boundary conceptually; only the frontend's own
+    # port is host-published.
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - public
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,16 +113,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/ingestion_service/Dockerfile
-    container_name: oi_ingestion
-    command: uvicorn backend.services.ingestion_service.app.main:app --host 0.0.0.0 --port 8001 --reload
-    # No host port mapping: ingestion_service is internal-only, reachable
-    # from other containers via Docker service-name networking
-    # (http://ingestion_service:8001) and from the browser only through
-    # the Gateway. Only gateway_service and postgres are host-published.
+    container_name: oi_prod_ingestion
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,13 +133,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/nlp_service/Dockerfile
-    container_name: oi_nlp
-    command: uvicorn backend.services.nlp_service.app.main:app --host 0.0.0.0 --port 8002 --reload
-    # No host port mapping: internal-only, same rationale as ingestion_service above.
+    container_name: oi_prod_nlp
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,13 +153,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/anomaly_service/Dockerfile
-    container_name: oi_anomaly
-    command: uvicorn backend.services.anomaly_service.app.main:app --host 0.0.0.0 --port 8003 --reload
-    # No host port mapping: internal-only, same rationale as ingestion_service above.
+    container_name: oi_prod_anomaly
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -117,13 +173,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/root_cause_service/Dockerfile
-    container_name: oi_root_cause
-    command: uvicorn backend.services.root_cause_service.app.main:app --host 0.0.0.0 --port 8004 --reload
-    # No host port mapping: internal-only, same rationale as ingestion_service above.
+    container_name: oi_prod_root_cause
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -139,13 +193,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/business_impact_service/Dockerfile
-    container_name: oi_business_impact
-    command: uvicorn backend.services.business_impact_service.app.main:app --host 0.0.0.0 --port 8005 --reload
-    # No host port mapping: internal-only, same rationale as ingestion_service above.
+    container_name: oi_prod_business_impact
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -161,16 +213,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/recommendation_service/Dockerfile
-    container_name: oi_recommendation
-    command: uvicorn backend.services.recommendation_service.app.main:app --host 0.0.0.0 --port 8006 --reload
-    # No host port mapping: internal-only. This is the service that hosts
-    # /internal/events/business-impact-completed -- removing the host
-    # publish is what actually makes that route unreachable from outside
-    # the Docker network (P1-4), not just a routing convention.
+    container_name: oi_prod_recommendation
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -186,13 +233,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/copilot_service/Dockerfile
-    container_name: oi_copilot
-    command: uvicorn backend.services.copilot_service.app.main:app --host 0.0.0.0 --port 8007 --reload
-    # No host port mapping: internal-only, same rationale as ingestion_service above.
+    container_name: oi_prod_copilot
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -208,14 +253,11 @@ services:
     build:
       context: .
       dockerfile: backend/services/evaluation_service/Dockerfile
-    container_name: oi_evaluation
-    command: uvicorn backend.services.evaluation_service.app.main:app --host 0.0.0.0 --port 8008 --reload
-    # No host port mapping: internal-only. Also hosts
-    # /internal/events/business-impact-completed -- see recommendation_service's note above.
+    container_name: oi_prod_evaluation
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    networks:
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -231,43 +273,33 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # Phase 13 Batch 9 (AD-2, §20): the Dockerfile is now multi-stage
-      # (the production-like configuration needs a build+static-serve
-      # path it didn't have before) -- `target: dev` pins this
-      # development configuration to the exact same stage/behavior
-      # (`npm run dev`) it always used. Without this, Compose would
-      # default to building the LAST stage (the production one), which
-      # would silently break local development.
-      target: dev
-    container_name: oi_frontend
+      # The production stage: `npm run build` (already scripted, never
+      # invoked before this batch) + nginx serving the built bundle +
+      # reverse-proxying `/api/*` to gateway_service (see
+      # frontend/nginx.conf) -- no Vite dev server, no source bind mount.
+      target: production
+    container_name: oi_prod_frontend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-      # Phase 13 Batch 2 (AD-6): no VITE_API_BASE_URL override -- the
-      # frontend's own default ('/api', frontend/src/app/configuration/
-      # env.ts) now applies, routed through vite.config.ts's existing
-      # `/api` -> gateway_service:8000 proxy. This makes the browser see
-      # the API as same-origin (http://localhost:3000), which the
-      # HttpOnly session cookie requires -- the previous absolute
-      # cross-origin URL here is exactly the contradiction AD-6
-      # documents and corrects (docs/DECISIONS.md, docs/architecture/
-      # phase-13/PHASE_13_ARCHITECTURE.md §9).
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - public
+    depends_on:
+      - gateway_service
     restart: unless-stopped
 
   # ---------------------------------------------------------------------
-  # Phase 11 Batch 1 -- Observability Foundation.
-  # Prometheus (metrics) + Loki/Promtail (logs). Tracing (OTel Collector,
-  # Tempo) and Grafana are later batches (docs/architecture/phase-11/
-  # PHASE_11_ARCHITECTURE.md) -- not added here.
+  # Observability -- identical images/config files to the development
+  # configuration (Phase 11); only network placement changes here. Every
+  # scrape/log-ship/trace-export target is already addressed by Compose
+  # service name (verified: prometheus.yml, the Grafana datasource
+  # provisioning, the OTel Collector config, and promtail-config.yaml
+  # contain zero `localhost`/dev-only addresses) -- no observability
+  # configuration file changes when layered onto this topology.
   # ---------------------------------------------------------------------
 
   prometheus:
     image: prom/prometheus:v2.53.0
-    container_name: oi_prometheus
+    container_name: oi_prod_prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
     ports:
@@ -275,100 +307,77 @@ services:
     volumes:
       - ./infrastructure/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    networks:
+      - internal
     restart: unless-stopped
 
   loki:
     image: grafana/loki:2.9.8
-    container_name: oi_loki
+    container_name: oi_prod_loki
     command:
       - "-config.file=/etc/loki/loki-config.yaml"
-    # No host port mapping: internal-only, same convention as every
-    # backend service that isn't gateway_service -- only Grafana (a later
-    # batch) needs to reach Loki, over the Compose network.
     volumes:
       - ./infrastructure/observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - loki_data:/loki
+    networks:
+      - internal
     restart: unless-stopped
 
   promtail:
     image: grafana/promtail:2.9.8
-    container_name: oi_promtail
+    container_name: oi_prod_promtail
     command:
       - "-config.file=/etc/promtail/promtail-config.yaml"
     volumes:
       - ./infrastructure/observability/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
-      # Read-only access to every container's own Docker json-file log --
-      # the mechanism this batch's structured stdout logging (backend/
-      # shared/logging/logger.py) is shipped through, with zero networking
-      # dependency added to any backend service itself.
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - internal
     depends_on:
       - loki
     restart: unless-stopped
 
-  # Phase 11 Batch 2 -- Distributed Tracing. Every backend service exports
-  # OTLP traces to otel-collector, which forwards them to tempo. Direct
-  # OTLP export to Tempo was deliberately not used (Phase 11 architecture
-  # §3.2/§5): a Collector is the frozen topology.
   otel-collector:
     image: otel/opentelemetry-collector:0.111.0
-    container_name: oi_otel_collector
+    container_name: oi_prod_otel_collector
     command:
       - "--config=/etc/otel-collector-config.yaml"
-    # No host port mapping: internal-only -- only backend services (over
-    # the Compose network) send OTLP here.
     volumes:
       - ./infrastructure/observability/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    networks:
+      - internal
     depends_on:
       - tempo
     restart: unless-stopped
 
   tempo:
     image: grafana/tempo:2.5.0
-    container_name: oi_tempo
+    container_name: oi_prod_tempo
     command:
       - "-config.file=/etc/tempo.yaml"
-    # No host port mapping: internal-only, same convention as Loki --
-    # only the OTel Collector (writer) and Grafana (reader, this batch)
-    # need to reach Tempo, both over the Compose network.
     volumes:
       - ./infrastructure/observability/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
       - tempo_data:/var/tempo
+    networks:
+      - internal
     restart: unless-stopped
 
-  # Phase 11 Batch 4 -- Grafana: the operational visualization layer over
-  # Prometheus/Loki/Tempo (Phase 11 architecture §3.9/§3.11). Datasources
-  # and dashboards are file-provisioned (below) so a fresh `docker compose
-  # up` reproduces the same Grafana configuration with no manual
-  # click-through setup.
   grafana:
     image: grafana/grafana:11.3.0
-    container_name: oi_grafana
+    container_name: oi_prod_grafana
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
-      # No new user-signup surface, no anonymous access -- Grafana's own
-      # default admin flow only (Phase 11 architecture §5: auth/RBAC
-      # integration with platform auth is explicitly deferred, not
-      # replaced with a bespoke auth system here).
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
-      # F1: container keeps Grafana's own default internal port (3000);
-      # only the host mapping moves, since the frontend already owns
-      # host port 3000.
       - "${GRAFANA_PORT:-3001}:3000"
     volumes:
       - ./infrastructure/observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infrastructure/observability/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
+    networks:
+      - internal
     depends_on:
       - prometheus
       - loki
       - tempo
     restart: unless-stopped
-
-volumes:
-  postgres_data:
-  prometheus_data:
-  loki_data:
-  tempo_data:
-  grafana_data:
