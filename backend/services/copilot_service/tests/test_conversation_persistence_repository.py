@@ -27,6 +27,7 @@ from backend.services.copilot_service.app.models.message import CopilotMessage
 from backend.services.copilot_service.app.repositories.conversation_repository import CopilotConversationRepository
 from backend.services.copilot_service.app.repositories.message_repository import CopilotMessageRepository
 from backend.services.copilot_service.app.schemas.copilot import EvidenceReference, WorkspaceContext
+from backend.services.copilot_service.tests._test_identity import TEST_OWNER_ID, ensure_test_owner_exists
 from backend.shared.config.settings import Settings
 from backend.shared.constants.enums.copilot import CopilotMessageRole
 
@@ -122,6 +123,63 @@ async def test_get_returns_none_for_unknown_id():
         repository = CopilotConversationRepository(session)
 
         assert await repository.get(uuid.uuid4()) is None
+
+
+@pytest.mark.anyio
+async def test_create_with_owner_id_persists_ownership():
+    async with _repository_session() as session:
+        await ensure_test_owner_exists(session)
+        repository = CopilotConversationRepository(session)
+        conversation_id = uuid.uuid4()
+
+        created = await repository.create(conversation_id, workspace_context=None, owner_id=TEST_OWNER_ID)
+
+        assert created.owner_id == TEST_OWNER_ID
+        fetched = await repository.get(conversation_id)
+        assert fetched is not None
+        assert fetched.owner_id == TEST_OWNER_ID
+
+
+@pytest.mark.anyio
+async def test_create_without_owner_id_persists_null_owner():
+    async with _repository_session() as session:
+        repository = CopilotConversationRepository(session)
+        conversation_id = uuid.uuid4()
+
+        created = await repository.create(conversation_id, workspace_context=None)
+
+        assert created.owner_id is None
+
+
+@pytest.mark.anyio
+async def test_delete_removes_the_conversation_row():
+    async with _repository_session() as session:
+        await ensure_test_owner_exists(session)
+        repository = CopilotConversationRepository(session)
+        conversation_id = uuid.uuid4()
+        conversation = await repository.create(conversation_id, workspace_context=None, owner_id=TEST_OWNER_ID)
+
+        await repository.delete(conversation)
+
+        assert await repository.get(conversation_id) is None
+
+
+@pytest.mark.anyio
+async def test_delete_cascades_to_messages():
+    async with _repository_session() as session:
+        await ensure_test_owner_exists(session)
+        conversation_repository = CopilotConversationRepository(session)
+        message_repository = CopilotMessageRepository(session)
+        conversation_id = uuid.uuid4()
+        conversation = await conversation_repository.create(
+            conversation_id, workspace_context=None, owner_id=TEST_OWNER_ID
+        )
+        await message_repository.append(conversation_id=conversation_id, role=CopilotMessageRole.USER, content="hello")
+
+        await conversation_repository.delete(conversation)
+
+        remaining = await message_repository.list_recent(conversation_id)
+        assert remaining == []
 
 
 @pytest.mark.anyio

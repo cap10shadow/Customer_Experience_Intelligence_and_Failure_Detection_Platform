@@ -69,6 +69,55 @@ async def post_json(
     return response.json()
 
 
+async def post_resource(
+    client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None, extra_headers: Optional[dict] = None
+) -> httpx.Response:
+    """
+    Issues one bounded POST and returns the raw `httpx.Response` --
+    unlike `post_json`, deliberately not status-mapped here (Phase 13
+    Batch 6, AD-4). `post_json`'s shared "404 -> None, >=400 ->
+    DownstreamServiceError" contract assumes every non-2xx is a genuine
+    downstream failure; that assumption doesn't hold for
+    `copilot_aggregator.send_copilot_message`, where a `401`/`403` is a
+    real, legitimate conversation-ownership outcome (§17) the Gateway
+    must translate into its own `AuthenticationError`/`AuthorizationError`,
+    not mask behind a generic `502` -- the same reasoning
+    `delete_resource` documents for the DELETE conversation route. Only
+    connection failure and timeout are handled here -- every status-code
+    interpretation is the caller's.
+    """
+    try:
+        return await client.post(url, json=json, headers={**correlation_headers(), **(extra_headers or {})})
+    except httpx.TimeoutException as exc:
+        raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
+    except httpx.RequestError as exc:
+        raise DownstreamUnavailableError(f"Could not reach {url}.") from exc
+
+
+async def delete_resource(
+    client: httpx.AsyncClient, url: str, *, extra_headers: Optional[dict] = None
+) -> httpx.Response:
+    """
+    Issues one bounded DELETE to a downstream service and returns the
+    raw `httpx.Response`, unlike `get_json`/`post_json`/`patch_json` --
+    deliberately not parsed/status-mapped here (Phase 13 Batch 6, AD-4).
+    Those three helpers' shared "404 -> None, >=400 -> DownstreamServiceError"
+    contract assumes every non-2xx/404 status is a genuine downstream
+    failure; that assumption doesn't hold for
+    `copilot_aggregator.delete_conversation`, where a `401`/`403` is a
+    legitimate ownership-boundary outcome the Gateway must translate
+    into its own `AuthenticationError`/`AuthorizationError`, not mask
+    behind a generic `502`. Only connection failure and timeout are
+    handled here -- every status-code interpretation is the caller's.
+    """
+    try:
+        return await client.delete(url, headers={**correlation_headers(), **(extra_headers or {})})
+    except httpx.TimeoutException as exc:
+        raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
+    except httpx.RequestError as exc:
+        raise DownstreamUnavailableError(f"Could not reach {url}.") from exc
+
+
 async def patch_json(
     client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None, extra_headers: Optional[dict] = None
 ) -> Any:

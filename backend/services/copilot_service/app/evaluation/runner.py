@@ -11,6 +11,19 @@ second orchestration/conversation implementation (§12). Persistence,
 history-loading, and conversation-identity resolution are therefore all
 exercised for real, through the real Batch 4 path, not re-implemented
 here.
+
+Phase 13 Batch 6 (AD-4): `handle_persisted_query` now requires a real
+`actor_id` for every call (ownership is unconditional -- "every
+conversation created after Phase 13 ships must have one"). This
+harness is an internal, out-of-band developer tool with no Gateway
+route and no real authenticated user behind it (see `__main__.py`'s own
+docstring) -- it is given a fixed, well-known synthetic actor identity
+(`EVALUATION_ACTOR_ID`) rather than a carved-out bypass of the
+ownership rule, so it is subject to the exact same real ownership path
+every other caller is, never a special case. `__main__.py` is
+responsible for ensuring a matching `users` row exists before invoking
+this module for real; the test suite does the equivalent within its own
+rolled-back transaction (see `test_evaluation_runner.py`).
 """
 
 import uuid
@@ -26,6 +39,14 @@ from backend.services.copilot_service.app.evaluation.results import CaseResult, 
 from backend.services.copilot_service.app.schemas.copilot import CopilotQueryRequest, WorkspaceContext
 from backend.services.copilot_service.app.services.conversation_service import handle_persisted_query
 from backend.services.copilot_service.app.services.orchestrator.llm_provider import LLMProvider, get_llm_provider
+
+# Phase 13 Batch 6 (AD-4): the evaluation harness's own synthetic,
+# non-login-capable actor identity -- never a real user account. Fixed
+# and well-known (not `uuid.uuid4()` per run) so `__main__.py` can
+# upsert its matching `users` row idempotently rather than accumulating
+# a new throwaway row on every invocation.
+EVALUATION_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-0000000000e0")
+EVALUATION_ACTOR_EMAIL = "copilot-evaluation-harness@internal.invalid"
 
 
 def _resolve_provider(case: EvaluationCase) -> LLMProvider:
@@ -45,7 +66,11 @@ def _provider_label(provider: LLMProvider, was_scripted: bool) -> str:
 
 
 async def run_evaluation(
-    dataset: EvaluationDataset, *, client: httpx.AsyncClient, session: AsyncSession
+    dataset: EvaluationDataset,
+    *,
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+    actor_id: uuid.UUID = EVALUATION_ACTOR_ID,
 ) -> EvaluationReport:
     conversation_ids_by_case: Dict[str, str] = {}
     report = EvaluationReport()
@@ -66,6 +91,7 @@ async def run_evaluation(
                 client=client,
                 request_id=f"eval-{case.case_id}-{uuid.uuid4()}",
                 session=session,
+                actor_id=actor_id,
                 llm_provider=provider,
             )
         except Exception as exc:  # noqa: BLE001 -- a case-level failure must never abort the whole run; report it and continue.

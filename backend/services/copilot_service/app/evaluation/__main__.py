@@ -21,10 +21,36 @@ import json
 import sys
 
 import httpx
+from sqlalchemy import text
 
 from backend.services.copilot_service.app.evaluation.dataset import DatasetValidationError, load_dataset
-from backend.services.copilot_service.app.evaluation.runner import run_evaluation
+from backend.services.copilot_service.app.evaluation.runner import (
+    EVALUATION_ACTOR_EMAIL,
+    EVALUATION_ACTOR_ID,
+    run_evaluation,
+)
 from backend.shared.database.database import async_session_maker, engine
+
+
+async def _ensure_evaluation_actor_exists(session) -> None:
+    """
+    Phase 13 Batch 6 (AD-4): `copilot_conversations.owner_id` now carries
+    a real, cross-service FOREIGN KEY to `users.id` -- this harness's
+    fixed synthetic actor (`runner.EVALUATION_ACTOR_ID`) must exist as a
+    real row before `run_evaluation` can persist any conversation.
+    Idempotent (`ON CONFLICT DO NOTHING`): safe to run on every
+    invocation, never accumulates duplicate rows. Never a login-capable
+    account -- `password_hash` is a value that can never validate, and
+    this row is never used by the real authentication flow (AD-1).
+    """
+    await session.execute(
+        text(
+            "INSERT INTO users (id, email, password_hash, is_active) "
+            "VALUES (:id, :email, :password_hash, TRUE) ON CONFLICT (id) DO NOTHING"
+        ),
+        {"id": str(EVALUATION_ACTOR_ID), "email": EVALUATION_ACTOR_EMAIL, "password_hash": "not-a-real-account"},
+    )
+    await session.commit()
 
 
 async def _main(out_path: str | None) -> int:
@@ -36,6 +62,7 @@ async def _main(out_path: str | None) -> int:
 
     try:
         async with async_session_maker() as session:
+            await _ensure_evaluation_actor_exists(session)
             async with httpx.AsyncClient(timeout=10.0) as client:
                 report = await run_evaluation(dataset, client=client, session=session)
             await session.commit()

@@ -116,6 +116,30 @@ async def test_missing_message_returns_422_without_calling_copilot(override_http
 
 
 @pytest.mark.anyio
+async def test_copilot_service_401_maps_to_gateway_401(override_http_client):
+    """Phase 13 Batch 6 (AD-4): no trusted principal was resolvable downstream -- a real, distinct outcome, never masked as a generic 502."""
+    client = _client_for(_make_handler(status=401))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.post("/api/v1/copilot/messages", json={"message": "hello"})
+
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_copilot_service_403_maps_to_gateway_403(override_http_client):
+    """Phase 13 Batch 6 (AD-4): copilot_service's own ownership check rejected this caller -- must reach the client as 403, never a generic 502."""
+    client = _client_for(_make_handler(status=403))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.post("/api/v1/copilot/messages", json={"message": "hello"})
+
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
 async def test_copilot_service_failure_maps_to_502(override_http_client):
     client = _client_for(_make_handler(status=500))
     override_http_client(client)
@@ -155,6 +179,95 @@ async def test_copilot_service_timeout_maps_to_504(override_http_client):
 
     assert response.status_code == 504
     assert response.json()["error"]["code"] == "DOWNSTREAM_TIMEOUT"
+
+
+# --- Phase 13 Batch 6 (AD-4): DELETE /copilot/conversations/{id} -------------------
+
+
+@pytest.mark.anyio
+async def test_delete_conversation_success_returns_204(override_http_client):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(204)
+
+    override_http_client(_client_for(handler))
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.delete(f"/api/v1/copilot/conversations/{CONVERSATION_ID}")
+
+    assert response.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_delete_conversation_forwards_internal_secret_and_principal_header(override_http_client):
+    captured: list = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(204)
+
+    override_http_client(_client_for(handler))
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        await test_client.delete(f"/api/v1/copilot/conversations/{CONVERSATION_ID}")
+
+    assert len(captured) == 1
+    assert captured[0].method == "DELETE"
+    assert "X-Internal-Secret" in captured[0].headers
+    assert "X-Authenticated-User-Id" in captured[0].headers
+
+
+@pytest.mark.anyio
+async def test_delete_conversation_not_found_maps_to_404(override_http_client):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    override_http_client(_client_for(handler))
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.delete(f"/api/v1/copilot/conversations/{CONVERSATION_ID}")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_delete_conversation_ownership_denied_maps_to_403(override_http_client):
+    """copilot_service's own ownership check (AD-4) rejected this caller -- a real, distinct outcome, never masked as a generic 502."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403)
+
+    override_http_client(_client_for(handler))
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.delete(f"/api/v1/copilot/conversations/{CONVERSATION_ID}")
+
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_delete_conversation_service_failure_maps_to_502(override_http_client):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    override_http_client(_client_for(handler))
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.delete(f"/api/v1/copilot/conversations/{CONVERSATION_ID}")
+
+    assert response.status_code == 502
+
+
+@pytest.mark.anyio
+async def test_delete_conversation_service_unavailable_maps_to_503(override_http_client):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    override_http_client(_client_for(handler))
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.delete(f"/api/v1/copilot/conversations/{CONVERSATION_ID}")
+
+    assert response.status_code == 503
 
 
 @pytest.mark.anyio

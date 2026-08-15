@@ -37,9 +37,15 @@ import httpx
 from backend.services.copilot_service.app.dependencies.http_client import get_http_client
 from backend.services.copilot_service.app.models.conversation import CopilotConversation
 from backend.services.copilot_service.app.models.message import CopilotMessage
+from backend.services.copilot_service.tests._test_identity import (
+    TEST_OTHER_OWNER_ID,
+    TEST_OWNER_ID,
+    ensure_other_owner_exists,
+    ensure_test_owner_exists,
+)
 from backend.shared.config.settings import Settings
 from backend.shared.database.session import get_db_session
-from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
+from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER, PRINCIPAL_USER_ID_HEADER
 
 # Bare (non-`with`) TestClient never runs the app's lifespan, so
 # `app.state.http_client` (constructed there) does not exist -- exactly
@@ -100,10 +106,40 @@ pytestmark = pytest.mark.skipif(
     reason="PostgreSQL is not reachable on localhost:5432 -- run `docker compose up postgres` to enable these tests",
 )
 
+if _database_available():
+    # Phase 13 Batch 6 (AD-4): `owner_id` carries a real, cross-service
+    # FOREIGN KEY to `users.id` -- this module's shared `client` always
+    # carries a real, matching principal header (below), so the row it
+    # references must exist before any request runs.
+    async def _seed() -> None:
+        async with _test_engine.begin() as conn:
+            await ensure_test_owner_exists(conn)
+            await ensure_other_owner_exists(conn)
+
+    asyncio.run(_seed())
+
 # Phase 13 Batch 4 (AD-5): POST /copilot/messages now requires the
 # internal-service credential -- applied here once, for every request
 # this module's shared `client` makes.
-client = TestClient(app, headers={INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET})
+# Phase 13 Batch 6 (AD-4): every conversation-creating request now also
+# requires a real principal header (ownership is unconditional) --
+# `TEST_OWNER_ID` is this module's default authenticated caller;
+# `test_second_users_client` (below) exercises `TEST_OTHER_OWNER_ID`
+# for cross-owner access-control tests.
+client = TestClient(
+    app,
+    headers={
+        INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET,
+        PRINCIPAL_USER_ID_HEADER: str(TEST_OWNER_ID),
+    },
+)
+other_user_client = TestClient(
+    app,
+    headers={
+        INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET,
+        PRINCIPAL_USER_ID_HEADER: str(TEST_OTHER_OWNER_ID),
+    },
+)
 
 
 async def _fetch_conversation(conversation_id: str) -> CopilotConversation:
@@ -354,7 +390,12 @@ def test_orchestration_failure_persists_nothing_and_preserves_the_error_contract
     # the real 500 response the registered `Exception` handler produces,
     # instead of re-raising the exception into the test itself.
     non_raising_client = TestClient(
-        app, raise_server_exceptions=False, headers={INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET}
+        app,
+        raise_server_exceptions=False,
+        headers={
+            INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET,
+            PRINCIPAL_USER_ID_HEADER: str(TEST_OWNER_ID),
+        },
     )
     supplied = str(uuid.uuid4())
     response = non_raising_client.post(
@@ -372,3 +413,153 @@ def test_orchestration_failure_persists_nothing_and_preserves_the_error_contract
 
     assert asyncio.run(_conversation_row_count()) == 0
     assert asyncio.run(_fetch_messages(supplied)) == []
+
+
+# --- Phase 13 Batch 6 (AD-4): Copilot conversation ownership ------------------------
+
+
+def test_newly_created_conversation_is_owned_by_the_authenticated_principal():
+    response = client.post("/api/v1/copilot/messages", json={"message": "hello"})
+    conversation_id = response.json()["conversation_id"]
+
+    conversation = asyncio.run(_fetch_conversation(conversation_id))
+
+    assert conversation.owner_id == TEST_OWNER_ID
+
+
+def test_owner_can_continue_their_own_conversation():
+    first = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = first["conversation_id"]
+
+    second = client.post(
+        "/api/v1/copilot/messages", json={"message": "why?", "conversation_id": conversation_id}
+    )
+
+    assert second.status_code == 200
+
+
+def test_a_different_users_client_cannot_access_another_users_conversation():
+    first = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = first["conversation_id"]
+
+    response = other_user_client.post(
+        "/api/v1/copilot/messages", json={"message": "trying to read someone else's thread", "conversation_id": conversation_id}
+    )
+
+    assert response.status_code == 403
+
+
+def test_missing_principal_header_is_rejected_with_401():
+    no_principal_client = TestClient(app, headers={INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET})
+
+    response = no_principal_client.post("/api/v1/copilot/messages", json={"message": "hello"})
+
+    assert response.status_code == 401
+
+
+def test_a_spoofed_principal_header_cannot_establish_ownership_of_another_users_conversation():
+    """
+    `PRINCIPAL_USER_ID_HEADER` is only ever trustworthy because it arrives
+    alongside a valid `X-Internal-Secret` -- verified upstream by
+    `require_internal_secret` before this route body ever runs. This
+    test proves the ownership check itself is real: a request carrying
+    someone else's real user id in that header (indistinguishable, at
+    this layer, from a spoofed one -- Batch 4 already established that a
+    client can never reach this header at all without passing through a
+    trusted Gateway) still cannot read a conversation it doesn't own.
+    """
+    first = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = first["conversation_id"]
+
+    spoofing_client = TestClient(
+        app,
+        headers={
+            INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET,
+            PRINCIPAL_USER_ID_HEADER: str(uuid.uuid4()),
+        },
+    )
+    response = spoofing_client.post(
+        "/api/v1/copilot/messages", json={"message": "hello", "conversation_id": conversation_id}
+    )
+
+    assert response.status_code == 403
+
+
+def test_ownership_persists_correctly_across_separate_requests():
+    first = client.post("/api/v1/copilot/messages", json={"message": "turn 1"}).json()
+    conversation_id = first["conversation_id"]
+
+    # Two more, independent HTTP requests -- not the same in-process call.
+    second = client.post("/api/v1/copilot/messages", json={"message": "turn 2", "conversation_id": conversation_id})
+    third = client.post("/api/v1/copilot/messages", json={"message": "turn 3", "conversation_id": conversation_id})
+
+    assert second.status_code == 200
+    assert third.status_code == 200
+    conversation = asyncio.run(_fetch_conversation(conversation_id))
+    assert conversation.owner_id == TEST_OWNER_ID
+
+
+# --- Phase 13 Batch 6 (AD-4): DELETE /copilot/conversations/{id} --------------------
+
+
+def test_owner_can_delete_their_own_conversation():
+    created = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = created["conversation_id"]
+
+    response = client.delete(f"/api/v1/copilot/conversations/{conversation_id}")
+
+    assert response.status_code == 204
+    assert asyncio.run(_fetch_conversation_or_none(conversation_id)) is None
+
+
+def test_delete_cascades_to_messages():
+    created = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = created["conversation_id"]
+
+    client.delete(f"/api/v1/copilot/conversations/{conversation_id}")
+
+    assert asyncio.run(_fetch_messages(conversation_id)) == []
+
+
+def test_non_owner_cannot_delete_another_users_conversation():
+    created = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = created["conversation_id"]
+
+    response = other_user_client.delete(f"/api/v1/copilot/conversations/{conversation_id}")
+
+    assert response.status_code == 403
+    assert asyncio.run(_fetch_conversation_or_none(conversation_id)) is not None
+
+
+def test_delete_of_unknown_conversation_returns_404():
+    response = client.delete(f"/api/v1/copilot/conversations/{uuid.uuid4()}")
+
+    assert response.status_code == 404
+
+
+def test_delete_without_principal_header_is_rejected_with_401():
+    created = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = created["conversation_id"]
+
+    no_principal_client = TestClient(app, headers={INTERNAL_SECRET_HEADER: _test_settings.INTERNAL_SERVICE_SECRET})
+    response = no_principal_client.delete(f"/api/v1/copilot/conversations/{conversation_id}")
+
+    assert response.status_code == 401
+
+
+def test_delete_without_internal_secret_is_rejected_with_401():
+    created = client.post("/api/v1/copilot/messages", json={"message": "hello"}).json()
+    conversation_id = created["conversation_id"]
+
+    no_secret_client = TestClient(app, headers={PRINCIPAL_USER_ID_HEADER: str(TEST_OWNER_ID)})
+    response = no_secret_client.delete(f"/api/v1/copilot/conversations/{conversation_id}")
+
+    assert response.status_code == 401
+
+
+async def _fetch_conversation_or_none(conversation_id: str):
+    async with _test_session_maker() as session:
+        result = await session.execute(
+            select(CopilotConversation).where(CopilotConversation.conversation_id == uuid.UUID(conversation_id))
+        )
+        return result.scalar_one_or_none()

@@ -1,11 +1,11 @@
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 
 from backend.services.gateway_service.app.core.auth_dependency import get_current_user
 from backend.services.gateway_service.app.core.principal import AuthenticatedUser
 from backend.services.gateway_service.app.dependencies.http_client import get_http_client
 from backend.services.gateway_service.app.schemas.copilot import CopilotQueryRequest, CopilotResponse
-from backend.services.gateway_service.app.services.copilot_aggregator import send_copilot_message
+from backend.services.gateway_service.app.services.copilot_aggregator import delete_conversation, send_copilot_message
 
 router = APIRouter(tags=["copilot"])
 
@@ -28,3 +28,22 @@ async def post_copilot_message(
     `send_copilot_message`.
     """
     return await send_copilot_message(client, request, principal=principal)
+
+
+@router.delete("/copilot/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_copilot_conversation(
+    conversation_id: str,
+    client: httpx.AsyncClient = Depends(get_http_client),
+    principal: AuthenticatedUser = Depends(get_current_user),
+) -> Response:
+    """
+    Phase 13 Batch 6 (AD-4, §17/§18): deletes one Copilot conversation,
+    owner-only, no admin override -- this router's own `require_role("operator")`
+    dependency (`main.py`) already gates every route here, matching the
+    permission matrix's `operator (owner-only)` entry; ownership itself
+    is verified by copilot_service, not here (see
+    `copilot_aggregator.delete_conversation`'s docstring). No business
+    logic lives here, exactly like `post_copilot_message` above.
+    """
+    await delete_conversation(client, conversation_id, principal=principal)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -236,6 +236,28 @@ async def test_operator_passes_the_authorization_gate_on_the_copilot_route(opera
     assert response.status_code != 403
 
 
+# --- Operator-level route (DELETE /copilot/conversations/{id}, Phase 13 Batch 6) ------
+
+
+@pytest.mark.anyio
+async def test_viewer_only_gets_403_on_the_operator_only_copilot_delete_route(viewer_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, viewer_user)
+        response = client.delete(f"/api/v1/copilot/conversations/{uuid.uuid4()}")
+
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_operator_passes_the_authorization_gate_on_the_copilot_delete_route(operator_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, operator_user)
+        response = client.delete(f"/api/v1/copilot/conversations/{uuid.uuid4()}")
+
+    assert response.status_code != 401
+    assert response.status_code != 403
+
+
 # --- Client cannot elevate its own privileges -----------------------------------------
 
 

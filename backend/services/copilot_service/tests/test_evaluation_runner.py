@@ -20,7 +20,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.services.copilot_service.app.evaluation.dataset import EvaluationDataset, load_dataset
 from backend.services.copilot_service.app.evaluation.results import CheckStatus, Dimension
-from backend.services.copilot_service.app.evaluation.runner import run_evaluation
+from backend.services.copilot_service.app.evaluation.runner import EVALUATION_ACTOR_EMAIL, EVALUATION_ACTOR_ID, run_evaluation
 from backend.services.copilot_service.app.models.conversation import CopilotConversation
 from backend.services.copilot_service.app.models.message import CopilotMessage
 from backend.shared.config.settings import Settings
@@ -56,6 +56,19 @@ async def _eval_session() -> AsyncIterator[AsyncSession]:
         trans = await conn.begin()
         session = AsyncSession(bind=conn, expire_on_commit=False)
         try:
+            # Phase 13 Batch 6 (AD-4): `run_evaluation` persists real
+            # conversations owned by `EVALUATION_ACTOR_ID`, which now
+            # requires a matching `users` row to satisfy the real
+            # cross-service FK -- inserted inside this same
+            # always-rolled-back transaction, so it never leaks into the
+            # real `users` table.
+            await session.execute(
+                text(
+                    "INSERT INTO users (id, email, password_hash, is_active) "
+                    "VALUES (:id, :email, :password_hash, TRUE) ON CONFLICT (id) DO NOTHING"
+                ),
+                {"id": str(EVALUATION_ACTOR_ID), "email": EVALUATION_ACTOR_EMAIL, "password_hash": "not-a-real-account"},
+            )
             yield session
         finally:
             await session.close()

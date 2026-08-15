@@ -18,9 +18,10 @@ from sqlalchemy.pool import NullPool
 
 from backend.services.copilot_service.app.dependencies.http_client import get_http_client
 from backend.services.copilot_service.app.main import app
+from backend.services.copilot_service.tests._test_identity import TEST_OWNER_ID, ensure_test_owner_exists
 from backend.shared.config.settings import Settings, settings
 from backend.shared.database.session import get_db_session
-from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
+from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER, PRINCIPAL_USER_ID_HEADER
 
 app.dependency_overrides[get_http_client] = lambda: httpx.AsyncClient(
     transport=httpx.MockTransport(lambda request: httpx.Response(404))
@@ -61,6 +62,16 @@ pytestmark = pytest.mark.skipif(
     reason="PostgreSQL is not reachable on localhost:5432 -- run `docker compose up postgres` to enable these tests",
 )
 
+if _database_available():
+    # Phase 13 Batch 6 (AD-4): `test_copilot_message_with_the_correct_secret_is_accepted`
+    # below creates a real conversation, which now requires a real,
+    # matching `owner_id` row to satisfy the cross-service FK.
+    async def _seed_owner() -> None:
+        async with _test_engine.begin() as conn:
+            await ensure_test_owner_exists(conn)
+
+    asyncio.run(_seed_owner())
+
 client = TestClient(app)
 
 
@@ -82,7 +93,10 @@ def test_copilot_message_with_the_correct_secret_is_accepted():
     response = client.post(
         "/api/v1/copilot/messages",
         json={"message": "hello"},
-        headers={INTERNAL_SECRET_HEADER: settings.INTERNAL_SERVICE_SECRET},
+        headers={
+            INTERNAL_SECRET_HEADER: settings.INTERNAL_SERVICE_SECRET,
+            PRINCIPAL_USER_ID_HEADER: str(TEST_OWNER_ID),
+        },
     )
 
     assert response.status_code == 200

@@ -3,7 +3,8 @@ from typing import Any, Dict
 import httpx
 
 from backend.services.gateway_service.app.core.config import settings
-from backend.services.gateway_service.app.core.downstream import post_json
+from backend.services.gateway_service.app.core.downstream import delete_resource, post_resource
+from backend.services.gateway_service.app.core.errors import AuthenticationError, AuthorizationError, DownstreamServiceError, ResourceNotFoundError
 from backend.services.gateway_service.app.core.principal import AuthenticatedUser
 from backend.services.gateway_service.app.schemas.copilot import (
     CopilotQueryRequest,
@@ -27,10 +28,15 @@ async def send_copilot_message(
 
     Phase 13 Batch 4 (AD-5, §14): carries the shared internal-service
     credential and the Gateway-attested `principal.user_id` (never
-    `email`/`roles`). copilot_service does not yet persist this as
-    `owner_id` -- that remains explicitly a later batch's scope
-    (COPILOT-002/AD-4); this batch only makes the header trustworthy
-    and available.
+    `email`/`roles`).
+
+    Phase 13 Batch 6 (AD-4, §16/§17): copilot_service now persists
+    `principal.user_id` as `owner_id` and enforces real ownership on
+    every create/continue -- a genuine `401` (no principal) or `403`
+    (not this conversation's owner) is a real, distinct outcome that
+    must reach the caller as the Gateway's own matching error, never a
+    generic `502` (see `post_resource`'s docstring for why this uses it
+    instead of `post_json`).
     """
     body: Dict[str, Any] = {"message": request.message, "conversation_id": request.conversationId}
     if request.workspaceContext is not None:
@@ -42,13 +48,55 @@ async def send_copilot_message(
             "time_range": request.workspaceContext.timeRange,
         }
 
-    response = await post_json(
+    url = f"{settings.COPILOT_SERVICE_URL}/api/v1/copilot/messages"
+    response = await post_resource(
         client,
-        f"{settings.COPILOT_SERVICE_URL}/api/v1/copilot/messages",
+        url,
         json=body,
         extra_headers={**internal_service_headers(), PRINCIPAL_USER_ID_HEADER: str(principal.user_id)},
     )
-    return _to_response(response)
+    if response.status_code == 401:
+        raise AuthenticationError("Authentication required.")
+    if response.status_code == 403:
+        raise AuthorizationError("You do not have access to this conversation.")
+    if response.status_code >= 400:
+        raise DownstreamServiceError(f"{url} returned status {response.status_code}.")
+    return _to_response(response.json())
+
+
+async def delete_conversation(client: httpx.AsyncClient, conversation_id: str, *, principal: AuthenticatedUser) -> None:
+    """
+    Deletes one Copilot conversation (Phase 13 Batch 6, AD-4, §17/§18):
+    forwards `DELETE /api/v1/copilot/conversations/{id}` to
+    copilot_service with the shared internal-service credential and the
+    Gateway-attested `principal.user_id` -- copilot_service, not this
+    aggregator, is the sole authority on whether `principal` owns this
+    conversation (never re-implemented here). `204` maps to a plain
+    return; `404`/`403`/`401` are real, distinct outcomes copilot_service
+    can legitimately produce and must be surfaced to the caller as the
+    Gateway's own matching error, never collapsed into a generic `502`
+    the way `get_json`/`post_json`/`patch_json`'s shared ">=400 ->
+    DownstreamServiceError" contract would (see `delete_resource`'s
+    docstring for why this route uses it instead of `patch_json`).
+    """
+    response = await delete_resource(
+        client,
+        f"{settings.COPILOT_SERVICE_URL}/api/v1/copilot/conversations/{conversation_id}",
+        extra_headers={**internal_service_headers(), PRINCIPAL_USER_ID_HEADER: str(principal.user_id)},
+    )
+    if response.status_code == 204:
+        return
+    if response.status_code == 404:
+        raise ResourceNotFoundError(
+            f"Conversation {conversation_id} was not found.", details={"conversationId": conversation_id}
+        )
+    if response.status_code == 403:
+        raise AuthorizationError("You do not have permission to delete this conversation.")
+    if response.status_code == 401:
+        raise AuthenticationError("Authentication required.")
+    raise DownstreamServiceError(
+        f"{settings.COPILOT_SERVICE_URL}/api/v1/copilot/conversations/{conversation_id} returned status {response.status_code}."
+    )
 
 
 def _to_response(payload: Dict[str, Any]) -> CopilotResponse:
