@@ -102,6 +102,15 @@ export async function apiRequest<TResponse>(path: string, options: ApiRequestOpt
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
+      // Phase 13 Batch 2 (AD-6): the Gateway's session is an HttpOnly
+      // cookie, never read by this client -- the browser attaches it
+      // automatically, but only if the request explicitly opts in.
+      // Same-origin (see docker-compose.yml/vite.config.ts's proxy) as
+      // of this batch, so 'same-origin' would suffice; 'include' is used
+      // instead so this doesn't silently stop working if a future,
+      // still-same-origin deployment topology (§20 of the frozen
+      // architecture) ever routes this through an intermediate redirect.
+      credentials: 'include',
     })
   } catch (cause) {
     if (controller.signal.aborted) {

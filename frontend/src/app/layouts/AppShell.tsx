@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { PRIMARY_NAVIGATION } from '@/app/configuration/navigation.config'
+import { ROUTE_PATHS } from '@/app/routing/routePaths'
+import { useAuth } from '@/auth/context/AuthContext'
 import { Copilot } from '@/copilot'
 import { Sidebar, TopBar } from '@/shared/components/navigation'
 import { useDisclosure } from '@/shared/hooks/useDisclosure'
@@ -24,10 +26,21 @@ function getActiveWorkspaceLabel(pathname: string): string {
  */
 export function AppShell() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(
     () => typeof window !== 'undefined' && window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true',
   )
   const mobileNav = useDisclosure()
+
+  // AppShell only ever renders inside RequireAuth (see AppRouter.tsx),
+  // so `user` is always non-null here in practice -- the fallback below
+  // exists only so TopBar's prop type stays a plain `string`, not to
+  // handle a real anonymous-render case.
+  const handleSignOut = async () => {
+    await logout()
+    navigate(ROUTE_PATHS.login, { replace: true })
+  }
 
   const toggleCollapsed = () => {
     setIsCollapsed((current) => {
@@ -51,7 +64,12 @@ export function AppShell() {
         onCloseMobile={mobileNav.close}
       />
       <div className={styles.column}>
-        <TopBar breadcrumbSegments={[{ label: activeLabel }]} onOpenMobileNav={mobileNav.open} />
+        <TopBar
+          breadcrumbSegments={[{ label: activeLabel }]}
+          onOpenMobileNav={mobileNav.open}
+          userName={user?.email ?? 'Signed in'}
+          onSignOut={handleSignOut}
+        />
         <main id="main-content" className={styles.main} tabIndex={-1}>
           <WorkspaceLayout>
             <Outlet />

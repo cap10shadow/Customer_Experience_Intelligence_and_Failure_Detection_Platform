@@ -7,6 +7,8 @@ import { lazy } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 
 import { AppShell } from '@/app/layouts/AppShell'
+import { LoginPage } from '@/auth/components/LoginPage'
+import { RequireAuth } from '@/auth/components/RequireAuth'
 
 import { ROUTE_PATHS, ROUTE_TEMPLATES } from './routePaths'
 
@@ -32,9 +34,17 @@ const AdministrationWorkspace = lazy(() =>
  * only need the lazy component itself -- no per-route fallback wiring.
  */
 export const router = createBrowserRouter([
+  // Phase 13 Batch 2 (AD-6): the one route outside RequireAuth/AppShell
+  // -- a signed-out visitor must be able to reach it without already
+  // having a session.
+  { path: ROUTE_PATHS.login, element: <LoginPage /> },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
     children: [
       { index: true, element: <DashboardWorkspace /> },
       { path: ROUTE_TEMPLATES.investigation, element: <InvestigationsWorkspace /> },

@@ -53,6 +53,21 @@ class ResourceNotFoundError(GatewayError):
     code = "RESOURCE_NOT_FOUND"
 
 
+class AuthenticationError(GatewayError):
+    """
+    Phase 13 Batch 2 (AD-6): missing, invalid, or expired session --
+    covers both an anonymous request to a protected route and a bad
+    login attempt. `message` is always the single generic phrase
+    "Invalid email or password." for a failed login (never distinguishes
+    unknown-email from wrong-password from inactive-user -- AD-6/§10)
+    or "Authentication required." for a missing/expired/invalid session
+    -- never a credential, token fragment, or internal detail.
+    """
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    code = "UNAUTHENTICATED"
+
+
 class ConflictError(GatewayError):
     status_code = status.HTTP_409_CONFLICT
     code = "CONFLICT"

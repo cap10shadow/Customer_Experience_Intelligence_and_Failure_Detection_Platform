@@ -234,7 +234,15 @@ services:
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
-      - VITE_API_BASE_URL=http://localhost:8000
+      # Phase 13 Batch 2 (AD-6): no VITE_API_BASE_URL override -- the
+      # frontend's own default ('/api', frontend/src/app/configuration/
+      # env.ts) now applies, routed through vite.config.ts's existing
+      # `/api` -> gateway_service:8000 proxy. This makes the browser see
+      # the API as same-origin (http://localhost:3000), which the
+      # HttpOnly session cookie requires -- the previous absolute
+      # cross-origin URL here is exactly the contradiction AD-6
+      # documents and corrects (docs/DECISIONS.md, docs/architecture/
+      # phase-13/PHASE_13_ARCHITECTURE.md §9).
     restart: unless-stopped
 
   # ---------------------------------------------------------------------

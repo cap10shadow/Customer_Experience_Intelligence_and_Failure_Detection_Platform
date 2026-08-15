@@ -10,6 +10,10 @@ export const ROUTE_PATHS = {
   recommendations: '/recommendations',
   analytics: '/analytics',
   administration: '/administration',
+  // Phase 13 Batch 2 (AD-6): the one anonymous-accessible route in the
+  // frontend router -- outside AppShell, so it never renders the
+  // sidebar/top bar chrome a signed-out visitor shouldn't see.
+  login: '/login',
 } as const
 
 export type RoutePathKey = keyof typeof ROUTE_PATHS

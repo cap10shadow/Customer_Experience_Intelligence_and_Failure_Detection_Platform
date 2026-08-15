@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -7,14 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.services.gateway_service.app.models.identity import Role, User, UserRole
 
 """
-Identity lookup primitives (Phase 13 Batch 1, AD-1 §7/§8). Persistence
-only, matching this platform's existing repository convention
-(ComplaintRepository is the closest precedent for a plain,
-non-port/adapter repository class): no password verification, no JWT,
-no route wiring. Callers (a future Batch 3 login flow, Batch 4 role
-assignment, or a test) construct these directly against an
-`AsyncSession` -- nothing here is exposed through any Gateway route in
-this batch.
+Identity lookup primitives (Phase 13 Batch 1, AD-1 §7/§8; extended in
+Batch 2 with `touch_last_login`). Persistence only, matching this
+platform's existing repository convention (ComplaintRepository is the
+closest precedent for a plain, non-port/adapter repository class): no
+password verification, no JWT. As of Batch 2, `UserRepository` is
+consumed by `app/services/auth_service.py` and `app/api/auth.py`;
+`RoleRepository` remains unconsumed until the RBAC batch.
 """
 
 
@@ -38,6 +38,23 @@ class UserRepository:
         stmt = select(User).where(User.email == email)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def touch_last_login(self, user_id: uuid.UUID) -> None:
+        """
+        Phase 13 Batch 2: sets `last_login_at` (and `updated_at`)
+        explicitly in application code on a successful login -- the
+        exact pattern `User.updated_at`'s own docstring (Batch 1)
+        anticipated, never `onupdate=func.now()` (MissingGreenlet
+        hazard). A no-op if `user_id` doesn't exist (defensive only;
+        callers always pass an id just returned by `authenticate()`).
+        """
+        user = await self.get_by_id(user_id)
+        if user is None:
+            return
+        now = datetime.now(timezone.utc)
+        user.last_login_at = now
+        user.updated_at = now
+        await self.session.flush()
 
 
 class RoleRepository:

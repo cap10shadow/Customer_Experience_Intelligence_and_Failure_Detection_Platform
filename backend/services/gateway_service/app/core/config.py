@@ -36,6 +36,21 @@ class GatewaySettings(BaseSettings):
     # list so a .env edit doesn't need JSON-array syntax.
     CORS_ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
+    # Phase 13 Batch 2 (AD-1/AD-6): the Gateway's own JWT session signing
+    # key. The default below is an explicit, obviously-fake development
+    # secret -- the same weak-dev-default convention already used by
+    # POSTGRES_PASSWORD ("postgres") and GF_SECURITY_ADMIN_PASSWORD
+    # ("admin") elsewhere in this repository, always overridable via
+    # .env, and flagged (§19 of the frozen architecture) as requiring
+    # rotation before any real deployment. Never a VITE_* variable --
+    # this must never reach frontend/browser code.
+    JWT_SECRET_KEY: str = "dev-only-insecure-secret-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    # Short-lived per AD-6 ("short-lived JWT"); no refresh token exists
+    # in this batch, so this is also the platform's full session length
+    # today -- a user must log in again after this many minutes.
+    JWT_EXPIRE_MINUTES: int = 30
+
     @property
     def downstream_service_urls(self) -> dict[str, str]:
         return {
