@@ -1,0 +1,9 @@
+# Phase 13 Frozen Batch 1 (CI, docs/architecture/phase-13/
+# PHASE_13_ARCHITECTURE.md §21). pytest itself is not declared in any
+# service's requirements.txt despite 145+ existing test files already
+# depending on it (run manually, per every phase-closure verification
+# section in docs/PROJECT_STATUS.md) -- this is the one missing pin
+# needed to run the existing suite deterministically in CI. Not a new
+# testing framework: pytest is already the repository's actual test
+# runner (see backend/services/*/tests/, backend/shared/tests/).
+pytest==9.0.3

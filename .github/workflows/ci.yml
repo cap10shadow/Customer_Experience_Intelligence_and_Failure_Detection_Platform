@@ -1,0 +1,186 @@
+name: CI
+
+# Phase 13 Frozen Batch 1 (docs/architecture/phase-13/PHASE_13_ARCHITECTURE.md
+# §21, §31 Definition of Done, §32 Batch 1): wires the repository's
+# already-existing, already-working tooling (pytest, Vitest, tsc, eslint,
+# `npm run build`, `docker compose config`) into automation for the first
+# time. No new CI stack, framework, or tool is introduced.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Minimum permissions required: read the repository, nothing else. No job
+# publishes a package, comments on a PR, or writes repository state.
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Backend tests (pytest)
+    runs-on: ubuntu-latest
+
+    # Matches docker-compose.yml's `postgres` service (image, default
+    # credentials) so the same schema-creation path (`alembic upgrade
+    # head`) used by every real deployment of this platform is what CI
+    # exercises too -- not a CI-only substitute mechanism.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: operational_intelligence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d operational_intelligence"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # GitHub Actions `services:` containers publish to the runner's own
+      # localhost, not a Docker-network hostname -- the job itself runs
+      # directly on the runner host, not inside the Compose network. This
+      # matches `backend/shared/config/settings.py`'s own documented
+      # default (`POSTGRES_HOST: str = "localhost"`, "Docker overrides
+      # this via .env"); no `.env` file is created in this job, so that
+      # default applies unchanged. Setting POSTGRES_HOST=postgres here
+      # (the Docker-network value) would reproduce the documented
+      # host-shell DNS failure this project has already hit before.
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: operational_intelligence
+      # Left at its default (true): backend/shared/tests/test_tracing.py
+      # exercises the real tracing wiring itself (span creation/
+      # continuity) and fails outright with TRACING_ENABLED=false
+      # (verified during this batch's local validation -- 5 tests
+      # regress). No otel-collector runs in CI, so span export retries
+      # against an unreachable host print harmless stderr warnings; they
+      # do not fail any test.
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Matches every backend Dockerfile's `FROM python:3.11-slim`.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Deterministic, pinned install -- the union of all 9 services'
+      # already-committed requirements.txt files (identical pins wherever
+      # they overlap; verified no version conflicts) plus pytest itself,
+      # the one test-running dependency this repository has never
+      # actually pinned anywhere despite 145+ existing test files
+      # depending on it (backend/requirements-test.txt, added by this
+      # batch).
+      # A single combined install (all 9 services' requirements.txt plus
+      # requirements-test.txt in one pip invocation) so pip's resolver
+      # validates cross-file consistency atomically, rather than 9
+      # sequential installs where a later, unpinned transitive dependency
+      # could silently drift an earlier exact pin (e.g. httpx). Safe here
+      # because every pin that overlaps between services is already
+      # identical (verified during this batch's implementation).
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            -r backend/services/anomaly_service/requirements.txt \
+            -r backend/services/business_impact_service/requirements.txt \
+            -r backend/services/copilot_service/requirements.txt \
+            -r backend/services/evaluation_service/requirements.txt \
+            -r backend/services/gateway_service/requirements.txt \
+            -r backend/services/ingestion_service/requirements.txt \
+            -r backend/services/nlp_service/requirements.txt \
+            -r backend/services/recommendation_service/requirements.txt \
+            -r backend/services/root_cause_service/requirements.txt \
+            -r backend/requirements-test.txt
+
+      # The platform's one linear Alembic chain (ARCH-002) is the only
+      # approved way any deployment of this platform creates its schema
+      # (backend/services/gateway_service/Dockerfile,
+      # backend/services/ingestion_service/Dockerfile). Two active test
+      # files (recommendation_service, copilot_service) insert real rows
+      # into gateway_service's `users` table to exercise the cross-service
+      # `decided_by`/`actor_id` foreign key honestly, so it must exist.
+      #
+      # KNOWN ISSUE (carried forward from Batch 9, reproduced during this
+      # batch's own local validation against a genuinely fresh database):
+      # migration f05ea2afc3ee's `op.add_column(..., sa.Enum(...,
+      # name="recommendationdecision"))` does not create the
+      # `recommendationdecision` Postgres enum type first -- `op.add_column`
+      # (unlike `op.create_table`) does not auto-create Postgres ENUM
+      # types. Against a completely empty database this step fails with
+      # `UndefinedObjectError: type "recommendationdecision" does not
+      # exist`. This is a pre-existing defect in a historical migration;
+      # Frozen Batch 1 (CI) is explicitly forbidden from modifying
+      # historical migrations, so it is not fixed here. See this batch's
+      # implementation report for the full reproduction and the decision
+      # this leaves open.
+      - name: Run database migrations
+        run: python -m alembic upgrade head
+
+      - name: Run backend test suite
+        run: python -m pytest backend -q
+
+  frontend-checks:
+    name: Frontend checks (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # Deterministic install from the committed lockfile -- no lockfile
+      # regeneration, no dependency upgrade.
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Typecheck (tsc)
+        run: npm run typecheck
+
+      - name: Test (vitest)
+        run: npm test
+
+      # Scripted since Phase 10 but never actually invoked before this
+      # batch (§20/§21 of the frozen architecture) -- load-bearing for
+      # docker-compose.prod.yml's frontend build stage.
+      - name: Production build (vite build)
+        run: npm run build
+
+  compose-validate:
+    name: Docker Compose config validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # docker-compose.yml (development) -- every interpolated variable
+      # already carries a default (verified: none require an unset .env),
+      # so this validates cleanly with no .env file present.
+      - name: Validate development Compose configuration
+        run: docker compose -f docker-compose.yml config --quiet
+
+      # docker-compose.prod.yml (production-like, AD-2) is a standalone
+      # configuration, not a base-file override (see its own header
+      # comment), so it is validated independently.
+      - name: Validate production Compose configuration
+        run: docker compose -f docker-compose.prod.yml config --quiet

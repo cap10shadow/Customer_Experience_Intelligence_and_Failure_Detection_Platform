@@ -1,5 +1,15 @@
 fastapi==0.109.2
 uvicorn==0.27.1
+# Phase 13 Batch 10: minimal, explicitly-authorized dependency fix for a
+# pre-existing gap discovered in Batch 9 -- this service's own
+# app/services/business_impact_event_publisher.py (and main.py) import
+# httpx directly, but it was never listed here (only the
+# opentelemetry-instrumentation-httpx *instrumentation* package was,
+# which does not itself depend on httpx). Crashed on every fresh build,
+# dev or production-like, with `ModuleNotFoundError: No module named
+# 'httpx'`. Version matches every sibling service that already declares
+# it (gateway_service, copilot_service).
+httpx==0.27.0
 pydantic-settings==2.1.0
 sqlalchemy==2.0.36
 asyncpg==0.29.0
