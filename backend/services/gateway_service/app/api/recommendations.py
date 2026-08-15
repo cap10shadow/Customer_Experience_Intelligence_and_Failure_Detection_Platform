@@ -1,6 +1,7 @@
 import httpx
 from fastapi import APIRouter, Depends
 
+from backend.services.gateway_service.app.core.authorization import require_role
 from backend.services.gateway_service.app.dependencies.http_client import get_http_client
 from backend.services.gateway_service.app.schemas.recommendations import (
     RecommendationDecisionPatchRequest,
@@ -33,7 +34,11 @@ async def get_recommendation(
     return await build_recommendation(client, recommendation_id)
 
 
-@router.patch("/recommendations/{recommendation_id}/decision", response_model=RecommendationResponse)
+@router.patch(
+    "/recommendations/{recommendation_id}/decision",
+    response_model=RecommendationResponse,
+    dependencies=[Depends(require_role("operator"))],
+)
 async def patch_recommendation_decision(
     recommendation_id: str,
     request: RecommendationDecisionPatchRequest,
@@ -47,6 +52,10 @@ async def patch_recommendation_decision(
     (rejecting any unsupported field, including an actor/owner or a
     client-supplied timestamp), and `update_recommendation_decision`
     forwards the request as-is.
+
+    Phase 13 Batch 3 (§12): requires `operator` (not just `viewer`,
+    which the router-level dependency already grants access under) --
+    the one mutating route this router exposes.
     """
     return await update_recommendation_decision(
         client, recommendation_id, decision=request.decision, note=request.note

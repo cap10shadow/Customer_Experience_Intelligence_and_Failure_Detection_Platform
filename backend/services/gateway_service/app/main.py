@@ -12,7 +12,7 @@ from backend.services.gateway_service.app.api.copilot import router as copilot_r
 from backend.services.gateway_service.app.api.dashboard import router as dashboard_router
 from backend.services.gateway_service.app.api.investigations import router as investigations_router
 from backend.services.gateway_service.app.api.recommendations import router as recommendations_router
-from backend.services.gateway_service.app.core.auth_dependency import get_current_user
+from backend.services.gateway_service.app.core.authorization import require_role
 from backend.services.gateway_service.app.core.config import settings
 from backend.services.gateway_service.app.core.errors import (
     GatewayError,
@@ -91,22 +91,31 @@ init_tracing("gateway_service", app, engine=engine)
 # that does require a session.
 app.include_router(auth_router, prefix="/api/v1")
 
-# Phase 13 Batch 2 (AD-1/AD-6): every one of these 6 routers requires a
-# valid session -- this is authentication only ("who are you"), not
-# authorization ("are you allowed"): every route here accepts any
-# authenticated principal regardless of role, matching §12's permission
-# matrix where every existing route's minimum requirement is "viewer"
-# (i.e. authenticated at all). Role-differentiated enforcement (viewer
-# vs operator vs admin) is explicitly RBAC-batch scope, not this one.
-# `/health`, `/health/ready`, and `/metrics` are deliberately excluded
-# (mounted above/below, never through this dependency).
-_require_session = [Depends(get_current_user)]
-app.include_router(dashboard_router, prefix="/api/v1", dependencies=_require_session)
-app.include_router(investigations_router, prefix="/api/v1", dependencies=_require_session)
-app.include_router(recommendations_router, prefix="/api/v1", dependencies=_require_session)
-app.include_router(analytics_router, prefix="/api/v1", dependencies=_require_session)
-app.include_router(administration_router, prefix="/api/v1", dependencies=_require_session)
-app.include_router(copilot_router, prefix="/api/v1", dependencies=_require_session)
+# Phase 13 Batch 3 (RBAC, §11/§12's permission matrix): role-based
+# authorization, replacing Batch 2's blanket "any authenticated
+# session" gate. `require_role("viewer")` is the baseline for every
+# read-only router below -- per the matrix, a session with zero roles
+# assigned does not satisfy even "viewer", so this is a real role
+# check, not merely "is there a valid cookie" (Batch 2's prior
+# behavior). `recommendations_router` mixes a viewer-level GET with an
+# operator-level PATCH in the same router file, so its PATCH route
+# carries its own additional `require_role("operator")` dependency
+# directly in `api/recommendations.py` -- the router-level "viewer"
+# dependency below still applies to it too (operator already implies
+# viewer in the hierarchy, so this is redundant-but-harmless, not a
+# conflict). `copilot_router` is entirely operator-level (its one route,
+# POST /copilot/messages, per the matrix), so it gets "operator" at the
+# router level directly, with no separate per-route override needed.
+# `/health`, `/health/ready`, and `/metrics` remain unauthenticated,
+# excluded from all of this (mounted above/below).
+_require_viewer = [Depends(require_role("viewer"))]
+_require_operator = [Depends(require_role("operator"))]
+app.include_router(dashboard_router, prefix="/api/v1", dependencies=_require_viewer)
+app.include_router(investigations_router, prefix="/api/v1", dependencies=_require_viewer)
+app.include_router(recommendations_router, prefix="/api/v1", dependencies=_require_viewer)
+app.include_router(analytics_router, prefix="/api/v1", dependencies=_require_viewer)
+app.include_router(administration_router, prefix="/api/v1", dependencies=_require_viewer)
+app.include_router(copilot_router, prefix="/api/v1", dependencies=_require_operator)
 
 
 @app.get("/health")

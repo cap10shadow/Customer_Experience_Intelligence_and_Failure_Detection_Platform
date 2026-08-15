@@ -68,6 +68,21 @@ class AuthenticationError(GatewayError):
     code = "UNAUTHENTICATED"
 
 
+class AuthorizationError(GatewayError):
+    """
+    Phase 13 Batch 3 (RBAC, §11/§12): a valid, authenticated session
+    that lacks the role a route requires -- distinct from
+    `AuthenticationError` (401, "who are you") by design: this is
+    always 403 ("I know who you are; you may not do this"). `message`
+    is a fixed, generic phrase that never names the caller's actual
+    roles or the specific role required -- both would leak authorization
+    internals to a client that already isn't supposed to know them.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "FORBIDDEN"
+
+
 class ConflictError(GatewayError):
     status_code = status.HTTP_409_CONFLICT
     code = "CONFLICT"
