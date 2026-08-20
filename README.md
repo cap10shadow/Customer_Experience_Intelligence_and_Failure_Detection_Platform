@@ -60,7 +60,7 @@ This is the real, working path through the product today — not an aspirational
 
 ### Incident / Anomaly Detection
 - Detected incidents are drillable into root cause, business impact, and recommendations, all keyed to the same evidence.
-- A read-only AI Copilot answers natural-language questions grounded in this same real evidence (see [Current Scope](#current-scope-and-future-improvements) for its LLM status).
+- A read-only Copilot interface is implemented with authenticated conversation ownership and an evidence/tool boundary; a live LLM provider is not currently configured.
 
 ### Administration & Dataset Lifecycle
 - Real dataset lifecycle controls (create, finalize, archive, version history) and platform/service health.
@@ -165,7 +165,7 @@ cd frontend && npm test                                  # frontend
 
 ## Validation
 
-The intelligence pipeline, authentication/RBAC, dataset isolation, and the full ingestion → dataset-finalization workflow have been manually walked through end-to-end against real running services, in addition to the automated test suites (1,400+ backend tests, 380+ frontend tests, all passing in CI). A saved, evidence-labelled validation record covering the pipeline, dataset scoping, and known edge cases is in [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md).
+The intelligence pipeline, authentication/RBAC, dataset isolation, and the full ingestion → dataset-finalization workflow have been manually walked through end-to-end against real running services, in addition to the automated test suites (Validated with 1,400+ backend tests and 380+ frontend tests, with CI covering backend tests, frontend checks/build, and Compose validation.). A saved, evidence-labelled validation record covering the pipeline, dataset scoping, and known edge cases is in [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md).
 
 ## Current Scope and Future Improvements
 
