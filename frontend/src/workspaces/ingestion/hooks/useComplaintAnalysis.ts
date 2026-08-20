@@ -45,11 +45,13 @@ export function useComplaintAnalysis(
   // A row set change invalidates the current page's results -- start back at page 1
   // rather than showing a stale page number for a now-different row count.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors useDataset's identical "reset on input change" branch.
     setPage(1)
   }, [rows])
 
   useEffect(() => {
     if (!datasetId || rows.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors useDataset's identical "nothing to fetch" branch.
       setAnalysis(null)
       setError(null)
       return

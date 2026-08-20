@@ -8,7 +8,7 @@
 
 The Customer Experience Intelligence & Failure Detection Platform is an operational intelligence system designed to help organizations transform customer complaints and operational signals into actionable business insights, root-cause analysis, and operational recommendations.
 
-Per the Architecture Review Board (ADR-001), the platform is formally named the **Customer Experience Intelligence & Operational Decision Support Platform**. Its purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions — it is NOT merely a complaint analytics dashboard.
+The platform's purpose, ratified by the Architecture Review Board as an internal identity clarification (ADR-001, `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`), is to transform customer complaints into explainable operational intelligence and evidence-based business decisions — it is NOT merely a complaint analytics dashboard. (ADR-001's descriptive alias, "Customer Experience Intelligence & Operational Decision Support Platform," is documented rationale only; the platform's actual name, used consistently across the repository, README, and every other document, remains the **Customer Experience Intelligence & Failure Detection Platform**.)
 
 The platform combines:
 

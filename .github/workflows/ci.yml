@@ -170,6 +170,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Every backend service declares `env_file: - .env` (docker-compose.yml,
+      # docker-compose.prod.yml) -- Compose requires that file to actually
+      # exist on disk to resolve `config`, even though every *interpolated*
+      # `${VAR:-default}` in these files already carries a default and
+      # doesn't itself need one. `.env` is git-ignored (never committed),
+      # so a fresh checkout has none. This mirrors the repository's own
+      # documented setup step (README "Getting Started": `cp .env.example
+      # .env`) rather than inventing a CI-only mechanism.
+      - name: Create .env for Compose validation
+        run: cp .env.example .env
+
       # docker-compose.yml (development) -- every interpolated variable
       # already carries a default (verified: none require an unset .env),
       # so this validates cleanly with no .env file present.

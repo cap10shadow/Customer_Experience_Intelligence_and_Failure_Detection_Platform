@@ -165,18 +165,33 @@ describe('Analytics real Gateway integration', () => {
 
   it('Part 7: retry issues a genuine new GET /api/v1/analytics/trends request and renders real data on success', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi
+    // AnalyticsWorkspaceContent also renders DatasetVersionLabel, which
+    // issues its own independent GET /v1/datasets/{id} via useDataset --
+    // routed separately here so it never consumes a queued
+    // analytics-trends response (the two fetches are concurrent and
+    // otherwise arrive at the shared mock queue in a nondeterministic
+    // order).
+    const trendsMock = vi
       .fn()
       .mockResolvedValueOnce(
         jsonResponse({ error: { code: 'DOWNSTREAM_SERVICE_FAILURE', message: 'Trend data could not be retrieved.', requestId: 'req-1' } }, 502),
       )
       .mockResolvedValueOnce(jsonResponse(SAMPLE_ANALYTICS_RESPONSE))
+    const fetchMock = vi.fn((input: RequestInfo | URL, ...rest: unknown[]) => {
+      if (String(input).includes('/v1/datasets/')) {
+        // Any non-404 failure leaves DatasetVersionLabel rendering the
+        // dataset name alone (AnalyticsWorkspaceContent only special-cases
+        // 404) -- irrelevant to what this test verifies.
+        return Promise.resolve(jsonResponse({ error: { code: 'DOWNSTREAM_SERVICE_FAILURE', message: 'not needed for this test', requestId: 'req-0' } }, 502))
+      }
+      return trendsMock(input, ...rest)
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     renderWorkspace()
     await waitForLoaded()
     expect(screen.getByText(/Something went wrong loading the Trend Analysis/)).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(trendsMock).toHaveBeenCalledTimes(1)
 
     // Trend Analysis and Executive Overview (Step 7.X A-08) share the one
     // fetch, so both show their own "Try again" -- clicking either one
@@ -184,7 +199,7 @@ describe('Analytics real Gateway integration', () => {
     const retryButtons = screen.getAllByRole('button', { name: 'Try again' })
     await user.click(retryButtons[0])
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(trendsMock).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(screen.getAllByText(/20 complaint\(s\) were recorded on 2026-08-08/).length).toBeGreaterThan(0))
     expect(screen.queryByText(/Something went wrong loading the Trend Analysis/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Something went wrong loading the Executive Overview/)).not.toBeInTheDocument()
@@ -197,14 +212,19 @@ describe('Analytics real Gateway integration', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
+    // Counts only the analytics-trends requests -- AnalyticsWorkspaceContent's
+    // DatasetVersionLabel issues its own independent GET /v1/datasets/{id}
+    // via useDataset, which also resolves through this same catch-all mock.
+    const trendsCalls = () => fetchMock.mock.calls.filter(([input]) => !String(input).includes('/v1/datasets/')).length
+
     renderWorkspace()
     await waitForLoaded()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(trendsCalls()).toBe(1)
 
     const retryButtons = screen.getAllByRole('button', { name: 'Try again' })
     await user.click(retryButtons[0])
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(trendsCalls()).toBe(2))
     expect(screen.getByText(/Something went wrong loading the Trend Analysis/)).toBeInTheDocument()
     expect(screen.getAllByText(/Still unavailable\./).length).toBe(2)
   })

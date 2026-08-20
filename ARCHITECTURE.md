@@ -6,7 +6,7 @@
 
 # 1. Architecture Philosophy
 
-Per the Architecture Review Board (ADR-001; see `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`), the platform is formally named the **Customer Experience Intelligence & Operational Decision Support Platform**. Its purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions. It is NOT merely a complaint analytics dashboard.
+Per the Architecture Review Board (ADR-001; see `docs/ADR_ARCHITECTURE_REVIEW_BOARD.md`), the platform's purpose is to transform customer complaints into explainable operational intelligence and evidence-based business decisions. It is NOT merely a complaint analytics dashboard. (ADR-001's descriptive alias, "Customer Experience Intelligence & Operational Decision Support Platform," is documented rationale only; the platform's actual name, used consistently across the repository, README, and every other document, remains the **Customer Experience Intelligence & Failure Detection Platform**.)
 
 The system is designed as a modular operational intelligence platform that combines:
 - backend services
