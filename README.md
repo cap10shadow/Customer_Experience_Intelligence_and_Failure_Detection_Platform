@@ -1,6 +1,6 @@
 # Customer Experience Intelligence & Failure Detection Platform
 
-A modular platform that turns raw customer complaints into explainable operational intelligence. It ingests complaint data, normalizes and maps it against known vocabulary, runs it through a real anomaly-detection and root-cause pipeline scoped to a versioned dataset, and lets an operator act on the result — with every decision attributed to a real identity.
+A modular platform that turns raw customer complaints into explainable operational intelligence. It ingests complaint data, normalizes and maps it against known vocabulary, runs it through an operational anomaly-detection and root-cause pipeline scoped to a versioned dataset, and lets an operator act on the result — with every decision attributed to a real identity.
 
 It is an engineering-focused prototype, not a deployed production service: the domain logic, persistence, authentication, and CI are real and independently verified (see [Validation](#validation)), but there is no live traffic, no cloud deployment, and no external customers. Where something is intentionally incomplete or deferred, this README says so directly rather than describing aspirational behavior as shipped.
 
@@ -31,7 +31,7 @@ flowchart LR
     I --> J
 ```
 
-This is the real, working path through the product today — not an aspirational diagram. Field mapping, normalization, and row analysis happen client-side against real backend vocabulary before a row is ever submitted; ingestion, dataset finalization, and every downstream workspace are real Gateway-backed requests.
+This is the implemented, working path through the product today. Field mapping, normalization, and row analysis happen client-side against the backend's own vocabulary before a row is ever submitted; ingestion, dataset finalization, and every downstream workspace call the Gateway directly.
 
 ## Key Capabilities
 
@@ -165,11 +165,14 @@ cd frontend && npm test                                  # frontend
 
 ## Validation
 
-The intelligence pipeline, authentication/RBAC, dataset isolation, and the full ingestion → dataset-finalization workflow have been manually walked through end-to-end against real running services, in addition to the automated test suites (Validated with 1,400+ backend tests and 380+ frontend tests, with CI covering backend tests, frontend checks/build, and Compose validation.). A saved, evidence-labelled validation record covering the pipeline, dataset scoping, and known edge cases is in [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md).
+The intelligence pipeline, authentication/RBAC, dataset isolation, and the full ingestion → dataset-finalization workflow have been manually walked through end-to-end against running services, in addition to the automated test suites (1,400+ backend tests, 380+ frontend tests, all passing in CI). A saved, evidence-labelled validation record covering the pipeline, dataset scoping, and known edge cases is in [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md).
+
+=======
+
 
 ## Current Scope and Future Improvements
 
-The end-to-end workflow described above — upload, map, normalize, ingest, finalize, and see the result reflected in a dataset-scoped Dashboard, Analytics, and incident/anomaly pipeline — is implemented and working today, not a mockup.
+The end-to-end workflow described above — upload, map, normalize, ingest, finalize, and see the result reflected in a dataset-scoped Dashboard, Analytics, and incident/anomaly pipeline — is implemented and working today.
 
 The next iteration of the platform is expected to focus on:
 
