@@ -8,7 +8,7 @@ It is an engineering-focused prototype, not a deployed production service: the d
 
 ## Why This Project Exists
 
-Operational teams — e-commerce, logistics, fintech, SaaS — receive a continuous stream of customer complaints but have no systematic way to tell an isolated complaint from a real, spreading operational failure (a payment outage, a delivery-region breakdown, a support-quality regression) until it's already large. Turning unstructured complaint data into a trustworthy signal isn't a dashboarding problem — it requires a real pipeline: ingestion with correct field mapping, statistical anomaly detection against a genuine baseline, correlation into incidents, deterministic root-cause and business-impact reasoning, and recommendations that cite the evidence they came from.
+Operational teams — e-commerce, logistics, fintech, SaaS — receive a continuous stream of customer complaints but have no systematic way to tell an isolated complaint from a real, spreading operational failure (a payment outage, a delivery-region breakdown, a support-quality regression) until it's already large. Turning unstructured complaint data into a trustworthy signal isn't a dashboarding problem — it requires a real pipeline: ingestion with correct field mapping, deterministic anomaly detection against a prior-window baseline, correlation into incidents, deterministic root-cause and business-impact reasoning, and recommendations that cite the evidence they came from.
 
 ## What the Platform Does
 
@@ -44,7 +44,7 @@ This is the implemented, working path through the product today. Field mapping, 
 
 ### Intelligence Pipeline
 - NLP enrichment: sentiment, category, urgency, and keyword extraction (deterministic classifiers).
-- Anomaly detection across volume, region, category, sentiment, and urgency, against a rolling baseline — dataset-scoped, so unrelated datasets never contaminate each other's baseline.
+- Anomaly detection across volume, region, category, sentiment, and urgency, comparing each current time window against the prior equivalent window with fixed percentage-change thresholds — dataset-scoped, so unrelated datasets never contaminate each other's baseline.
 - Incident correlation groups related anomalies into a single incident.
 - Deterministic root-cause rule engine with a confirm/reject/refresh lifecycle.
 - Weighted, five-dimension business-impact scoring (financial/customer/operational/SLA/reputation).
@@ -86,7 +86,7 @@ flowchart TB
     ING & NLP & ANOM & RC & BI & REC & COP --> PG[("PostgreSQL<br/>one Alembic chain")]
 ```
 
-Nine independently owned backend services sit behind `gateway_service`, the platform's sole public API boundary and identity owner. Every service persists to one shared PostgreSQL instance through its own local read model — never another service's ORM class. `ingestion_service` owns Dataset/DatasetVersion identity and complaint intake; every downstream service (`anomaly_service`, `root_cause_service`, `business_impact_service`, `recommendation_service`) requires a `dataset_id` on every write and read, so two datasets can never contaminate each other's analysis. Full architecture rationale is in [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`docs/DECISIONS.md`](docs/DECISIONS.md).
+Nine independently owned backend services sit behind `gateway_service`, the platform's sole public API boundary and identity owner. Every service persists to one shared PostgreSQL instance through its own local read model — never another service's ORM class. `ingestion_service` owns Dataset/DatasetVersion identity and complaint intake; every downstream service (`anomaly_service`, `root_cause_service`, `business_impact_service`, `recommendation_service`) requires a `dataset_id` on every write, and `anomaly_service`, `root_cause_service`, and `business_impact_service` require it on every read as well, so two datasets can never contaminate each other's analysis or query results through those services. `recommendation_service`'s by-id read (`GET /recommendations/{id}`) is a deliberate, ratified exception (AD-12 Addendum) rather than an oversight — a Recommendation stays addressable by its own id alone across a direct link or bookmark, with the frontend disclosing a dataset mismatch instead of blocking it. Full architecture rationale is in [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Technology Stack
 

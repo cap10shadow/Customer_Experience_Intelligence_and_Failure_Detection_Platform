@@ -133,8 +133,10 @@ class BusinessImpactApplicationService:
         except Exception:  # noqa: BLE001 -- delivery must never fail/roll back an already-persisted assessment.
             logger.exception("BusinessImpactCompleted publishing raised unexpectedly for incident %s", incident_id)
 
-    async def get_assessment(self, assessment_id: uuid.UUID) -> Optional[BusinessImpactAssessmentEntity]:
-        return await self.business_impact_repository.get(assessment_id)
+    async def get_assessment(
+        self, assessment_id: uuid.UUID, dataset_id: Optional[uuid.UUID] = None
+    ) -> Optional[BusinessImpactAssessmentEntity]:
+        return await self.business_impact_repository.get(assessment_id, dataset_id)
 
     async def list_assessments(
         self,

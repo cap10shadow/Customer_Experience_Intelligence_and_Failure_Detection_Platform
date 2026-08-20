@@ -81,8 +81,13 @@ class FakeBusinessImpactRepository:
         self.by_id[entity.assessment_id] = entity
         return entity
 
-    async def get(self, assessment_id: uuid.UUID) -> Optional[BusinessImpactAssessmentEntity]:
-        return self.by_id.get(assessment_id)
+    async def get(
+        self, assessment_id: uuid.UUID, dataset_id: Optional[uuid.UUID] = None
+    ) -> Optional[BusinessImpactAssessmentEntity]:
+        entity = self.by_id.get(assessment_id)
+        if entity is None or dataset_id is None:
+            return entity
+        return entity if entity.dataset_id == dataset_id else None
 
     async def list(
         self,

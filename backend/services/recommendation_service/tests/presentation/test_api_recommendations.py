@@ -80,6 +80,38 @@ async def test_get_recommendation_by_id_404_when_missing(wired_repository):
 
 
 @pytest.mark.anyio
+async def test_get_recommendation_by_id_is_addressable_across_datasets_by_design(wired_repository, make_recommendation):
+    """
+    `GET /recommendations/{id}` deliberately resolves by id alone, unlike
+    root_cause_service/business_impact_service's dataset-scoped
+    equivalents. This is a ratified decision, not an oversight: AD-12
+    Addendum (docs/DECISIONS.md, Decision point 4) documents a
+    Recommendation as reachable across datasets via a direct link or
+    bookmark, with the frontend disclosing a mismatch rather than
+    blocking it (RecommendationsWorkspace.tsx). This test guards against
+    a future change silently "fixing" this into dataset-scoping and
+    breaking that documented, working behavior.
+    """
+    other_dataset_id, other_dataset_version_id = uuid.uuid4(), uuid.uuid4()
+    saved = await wired_repository.save_many(
+        [make_recommendation(incident_id="INC-OTHER-DATASET")],
+        dataset_id=other_dataset_id,
+        dataset_version_id=other_dataset_version_id,
+        incident_id="INC-OTHER-DATASET",
+        generation_id=uuid.uuid4(),
+    )
+    record = saved[0]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
+        # No dataset_id supplied at all -- the route has no such parameter.
+        response = await client.get(f"/api/v1/recommendations/{record.recommendation_id}")
+
+    assert response.status_code == 200
+    assert response.json()["recommendation_id"] == str(record.recommendation_id)
+
+
+@pytest.mark.anyio
 async def test_get_recommendation_by_id_422_for_malformed_uuid(wired_repository):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:

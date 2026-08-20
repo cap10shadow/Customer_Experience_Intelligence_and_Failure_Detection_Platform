@@ -34,8 +34,22 @@ class RootCauseRepository:
         await self.session.flush()
         return root_cause
 
-    async def get(self, root_cause_id: uuid.UUID) -> Optional[RootCause]:
+    async def get(self, root_cause_id: uuid.UUID, dataset_id: Optional[uuid.UUID] = None) -> Optional[RootCause]:
+        """
+        By-id lookup, optionally scoped to `dataset_id`. The public
+        `GET /root-causes/{id}` route always supplies `dataset_id` (see
+        `api/root_causes.py`), so a caller cannot retrieve a RootCause
+        belonging to a dataset it did not ask for through that route — a
+        `root_cause_id` that exists but belongs to a different dataset
+        returns None there, identical to a genuinely missing id. The
+        lifecycle transitions (`confirm`/`reject`/`refresh`) resolve a
+        RootCause by id alone, unchanged — they operate on an id an
+        operator already has in hand from a dataset-scoped read, not on
+        caller-suppliable dataset context.
+        """
         stmt = select(RootCause).where(RootCause.id == root_cause_id)
+        if dataset_id is not None:
+            stmt = stmt.where(RootCause.dataset_id == dataset_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 

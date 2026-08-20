@@ -119,7 +119,7 @@ async def test_get_business_impact_by_assessment_id_round_trips(wired_scenario):
         created = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assessment_id = created.json()["assessment_id"]
 
-        fetched = await client.get(f"/api/v1/business-impact/{assessment_id}")
+        fetched = await client.get(f"/api/v1/business-impact/{assessment_id}", params={"dataset_id": str(DATASET_ID)})
 
     assert fetched.status_code == 200
     assert fetched.json() == created.json()
@@ -129,7 +129,22 @@ async def test_get_business_impact_by_assessment_id_round_trips(wired_scenario):
 async def test_get_business_impact_by_assessment_id_404_when_missing(wired_scenario):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1/business-impact/{uuid.uuid4()}")
+        response = await client.get(f"/api/v1/business-impact/{uuid.uuid4()}", params={"dataset_id": str(DATASET_ID)})
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_get_business_impact_by_assessment_id_404_when_belongs_to_a_different_dataset(wired_scenario):
+    """A real, existing assessment_id belonging to another dataset must not be retrievable -- 404, identical to a missing id."""
+    incident_id, _persisted_root_cause = wired_scenario
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
+        assessment_id = created.json()["assessment_id"]
+
+        response = await client.get(f"/api/v1/business-impact/{assessment_id}", params={"dataset_id": str(uuid.uuid4())})
 
     assert response.status_code == 404
 

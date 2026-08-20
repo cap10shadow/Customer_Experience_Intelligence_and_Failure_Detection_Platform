@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.services.root_cause_service.app.dependencies.services import get_root_cause_application_service
 from backend.services.root_cause_service.app.schemas.root_cause import CreateRootCauseRequest, RootCauseResponse
@@ -45,10 +45,15 @@ async def create_root_cause(
 @router.get("/{root_cause_id}", response_model=RootCauseResponse)
 async def get_root_cause(
     root_cause_id: uuid.UUID,
+    dataset_id: uuid.UUID = Query(..., description="The Dataset this RootCause must belong to."),
     service: RootCauseApplicationService = Depends(get_root_cause_application_service),
 ):
-    """Returns a RootCause by its own ID."""
-    root_cause = await service.get_root_cause(root_cause_id)
+    """
+    Returns a RootCause by its own ID, scoped to `dataset_id`. A
+    `root_cause_id` belonging to a different dataset returns 404,
+    identical to a genuinely missing id -- never a cross-dataset read.
+    """
+    root_cause = await service.get_root_cause(root_cause_id, dataset_id)
     if root_cause is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RootCause not found")
     return root_cause

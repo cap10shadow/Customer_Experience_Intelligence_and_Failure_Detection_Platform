@@ -59,8 +59,8 @@ class MockBusinessImpactApplicationService:
             raise RootCauseNotFoundError(incident_id)
         return _StubAssessment(incident_id, dataset_id=dataset_id, dataset_version_id=dataset_version_id)
 
-    async def get_assessment(self, assessment_id):
-        if assessment_id == SAMPLE_ASSESSMENT_ID:
+    async def get_assessment(self, assessment_id, dataset_id):
+        if assessment_id == SAMPLE_ASSESSMENT_ID and dataset_id == DATASET_ID:
             return _StubAssessment(EXISTING_INCIDENT_ID, assessment_id)
         return None
 
@@ -123,7 +123,9 @@ async def test_post_business_impact_rejects_extra_fields_beyond_incident_id(over
 async def test_get_business_impact_by_id(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}")
+        response = await client.get(
+            f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}", params={"dataset_id": str(DATASET_ID)}
+        )
         assert response.status_code == 200
         assert response.json()["assessment_id"] == str(SAMPLE_ASSESSMENT_ID)
 
@@ -132,7 +134,29 @@ async def test_get_business_impact_by_id(override_dependencies):
 async def test_get_business_impact_by_id_404_when_missing(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1/business-impact/{MISSING_ASSESSMENT_ID}")
+        response = await client.get(
+            f"/api/v1/business-impact/{MISSING_ASSESSMENT_ID}", params={"dataset_id": str(DATASET_ID)}
+        )
+        assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_get_business_impact_by_id_requires_dataset_id(override_dependencies):
+    """The dataset-scoping query parameter is required, not optional -- omitting it is a 422, not a silent global lookup."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}")
+        assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_get_business_impact_by_id_404_when_belongs_to_a_different_dataset(override_dependencies):
+    """A real, existing assessment_id belonging to another dataset must not be retrievable -- 404, identical to a missing id."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}", params={"dataset_id": str(uuid.uuid4())}
+        )
         assert response.status_code == 404
 
 
@@ -181,7 +205,9 @@ async def test_no_update_endpoint_exists(override_dependencies):
 async def test_response_includes_a_real_confidence_level_computed_from_confidence(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}")
+        response = await client.get(
+            f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}", params={"dataset_id": str(DATASET_ID)}
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -196,6 +222,8 @@ async def test_confidence_level_is_never_the_root_cause_vocabulary(override_depe
     """Root Cause's bands use 'Weak'/'Low'/'Medium'/'High'/'Very High' -- Business Impact's response must only ever use its own 'Low'/'Moderate'/'High' vocabulary."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}")
+        response = await client.get(
+            f"/api/v1/business-impact/{SAMPLE_ASSESSMENT_ID}", params={"dataset_id": str(DATASET_ID)}
+        )
 
     assert response.json()["confidence_level"] not in {"Weak", "Medium", "Very High"}

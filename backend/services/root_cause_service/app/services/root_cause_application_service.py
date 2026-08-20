@@ -66,8 +66,8 @@ class RootCauseApplicationService:
         root_cause = RootCauseMapper.to_orm(incident_id, dataset_id, dataset_version_id, candidate)
         return await self.root_cause_repository.save(root_cause)
 
-    async def get_root_cause(self, root_cause_id: uuid.UUID) -> Optional[RootCause]:
-        return await self.root_cause_repository.get(root_cause_id)
+    async def get_root_cause(self, root_cause_id: uuid.UUID, dataset_id: Optional[uuid.UUID] = None) -> Optional[RootCause]:
+        return await self.root_cause_repository.get(root_cause_id, dataset_id)
 
     async def get_root_cause_by_incident(self, incident_id: uuid.UUID) -> Optional[RootCause]:
         return await self.root_cause_repository.get_by_incident(incident_id)

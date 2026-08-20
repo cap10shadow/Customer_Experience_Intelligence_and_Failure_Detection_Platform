@@ -54,8 +54,8 @@ class MockRootCauseApplicationService:
             raise RootCauseAlreadyExistsError(incident_id)
         return _StubRootCause(incident_id, dataset_id, dataset_version_id)
 
-    async def get_root_cause(self, root_cause_id):
-        if root_cause_id == SAMPLE_ROOT_CAUSE_ID:
+    async def get_root_cause(self, root_cause_id, dataset_id=None):
+        if root_cause_id == SAMPLE_ROOT_CAUSE_ID and (dataset_id is None or dataset_id == DATASET_ID):
             return _StubRootCause(EXISTING_INCIDENT_ID)
         return None
 
@@ -142,7 +142,7 @@ async def test_post_root_causes_returns_409_when_already_exists(override_depende
 async def test_get_root_cause_by_id(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1/root-causes/{SAMPLE_ROOT_CAUSE_ID}")
+        response = await client.get(f"/api/v1/root-causes/{SAMPLE_ROOT_CAUSE_ID}", params={"dataset_id": str(DATASET_ID)})
         assert response.status_code == 200
         assert response.json()["id"] == str(SAMPLE_ROOT_CAUSE_ID)
 
@@ -151,7 +151,27 @@ async def test_get_root_cause_by_id(override_dependencies):
 async def test_get_root_cause_by_id_404_when_missing(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1/root-causes/{uuid.uuid4()}")
+        response = await client.get(f"/api/v1/root-causes/{uuid.uuid4()}", params={"dataset_id": str(DATASET_ID)})
+        assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_get_root_cause_by_id_requires_dataset_id(override_dependencies):
+    """The dataset-scoping query parameter is required, not optional -- omitting it is a 422, not a silent global lookup."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(f"/api/v1/root-causes/{SAMPLE_ROOT_CAUSE_ID}")
+        assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_get_root_cause_by_id_404_when_belongs_to_a_different_dataset(override_dependencies):
+    """A real, existing root_cause_id belonging to another dataset must not be retrievable -- 404, identical to a missing id."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            f"/api/v1/root-causes/{SAMPLE_ROOT_CAUSE_ID}", params={"dataset_id": str(uuid.uuid4())}
+        )
         assert response.status_code == 404
 
 

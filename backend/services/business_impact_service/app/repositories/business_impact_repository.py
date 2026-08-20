@@ -36,10 +36,23 @@ class BusinessImpactRepository:
         await self.session.flush()
         return assessment
 
-    async def get(self, assessment_id: uuid.UUID) -> Optional[BusinessImpactAssessmentEntity]:
+    async def get(
+        self, assessment_id: uuid.UUID, dataset_id: Optional[uuid.UUID] = None
+    ) -> Optional[BusinessImpactAssessmentEntity]:
+        """
+        By-id lookup, optionally scoped to `dataset_id`. The public
+        `GET /business-impact/{id}` route always supplies `dataset_id`
+        (see `api/business_impact.py`), so a caller cannot retrieve an
+        assessment belonging to a dataset it did not ask for through
+        that route — an `assessment_id` that exists but belongs to a
+        different dataset returns None there, identical to a genuinely
+        missing id.
+        """
         stmt = select(BusinessImpactAssessmentEntity).where(
             BusinessImpactAssessmentEntity.assessment_id == assessment_id
         )
+        if dataset_id is not None:
+            stmt = stmt.where(BusinessImpactAssessmentEntity.dataset_id == dataset_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 

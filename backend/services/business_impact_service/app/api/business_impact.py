@@ -50,10 +50,16 @@ async def create_business_impact_assessment(
 @router.get("/{assessment_id}", response_model=BusinessImpactAssessmentResponse)
 async def get_business_impact_assessment(
     assessment_id: uuid.UUID,
+    dataset_id: uuid.UUID = Query(..., description="The Dataset this BusinessImpactAssessment must belong to."),
     service: BusinessImpactApplicationService = Depends(get_business_impact_application_service),
 ):
-    """Returns a BusinessImpactAssessment by its own ID."""
-    assessment = await service.get_assessment(assessment_id)
+    """
+    Returns a BusinessImpactAssessment by its own ID, scoped to
+    `dataset_id`. An `assessment_id` belonging to a different dataset
+    returns 404, identical to a genuinely missing id -- never a
+    cross-dataset read.
+    """
+    assessment = await service.get_assessment(assessment_id, dataset_id)
     if assessment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BusinessImpactAssessment not found")
     return assessment

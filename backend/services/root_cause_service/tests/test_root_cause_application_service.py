@@ -54,8 +54,11 @@ class FakeRootCauseRepository:
     async def update(self, root_cause):
         return root_cause
 
-    async def get(self, root_cause_id):
-        return self.by_id.get(root_cause_id)
+    async def get(self, root_cause_id, dataset_id=None):
+        root_cause = self.by_id.get(root_cause_id)
+        if root_cause is None or dataset_id is None:
+            return root_cause
+        return root_cause if root_cause.dataset_id == dataset_id else None
 
     async def get_by_incident(self, incident_id):
         return self.by_incident_id.get(incident_id)
