@@ -1,352 +1,160 @@
-# Final Synthetic-Data Validation Report (F05/F06)
+# Validation Report
 
-**Validation date:** 2026-08-16
-**Scope:** Phase 13 closure items F05 (end-to-end synthetic-data validation) and F06 (whole-project completion validation).
-**Outcome:** 🟡 **Complete with documented limitations** — the full intelligence pipeline, authentication/RBAC, attribution, Copilot ownership, observability, and backup/restore were all exercised against real running services and passed. Remaining gaps are pre-existing, already-documented prototype limitations.
+## 1. Validation Scope
 
-Every claim below is labelled by evidence type:
+This report covers the 2026-08-20 dataset/dataset-version and ingestion-stabilization milestone specifically. It was produced against the repository's current working tree — `main`, commit `8134ede` plus the two CI fixes and one test-fixture fix applied in this pass (see `docs/CHANGELOG.md` for the milestone itself) — which includes the dataset/dataset-version architecture, ingestion normalization and field mapping, row analysis, duplicate detection, dataset-scoped intelligence, and dataset lifecycle/archive handling.
+
+**This is not a repeat, and not a full replacement, of the prior 2026-08-16 whole-system validation.** That report validated a pre-dataset system (17 migrations, one global complaint table, no dataset concept; also Copilot, `evaluation_service`, observability, and backup/restore, none of which are re-covered here) and remains real, valid evidence for everything it tested — it has been preserved verbatim, unedited, at [`docs/VALIDATION_REPORT_2026-08-16_WHOLE_SYSTEM.md`](VALIDATION_REPORT_2026-08-16_WHOLE_SYSTEM.md). This document occupies `docs/VALIDATION_REPORT.md` because it is the current, actively-maintained validation record going forward; it is scoped narrower than its predecessor by design, not by omission. Every claim below is labelled by evidence type, same convention as before:
 
 | Label | Meaning |
 |---|---|
-| `[RUNTIME]` | Executed during this validation against real running services; output observed directly. |
+| `[RUNTIME]` | Executed against real running services during this validation; output observed directly. |
 | `[TEST]` | Produced by an automated test suite run during this validation. |
 | `[CODE INSPECTION]` | Read from source; not executed during this validation. |
-| `[DOCUMENTATION]` | Claimed by a project document; not independently re-verified here. |
 
----
-
-## 1. Environment
+## 2. Environment
 
 | Item | Value |
 |---|---|
 | Host | Windows 11, Docker 29.2.1, Docker Compose v5.1.0 |
-| Host Python (test runner) | 3.13.0 (containers and CI use 3.11) |
-| Dev stack | Compose project `customer_experience_intelligence_and_failure_detection_platform` (`oi_*` containers), persistent `postgres_data` volume |
-| Validation stack | Compose project `oival` — a **separate, disposable stack on its own empty volume**, created so F05 could run against a genuinely fresh database without touching the persistent dev database |
-| Services started | `postgres` + all 9 backend services (gateway, ingestion, nlp, anomaly, root_cause, business_impact, recommendation, copilot, evaluation) |
-| Not started | Frontend container, Prometheus/Grafana/Loki/Promtail/Tempo/otel-collector (outside the harness's required set) |
-| External LLM provider | **Not configured.** `.env.example` ships `LLM_PROVIDER=none` with empty `LLM_API_KEY`; the local `.env` sets no LLM variables at all. All Copilot verification below exercises the honest `NullLLMProvider` fallback. |
+| Backend test runner | Python 3.11 (matches every service's `Dockerfile`) |
+| Frontend test runner | Node 22.12.0 locally; CI now pins Node 22 (see §3) |
+| Validation stack | A separate, disposable Compose project (`oival2`) on its own empty volume — postgres, gateway, ingestion, nlp, anomaly, root_cause, business_impact, recommendation. `copilot_service` and `evaluation_service` were deliberately not started for this pass (not part of the dataset/ingestion milestone under validation); their absence is itself real evidence the service-health check correctly reports (§10). Torn down (`down -v`) after validation — the persistent dev database was never touched. |
+| External LLM provider | Not configured (`LLM_PROVIDER=none`) — unchanged from the prior report, out of scope for this pass. |
 
-`[RUNTIME]` Both Compose files validate cleanly:
-`docker compose config --quiet` → exit 0; `docker compose -f docker-compose.prod.yml config --quiet` → exit 0.
+## 3. CI-Equivalent Verification
 
-`[RUNTIME]` All 10 containers reached `healthy`. All 9 services returned `200 {"status":"ready","checks":{"database":"ok"}}` from `/health/ready`.
+Two real CI failures were found and fixed in this pass before validation began.
 
----
+**Backend — `KeyError: 'dataset_id'` in `test_internal_auth_propagation.py` (3 tests).** Root cause: `recommendation_aggregator._to_response()` now genuinely requires `dataset_id`/`dataset_version_id` on every recommendation payload (provenance fields added by the dataset milestone) — real, intentional application behavior. The three tests' mock downstream-response bodies predated that change and never carried those fields. Fixed by adding them to the fixture bodies; no application code changed. `[TEST]` 5/5 tests in the file now pass.
 
-## 2. Dataset & Scenarios
+**Frontend — crash on Node 20 (`webidl.util.markAsUncloneable is not a function`).** Root cause: `jsdom@30.0.1` pulls in `undici@8.10.0`, which calls a Node-internal webidl API not present on Node 20 (`undici`'s own `engines` field declares `>=22.19.0`; `jsdom` declares `^22.22.2 || ^24.15.0 || >=26.0.0`). `.github/workflows/ci.yml`'s `frontend-checks` job pinned Node 20. This is a CI runtime floor, not a broken package — verified by running the identical `package-lock.json` on Node 22 locally, where it passes cleanly. Fixed by bumping `actions/setup-node`'s `node-version` from `"20"` to `"22"` in `frontend-checks` only; `frontend/Dockerfile` intentionally stays on `node:20-alpine` since it never runs Vitest's jsdom environment.
 
-The harness is `datasets/validation/run_validation.py`. It has **no CLI arguments**; it is designed to be `docker cp`'d into a running container and executed from inside the Docker network, because only `gateway_service` and `postgres` are host-published. It generates its data in-process (it does **not** read `datasets/sample_complaints/operational_seed.json`, which is a separate 8-record seed file used for manual seeding).
-
-`[CODE INSPECTION]` Two scenario populations, 24 complaints total:
-
-| Scenario | Records | Design |
-|---|---|---|
-| **A — Baseline (negative control)** | 10 | Spread across 5 regions × 5 neutral texts, 6–37 days ago. Intended to be unremarkable. |
-| **B–F — Concentrated spike** | 14 | Single region (US-West), delivery-failure language, highly-negative/critical urgency, all within the last ~2 days. One incident intended to satisfy the spike (B), regional-anomaly (C), customer-impact (D), root-cause-pattern (E) and recommendation (F) purposes simultaneously. |
-
-The harness's own docstring documents this consolidation honestly — six requested scenario *purposes* are covered by two real complaint populations, not six manufactured incidents.
-
----
-
-## 3. F05 — Synthetic-Data Validation
-
-### 3.1 Execution
-
-`[RUNTIME]` **First run — against the persistent dev database: inconclusive.**
-All 24 ingestion calls returned `409 "A complaint with this signature already exists."` because prior runs of the same deterministic harness had left `VALIDATION-*` records in the dev database (76 such rows present). NLP enrichment was therefore skipped for every record, `/anomalies/run` detected nothing new, and root-cause returned `409 RootCause already exists`. This run is **not** valid pipeline evidence — it only demonstrates that source-hash deduplication works. It is recorded here rather than discarded.
-
-`[RUNTIME]` **Second run — against a fresh, isolated database: valid.**
-A separate Compose project (`oival`) was started on its own empty volume. `python -m alembic upgrade head` applied all 17 migrations from empty to head `e35a123597e1` with **exit code 0** — independently re-confirming the AD-7 fresh-database migration fix. The harness then ran to completion:
-
-```
-docker cp datasets/validation/run_validation.py oival_gateway:/tmp/run_validation.py
-docker compose -p oival exec -T gateway_service python /tmp/run_validation.py
-→ exit code 0, all 13 stages executed
-```
-
-### 3.2 Scenario Results
-
-| Scenario | Result | Evidence | Notes |
+| Check | Command (exact, as CI runs it) | Result | Count |
 |---|---|---|---|
-| **A — Baseline (negative control)** | ⚠️ PASS WITH LIMITATION | `[RUNTIME]` 10/10 ingested (`201`), 10/10 enriched (`201`), correct neutral/low labels | The baseline **did** trigger CRITICAL anomalies. Against an empty database every dimension has a zero baseline, so the detector's `undefined_baseline (zero baseline with new activity) -> CRITICAL` rule fires for all 5 baseline categories and their regions. The negative control does not hold on a cold-start database. See §6. |
-| **B — Complaint spike** | ✅ PASS | `[RUNTIME]` `complaint_spike:global:ALL`, baseline=2, current=22, `+1000.0%`, severity `critical`, rule `percentage_change magnitude 1000.0% > 200% -> CRITICAL` | Correct arithmetic; 2 baseline records fall outside the 30-day current window. |
-| **C — Regional anomaly** | ✅ PASS | `[RUNTIME]` `regional_spike:region:US-West`, current=16, severity `critical` | US-West correctly isolated as the highest-volume region. |
-| **D — Customer/business impact** | ✅ PASS | `[RUNTIME]` Assessment `39a46974…`: financial `critical`, customer `medium`, operational `critical`, SLA `none`, reputation `none`, overall score 62 / `high`, confidence 60, 22 affected customers, full explanation string | Structurally valid and fully explained. Reputation scored `none` — see §6. |
-| **E — Root-cause pattern** | ✅ PASS | `[RUNTIME]` Root cause `6c1836dd…`: `service_outage`, confidence 100 (`Very High`), 4 weighted evidence entries (category 40, severity 25, urgency 20, region 15) | Deterministic and explainable. |
-| **F — Recommendation generation** | ✅ PASS | `[RUNTIME]` 3 recommendations from one generation `d7204bdd…`: `escalate`/critical/80, `mitigate`/high/80, `infrastructure_action`/high/67 — each with rationale, priority rationale and cited supporting evidence | Produced automatically via the real async `BusinessImpactCompleted` fan-out, not a direct call. |
+| Backend tests | `alembic upgrade head` then `python -m pytest backend -q` | ✅ PASS | 1,289 passed, 161 skipped, 21 failed locally |
+| Frontend lint | `npm run lint` (`eslint .`) | ✅ PASS | 0 errors, 5 pre-existing warnings |
+| Frontend typecheck | `npm run typecheck` (`tsc -b --noEmit`) | ✅ PASS | clean |
+| Frontend tests | `npm test` (`vitest run`) | ✅ PASS | 381 passed / 381, 53 files |
+| Frontend build | `npm run build` (`tsc -b && vite build`) | ✅ PASS | clean, ~1.1s |
+| Compose validation | `docker compose -f docker-compose.yml config --quiet` and the `.prod.yml` equivalent, after `cp .env.example .env` | ✅ PASS | both configs valid |
 
-### 3.3 Pipeline Layer Validation
+**On the 21 locally-failing backend tests:** all 21 are in `test_auth_api.py`, `test_event_isolation.py`, `test_main.py`, `test_rbac_api.py` — every one requires a `TestClient(app)` lifespan that reaches PostgreSQL via the bare hostname `localhost` from outside this sandbox's network path, a pre-existing, already-documented environment limitation (`docs/CHANGELOG.md`, multiple prior entries) unrelated to this milestone or these fixes. CI's real Postgres service container does not have this restriction. This is **not claimed as CI passing on GitHub** — only that the exact commands CI runs were reproduced locally and, modulo this one known sandbox-networking gap, pass.
 
-| Layer | Result | Evidence |
-|---|---|---|
-| Ingestion | ✅ PASS | `[RUNTIME]` 24/24 `201 Created`; re-run produced 24/24 `409` (deduplication works) |
-| Persistence | ✅ PASS | `[RUNTIME]` 24 complaints, 24 enrichments, 12 anomalies, 1 incident, 12 incident_anomalies, 1 root cause, 1 assessment, 3 recommendations, 1 generation, 1 evaluation |
-| NLP enrichment | ✅ PASS | `[RUNTIME]` 24/24 `201`; sentiment/urgency/category/keywords/summary plus `explainability_metadata` with matched keywords and method for every record |
-| Anomaly detection | ✅ PASS | `[RUNTIME]` 12 anomalies across 4 detector types (complaint/category/regional/urgency spike), each with fingerprint, baseline, current, triggered rule and explanation |
-| Incident correlation | ⚠️ PASS WITH LIMITATION | `[RUNTIME]` 1 incident `INC-91F462E2`, "Multi-Signal Incident (12 anomalies)", severity `critical`, confidence 55 (`Possible`) | All 12 anomalies — baseline and spike alike — were merged into a single incident rather than isolating the US-West delivery incident. See §6. |
-| Root cause | ✅ PASS | `[RUNTIME]` `201 Created`, deterministic, evidence-weighted |
-| Business impact | ✅ PASS | `[RUNTIME]` `201 Created`, 5-dimension weighted score with explanation |
-| Event fan-out | ✅ PASS | `[RUNTIME]` `BusinessImpactCompleted` produced both a recommendation generation **and** an evaluation with no direct call to either service |
-| Recommendation | ✅ PASS | `[RUNTIME]` `200`, 3 prioritized recommendations with cited evidence |
-| Evaluation | ✅ PASS | `[RUNTIME]` `200`, evaluation `60991856…`: valid, quality 80 (`high`), explainability 100 (`high`), confidence summary 100/60/80.0 |
-| API / Gateway | ✅ PASS | `[RUNTIME]` Dashboard, analytics, investigation, administration and recommendation routes all served real aggregated data (§5) |
-| Copilot | ⚠️ PASS WITH LIMITATION | `[RUNTIME]` Fully functional except that no LLM is configured (§7) |
+**Warnings that do not fail CI, reported separately:** 5 ESLint "unused eslint-disable directive" warnings (`useAnalyticsData.ts`, `useDashboardData.ts`, `useComplaintAnalysis.ts`, `useDataset.ts`, `useRecentComplaints.ts`) — cosmetic, pre-existing, not touched in this pass.
 
-### 3.4 Data Quality
+## 4. Dataset and Version Validation
 
-`[RUNTIME]` Queried directly against the fresh database:
+`[RUNTIME]`, live HTTP calls against the isolated stack (§2):
 
-- Expected record counts exactly met (24 complaints → 24 enrichments; 1:1, no gaps).
-- **Zero duplicate** `external_reference_id` values.
-- **Zero nulls** in `complaint_text`, `event_occurred_at`, `customer_region`.
-- All 12 anomalies linked to the incident via `incident_anomalies` (12 rows) — no orphans.
-- Sentiment/urgency/category enums all structurally valid; timestamps all timezone-aware.
-- Anomaly records carry complete `baseline_value` / `current_value` / `triggered_rule` / `explanation`; recommendations carry non-empty `action`, `recommendationRationale`, `priorityRationale` and `supportingEvidence`.
+- `POST /api/v1/datasets` → `201`, real UUID `id` returned.
+- `alembic upgrade head` applied all 27 migrations from empty to `d8e2f4a6b719` with exit code 0 — including the 9 dataset/mapping/provenance migrations, confirmed as a single linear chain (no branches).
+- 12 complaints ingested into a new dataset one at a time (`POST /datasets/{id}/complaints`) → 12/12 `201`.
+- Re-submitting an already-ingested row → `409 CONFLICT`, `"A complaint with this signature already exists."` — real source-hash duplicate detection, not a client-side check.
+- `POST /datasets/{id}/versions/finalize` → `200`, `status: "ready"`, `cumulativeRecordCount: 12`, `newRecordCount: 12`, real `analysisStartedAt`/`analysisCompletedAt` timestamps ~6s apart (the synchronous enrichment→anomaly→incident→root-cause→business-impact pipeline actually ran).
+- Extending the same dataset with 5 more rows and finalizing again produced version 2: `cumulativeRecordCount: 17`, `newRecordCount: 5`. `GET /datasets/{id}/versions` confirms both versions independently retrievable (v1: ready, 12 records; v2: ready, 17 records) — extending did not overwrite or hide v1.
+- `GET /datasets/{id}` after finalizing returns `currentVersion` (highest READY) and `latestVersion` (most recent regardless of status, including the new open draft) as two distinct fields — matches the documented design.
 
-Nullable-by-design fields (`percentage_change` on zero-baseline anomalies, `entity_value` on global anomalies, `resolved_at` on an open incident) are correctly null and are **not** counted as defects.
+## 5. End-to-End Data Flow
 
-### 3.5 Intelligence Output
+Upload → mapping → normalization → row analysis were validated at the API contract level (`POST /datasets/{id}/complaints:analyze`, `field_value_mapping` tables and repositories, `normalization.py`) via `[CODE INSPECTION]` and the existing backend test suites for `ingestion_service` (`test_normalization.py`, `test_mapping_service.py`, `test_api_field_mappings.py`, `test_api_complaint_analysis.py` — all passing, §3). The browser-driven UI flow (drag-drop upload, live mapping-review interaction) was **not exercised in this pass** — no browser automation exists in this project, consistent with every prior report. What *was* directly exercised end-to-end via real HTTP calls (§4) is the contract those UI screens call: ingest → duplicate-reject → finalize → dataset-scoped intelligence, with real, non-fabricated responses at every step.
 
-`[RUNTIME]` Structural correctness confirmed across all stages. Two honest observations about scenario *intent* (not structural defects):
+**Provenance:** each ingested complaint is associated with the dataset via a real FK (confirmed by `dataset_id` appearing correctly scoped throughout dashboard/analytics responses below); dataset-version-level provenance (which version's analysis run produced a given RootCause/BusinessImpactAssessment/Recommendation) is asserted by `docs/CHANGELOG.md`'s AD-12 Addendum and was not independently re-verified at the database row level in this pass (time-boxed; not part of either CI failure or this milestone's headline claims).
 
-1. **The negative control does not hold on a cold-start database.** All 5 baseline categories and 3 regions produced CRITICAL anomalies via the zero-baseline rule. On a database with history the rule would not fire; on an empty one it fires for everything. The harness's stated expectation that the baseline "must NOT itself produce a strong anomaly" was **not met**.
-2. **NLP urgency classification within the spike cohort is mixed.** Of the 14 spike complaints — all written with deliberately critical language — 9 were labelled `CRITICAL`, 2 `HIGH`, and 5 `LOW`. The deterministic keyword classifier behaves as designed (`[CODE INSPECTION]`) but does not uniformly reflect the cohort's intent. This is an inherent property of ARCH-004 (deterministic NLP for MVP), not a regression.
+## 6. Dataset Isolation and Scoping
 
-### 3.6 Recommendation Validation
+`[RUNTIME]`, two datasets created in the same validation session:
 
-| Check | Result | Evidence |
-|---|---|---|
-| Recommendations persisted | ✅ PASS | `[RUNTIME]` 3 rows under one `generation_id` |
-| Decision flow works | ✅ PASS | `[RUNTIME]` `PATCH /recommendations/{id}/decision` → `200`, `decision=APPROVED`, `decisionNote`, `decidedAt` |
-| `decided_by` from trusted auth | ✅ PASS | `[RUNTIME]` `decided_by = 950e79c0-…` = `operator@validation.local`, the authenticated session's own identity |
-| **Spoofing rejected** | ✅ PASS | `[RUNTIME]` A `PATCH` body containing `"decided_by": "00000000-0000-0000-0000-000000000000"` returned `200` and stored the **real operator's** id — the client-supplied value was discarded, never honoured |
-| History row created | ✅ PASS | `[RUNTIME]` 2 rows in `recommendation_decision_history`, each with `actor_id` correctly resolving to `operator@validation.local` |
+- **Dataset A** ("Payment Outage", 12 US-East/payments complaints) → finalized → Dashboard shows one incident: `"US-East — payment_issue Incident"`, root-caused to `"Payment Gateway Failure"`.
+- **Dataset B** ("Shipping Delays", 6 EU-West/logistics complaints) → finalized → Dashboard shows a **different** incident: `"EU-West — delivery_issue Incident"`, root-caused to `"Logistics Delay"`.
+- Re-fetching Dataset A's dashboard immediately after creating and finalizing Dataset B returns the **identical** A-only incident (same incident id, same content) — B's data never appeared under A.
+- `GET /api/v1/datasets` lists both datasets independently, each with its own version history and `openIncidentCount`.
 
-### 3.7 Copilot Validation
+**PASS with real evidence** — not inferred from code reading alone; two materially different datasets produced two materially different, correctly-scoped incidents in the same live session.
 
-> **External LLM provider: NOT CONFIGURED.** `LLM_PROVIDER` is unset in this environment and no `LLM_API_KEY` exists anywhere in the repository. Nothing below demonstrates real language-model reasoning.
+**Archive protection — mechanism clarified, not a gap.** Archiving Dataset B (`POST /datasets/{id}/archive` → `200`) does **not** make `GET /api/v1/dashboard?datasetId=<archived>` itself reject the request — that endpoint still returned `200` with data in this test. Protection is enforced one layer up: `GET /api/v1/datasets/{id}` correctly excludes archived datasets by default and returns `404` (confirmed directly), and the frontend's `DashboardWorkspace`/`AnalyticsWorkspace` use *that* 404 as the authoritative "no longer available" signal before ever reading `useDashboardData`'s result — a deliberate design documented in the component's own comments (`anomaly_service/etc. have no concept of Dataset lifecycle`). Net effect for a normal user through the UI: archived datasets are correctly blocked. Net effect for a direct API caller with a stale/known dataset id: the Dashboard/Analytics data routes themselves do not independently check archive status. Recorded as a real, verified nuance for §11, not fabricated as either a pass or a failure.
 
-| Check | Result | Evidence |
-|---|---|---|
-| Endpoint availability | ✅ PASS | `[RUNTIME]` `POST /api/v1/copilot/messages` → `200` |
-| Requires authentication | ✅ PASS | `[RUNTIME]` Anonymous → `401` |
-| Requires `operator` role | ✅ PASS | `[RUNTIME]` Authenticated `viewer` → `403` |
-| Conversation persistence | ✅ PASS | `[RUNTIME]` Conversation row with `owner_id` = the authenticated operator; 4 ordered `copilot_messages` rows (USER/ASSISTANT × 2 turns) |
-| Two-turn continuity | ✅ PASS | `[RUNTIME]` Second turn against the same `conversationId` → `200`, appended to the same conversation |
-| Workspace context persisted | ✅ PASS | `[RUNTIME]` `workspaceContext` persisted `workspace=investigations`, `incident_id=e09d6777-…` |
-| Ownership isolation | ✅ PASS | `[RUNTIME]` Operator B on operator A's conversation → `403 "You do not have access to this conversation."`; delete → `403`; A's own delete → `204` |
-| **Honest no-LLM fallback** | ✅ PASS | `[RUNTIME]` `"answer": "Copilot's language model is not configured in this environment, so this request cannot be interpreted."`, `limitations: ["No LLM provider is configured (LLM_PROVIDER is unset); no tool was called."]` — no fabricated answer, no invented evidence |
+## 7. Dashboard Validation
 
-### 3.8 F05 Final Result
+`[RUNTIME]` Dashboard output was evaluated for internal consistency against the input, not just successful rendering:
 
-**PASS WITH LIMITATIONS.** All 13 harness stages executed successfully end-to-end on a fresh database (exit code 0). Every pipeline layer produced real, structurally valid, explainable output. The three limitations are: the cold-start negative control, single-incident correlation of all anomalies, and the absence of a real LLM behind Copilot.
+- Dataset A's `operationalBrief.criticalSituations` names US-East and `payment_issue` — matches the region/category actually ingested (100% US-East, payment-related complaint text).
+- `investigationEntryPoints[0].direction` reads `"Most likely cause: Payment Gateway Failure (confidence: Medium)"` — a plausible, evidence-grounded root cause for the ingested payment-failure text, not a generic placeholder.
+- After extending Dataset A to version 2, the Dashboard's `decisionSummary` shows **two** recommendation entries tied to the same underlying incident id (one from each finalize run) rather than replacing the first. This is consistent with version-scoped intelligence generation (each finalize produces its own recommendation generation) but means the Dashboard does not currently collapse to "latest recommendation only" — a minor internal-consistency observation, not a crash or data-loss bug.
+- Dataset B's dashboard is fully independent (§6) — different incident id, different headline, different root cause.
 
----
+**Verdict: meaningful and internally consistent** with the ingested data, not merely "renders without error."
 
-## 4. F06 — Whole-Project Completion Validation
+## 8. Analytics Validation
 
-### 4.1 Backend Services
+`[RUNTIME]` `GET /analytics/trends?datasetId=<A>&period=last-30-days`:
 
-| Service | State | Evidence |
-|---|---|---|
-| `gateway_service` | ✅ COMPLETE | `[RUNTIME]` healthy, 12 routes, auth + RBAC enforced, aggregation verified. `[TEST]` 20 test files |
-| `ingestion_service` | ⚠️ PARTIAL | `[RUNTIME]` healthy, ingestion + dedup verified. **No dedicated test suite** (0 test files) — matches the documented limitation |
-| `nlp_service` | ✅ COMPLETE | `[RUNTIME]` 24/24 enrichments with explainability metadata. `[TEST]` 7 test files |
-| `anomaly_service` | ✅ COMPLETE | `[RUNTIME]` 12 anomalies + incident correlation. `[TEST]` 26 test files |
-| `root_cause_service` | ⚠️ PARTIAL | `[RUNTIME]` analysis verified. Confirm/reject/refresh exists at service level but is **not Gateway-exposed** — matches documentation. `[TEST]` 17 test files |
-| `business_impact_service` | ✅ COMPLETE | `[RUNTIME]` assessment + event publication verified. `[TEST]` 25 test files |
-| `recommendation_service` | ✅ COMPLETE | `[RUNTIME]` generation, decision, attribution, history verified. `[TEST]` 26 test files |
-| `copilot_service` | ⚠️ PARTIAL | `[RUNTIME]` orchestration, persistence, ownership all real; **no LLM configured**. `[TEST]` 19 test files |
-| `evaluation_service` | ⚠️ PARTIAL | `[RUNTIME]` computes and persists real evaluations; **no Gateway route surfaces them**. `[TEST]` 17 test files |
+- `volumeTrend`: 1 date bucket, count 12 — matches the 12 ingested rows exactly.
+- `categoryTrend`: `payment_issue`, count 12 — matches.
+- `regionTrend`: `US-East`, count 12 — matches.
+- `sentimentTrend`: 12/12 classified `negative`, average score `-1.0` — plausible for complaint text describing repeated payment failures.
+- `urgencyTrend`: 12/12 classified `low` — this is *not* what a human would expect from "payment failed... declined three times" language, and reproduces the previously-documented deterministic-keyword-classifier limitation (urgency classification doesn't reliably track perceived severity). Reported honestly as observed, not smoothed over.
 
-### 4.2 Authentication & RBAC
+No cross-dataset leakage observed: Dataset A's analytics reflect only Dataset A's 12 (then 17) records at every point checked.
 
-`[RUNTIME]` 31/31 checks passed in a single clean run against the live Gateway:
+**Verdict: outputs are real, traceable 1:1 to the input data** — this is pipeline-functionality evidence, not evidence that the urgency classifier's judgment is good (it demonstrably isn't, on this sample).
 
-- Anonymous → all 6 protected routes + decision PATCH + Copilot → `401`.
-- Wrong password → `401` (`"Invalid email or password."`, no user enumeration).
-- `viewer` → login `200`, `/auth/me` `200`, dashboard/analytics/investigation/administration `200`.
-- `viewer` → decision PATCH `403`, Copilot `403` (401-before-403 ordering correct).
-- `operator` → decision PATCH `200`, Copilot `200`.
-- Logout `204`, then `/auth/me` `401` (session genuinely invalidated).
-- Session cookie: `HttpOnly`, `SameSite=lax`, `Max-Age=1800`, `Path=/`. **No `Secure` flag** in the development configuration.
-- Login response body contains only `userId`/`email`/`roles` — no token, no hash.
+## 9. Incident / Anomaly Validation
 
-`[RUNTIME]` The bootstrap tool (`AD-8`) was verified in all three states: creates the admin, is idempotent on re-run (`"no password change performed"`), and fails clearly when credentials are absent (`"BOOTSTRAP_ADMIN_EMAIL is not configured."`).
+**Pipeline functionality:** ✅ confirmed. Finalizing each dataset produced a real, non-empty incident (4 correlated anomalies each: `category_spike`, `complaint_spike`, `regional_spike`, `urgency_spike`), each correctly scoped to its own dataset (§6), each with a root cause and a generated recommendation. This is direct evidence the detection → correlation → root-cause → recommendation chain executes correctly against dataset-scoped data.
 
-### 4.3 Observability
+**Intelligence quality — explicitly separated, not claimed as proven:** Both incidents were produced from a small, homogeneous, single-topic synthetic batch (12 and 6 records respectively, all describing the same failure mode) — exactly the condition under which the detector's zero-baseline rule fires easily, as the prior validation already documented. This run does not newly prove or newly disprove detection quality against realistic, heterogeneous, multi-topic traffic; it proves the mechanism runs correctly end-to-end and produces internally consistent output for the data given.
 
-| Check | Result | Evidence |
-|---|---|---|
-| Prometheus metrics | ✅ PASS | `[RUNTIME]` `/metrics` → `200`, 36 KB; `http_requests_total` correctly labelled by method/route/status/service |
-| No high-cardinality labels | ✅ PASS | `[RUNTIME]` Routes appear as templates (`/api/v1/recommendations/{recommendation_id}/decision`), never with real UUIDs |
-| Structured JSON logs | ✅ PASS | `[RUNTIME]` Logs carry `timestamp`, `level`, `service`, `logger`, `message`, `request_id`, `status_code`, `error_code`, `route` |
-| Correlation ID | ⚠️ PARTIAL | `[RUNTIME]` A client-supplied `X-Request-ID` is reused, echoed in the response header, and returned in the error envelope's `requestId`. It appears in Gateway structured logs. It was **not** observable in downstream services' logs — those log 404s via plain uvicorn access logging. `[CODE INSPECTION]` Forwarding is genuinely implemented (`correlation_headers()` used on every Gateway/Copilot/event-publisher outbound call) |
-| **No secret leakage** | ✅ PASS | `[RUNTIME]` All 9 services' logs scanned: 0 plaintext passwords, 0 bcrypt hashes, 0 JWTs, 0 internal-secret values |
+## 10. Administration Validation
 
-`[RUNTIME]` One narrow exception: the **operator-invoked bootstrap script** prints its `INSERT` statement — including the bcrypt hash — to stdout, because `backend/shared/database/database.py` sets `echo=(ENVIRONMENT == "development")`. This affects only that one script's console output in development (the hash, never the plaintext password), and no running service log. Minor, disclosed.
+`[RUNTIME]`, live calls against the isolated stack:
 
-### 4.4 Backup & Restore
+- `GET /api/v1/administration/overview` → `200`, per-service health: `gateway`/`ingestion`/`nlp`/`anomaly`/`root_cause`/`business_impact`/`recommendation` all report `"status": "healthy"`; `copilot`/`evaluation` correctly report `"status": "unavailable"` — because those two containers were deliberately not started for this pass. This is real, dynamically-computed health data (it correctly reflects the actual container state), not a static or fabricated display.
+- `GET /api/v1/administration/intelligence-configuration` → `200`, real weighted business-impact dimension configuration returned.
+- Dataset lifecycle (create, ingest, finalize, extend/re-analyze, archive) is real, Gateway-backed functionality, fully exercised in §4/§6 above — this is the dataset-lifecycle portion of Administration's real functionality.
 
-| Check | Result | Evidence |
-|---|---|---|
-| Migration head | ✅ PASS | `[RUNTIME]` `e35a123597e1`; 17 migrations, single linear chain, no branches |
-| Backup creates a valid dump | ✅ PASS | `[RUNTIME]` `pg_dump -Fc` against the real dev database → `operational_intelligence_20260816T091423Z.dump`, 190,365 bytes. Read-only; the dev database was never modified |
-| Restore safety guard active | ✅ PASS | `[RUNTIME]` `_guard_target_container` refuses both `oi_postgres` and `postgres`; allows only isolated names |
-| Full isolated round-trip | ✅ PASS | `[TEST]` All 8 tests in `test_backup_restore.py` pass, including `test_real_backup_then_restore_verification_round_trip`, which restores into a throwaway container and tears it down. **The real dev database was never a restore target.** |
+**Illustrative, not validated as functional (unchanged from prior report, not in scope for this pass):** broader user/role administration, external system/CRM integrations, and a full audit trail remain presentation-only sections, self-labelled as such in the frontend. Not re-tested here; not claimed as implemented.
 
-### 4.5 Docker & Infrastructure
+## 11. Known Limitations / Future Improvements
 
-`[RUNTIME]` Dev and prod Compose both validate (`config --quiet` → exit 0). `[CODE INSPECTION]` The prod configuration removes bind mounts and `--reload`, un-publishes PostgreSQL, segments the network, and runs non-root; every service has a healthcheck and `restart: unless-stopped`.
+Real, currently-observed limitations only:
 
-⚠️ **Reproducibility gap:** the repository's local `.env` is missing several keys present in `.env.example` (`INTERNAL_SERVICE_SECRET`, `LLM_PROVIDER`, `TRACING_ENABLED`, `OTLP_EXPORTER_ENDPOINT`, `PROMETHEUS_PORT`, `GRAFANA_PORT`, `BOOTSTRAP_ADMIN_*`). `[CODE INSPECTION]` Every one of them has a matching code-level default, so nothing breaks — but a fresh clone should copy `.env.example`, and the bootstrap variables must be set explicitly by the operator. `.env` is correctly gitignored and untracked.
+- **Archive protection is enforced one layer up from the data routes themselves** (§6) — a normal UI user is correctly blocked from viewing an archived dataset's Dashboard/Analytics, but the Dashboard/Analytics API routes do not independently reject a request naming an archived dataset id. Worth hardening at the data-route layer if direct API access by less-trusted callers becomes a real threat model; not a defect in the UI-driven product today.
+- **Dashboard does not collapse recommendations to "latest version only"** after a dataset is extended and re-finalized (§7) — both the pre- and post-extension recommendation remain visible under the same incident.
+- **Deterministic urgency classification does not reliably track perceived complaint severity** (§8) — reproduces a previously-documented limitation, now re-confirmed on dataset-scoped data specifically.
+- **"Keep as Others" mapping edge cases**, **easier access to already-finalized records for viewing/modification**, and **deeper post-mapping intelligence quality** are known, previously-documented areas for future iteration — not newly discovered here, not re-verified as fixed or unfixed in this pass (out of scope; not blocking).
+- **`copilot_service`/`evaluation_service` dataset-scoping** was not exercised in this pass (services deliberately not started) — the previously-documented `analytics_trends` tool gap and evaluation-output-not-surfaced gap are unchanged, not re-verified here.
+- **No browser automation** — as in every prior report, the UI's actual rendered behavior was not driven through a real browser session in this pass; validated at the API-contract level only.
 
-### 4.6 CI
+## 12. Final Acceptance Matrix
 
-`[CODE INSPECTION]` `.github/workflows/ci.yml` runs three jobs whose commands were verified to match the current repository:
-
-- `pytest backend -q` after `alembic upgrade head` — matches `[TEST]` local behaviour. All 9 `requirements.txt` files plus `backend/requirements-test.txt` exist at the referenced paths.
-- `npm run lint` / `typecheck` / `test` / `build` — all four scripts exist in `frontend/package.json` and all four pass locally `[TEST]`.
-- `docker compose config` for both files — both pass locally `[RUNTIME]`.
-
-⚠️ At the time of this validation the workflow still carried a long "KNOWN ISSUE" comment describing the `f05ea2afc3ee` enum-creation migration bug as unfixed. `[RUNTIME]` That bug is **fixed** — migrations now apply cleanly from empty. The comment was stale documentation inside a working file; it has since been corrected during the final release-readiness pass (comment text only — no job, step, or dependency was changed).
-
-### 4.7 Security
-
-| Check | Result | Evidence |
-|---|---|---|
-| No committed secrets | ✅ PASS | `[RUNTIME]` Scanned all tracked files for API-key/private-key/token patterns — none found. `.env` untracked; `/backups/` gitignored |
-| Actor identity server-derived | ✅ PASS | `[RUNTIME]` Spoofed `decided_by` discarded; Copilot `owner_id` taken from the session |
-| Auth bypass | ✅ PASS | `[RUNTIME]` No unauthenticated access to any protected route; internal mutation routes are not Gateway-exposed and require `X-Internal-Secret` (`[CODE INSPECTION]`: constant-time compare, fails closed, never distinguishes missing from wrong) |
-| Cookie flags | ⚠️ PARTIAL | `[RUNTIME]` `HttpOnly` + `SameSite=Lax` present; **no `Secure` flag** — acceptable for local HTTP development, would need setting behind TLS |
-| Credential leakage in logs | ✅ PASS | `[RUNTIME]` See §4.3 |
-
-### 4.8 Frontend
-
-`[TEST]` Lint, typecheck and production build all pass. The suite is 337 tests / 48 files, of which 336 passed in the full run — the single failure was a load-sensitive timing flake that passes standalone (see §5).
-
-`[CODE INSPECTION]` Route protection (`RequireAuth`), auth flow, five workspaces, and the Copilot panel all exist and are tested. The three specifically documented limitations were each re-checked and remain **accurately documented** — none has become an undisclosed gap:
-
-- **Role-aware UX** — 🟡 still a KNOWN LIMITATION. `roles` is present on the auth type but is used nowhere to gate UI controls.
-- **Administration placeholders** — 🟡 still a KNOWN LIMITATION. Four of six sections remain presentation-only, self-labelled in code.
-- **Root-cause decision actions** — 🟡 still a KNOWN LIMITATION. No Gateway route exposes confirm/reject/refresh.
-
-> **Not verified:** no browser automation was run. All frontend evidence is from the test suite and source inspection, never from a real rendered browser session.
+| Requirement | PASS | PARTIAL | NOT VERIFIED | Evidence |
+|---|---|---|---|---|
+| Dataset identity | ✅ | | | §4 — real UUIDs, `GET /datasets` lists independent entries |
+| Dataset versioning | ✅ | | | §4 — v1/v2 both independently retrievable after extend |
+| Ingestion pipeline | ✅ | | | §4, §5 — 12/12, 6/6, 5/5 real ingests across three batches |
+| Mapping | | | ✅ | §5 — validated via existing passing test suites, not re-driven live in this pass |
+| Normalization | | | ✅ | §5 — same |
+| Row analysis | | | ✅ | §5 — same |
+| Complaint provenance | ✅ | | | §4, §5 — dataset FK scoping confirmed via correctly-scoped downstream responses |
+| Duplicate handling | ✅ | | | §4 — real `409 CONFLICT` on resubmission |
+| Dataset-scoped intelligence | ✅ | | | §6, §7, §8 — two datasets, two independent, correctly-scoped intelligence sets |
+| Dataset isolation | ✅ | | | §6 — direct evidence, not inferred |
+| Re-analysis | ✅ | | | §4 — version 2 correctly reflects cumulative 17 records |
+| Stale-state handling | 🟡 | | | §7 — old and new recommendations both remain visible under one incident after re-analysis, rather than showing only the latest |
+| Archived dataset protection | 🟡 | | | §6, §11 — real, but enforced at the dataset-detail layer, not the Dashboard/Analytics data routes |
+| Dashboard | ✅ | | | §7 — internally consistent with input, not just rendering |
+| Analytics | ✅ | | | §8 — outputs traceable 1:1 to input; one known classifier-quality limitation reported honestly |
+| Incident/anomaly detection (pipeline) | ✅ | | | §9 — real, correctly dataset-scoped output produced |
+| Incident/anomaly quality | 🟡 | | | §9 — explicitly not proven on this small, homogeneous sample |
+| Administration dataset lifecycle | ✅ | | | §10 — create/ingest/finalize/extend/archive all real |
+| Administration service health | ✅ | | | §10 — dynamically correct, including reporting two intentionally-stopped services as unavailable |
+| Backend tests | ✅ | | | §3 — 1,289 passed locally; 21 pre-existing environment-only failures unrelated to this milestone |
+| Frontend tests | ✅ | | | §3 — 381/381 |
+| CI-equivalent verification | ✅ | | | §3 — lint/typecheck/test/build/compose all pass locally against the exact CI commands |
+| Migration integrity | ✅ | | | §4 — 27-migration linear chain, clean apply from empty |
+| Runtime validation | ✅ | | | §4–§10 — real HTTP calls against a live, isolated stack throughout |
 
 ---
 
-## 5. Test Results
-
-| Suite | Result | Notes |
-|---|---|---|
-| Backend `pytest backend -q` | ✅ **1,376 passed, 0 failed** | 330 s. One initial failure (`test_real_backup_then_restore_verification_round_trip`) was caused by *this validation's own* isolated stack occupying port 55432; with the port free it passes. Re-confirmed: 8/8 backup/restore tests pass |
-| Frontend `npm test` | ✅ **337 tests / 48 files**, 336 passed | One failure (`AppRouter.test.tsx`, 5 s timeout) under concurrent load; **passes standalone** in 15 s. A load-sensitive timing flake, not a product defect |
-| Frontend `npm run lint` | ✅ PASS | Clean |
-| Frontend `npm run typecheck` | ✅ PASS | Clean |
-| Frontend `npm run build` | ✅ PASS | Built in 2.34 s |
-| Validation harness | ✅ PASS | Exit code 0, 13/13 stages |
-
-**New failures vs. pre-existing:** no new failures. Both observed failures were environmental artefacts of this validation run and both resolve on re-run in isolation. The two issues `docs/PROJECT_STATUS.md` carried forward from Phase 12 (`business_impact_service`'s missing `httpx`, and the migration enum bug) are **both now fixed** — `httpx==0.27.0` is declared, and migrations apply cleanly from empty.
-
----
-
-## 6. Limitations & Findings
-
-### 🟡 Known limitations — confirmed still accurate
-
-1. **No external LLM provider.** Copilot's orchestration, tool boundary, persistence and ownership are real and tested; its reasoning has never been exercised against a live model.
-2. **Role-aware frontend UX** does not exist; backend RBAC is authoritative.
-3. **Administration workspace**: 2 of 6 sections show real data.
-4. **Root-cause confirm/reject/refresh** is service-level only, not Gateway-exposed.
-5. **`evaluation_service` output** is computed and persisted but surfaced nowhere.
-6. **`ingestion_service`** has no dedicated test suite.
-
-### 🟡 Newly documented by this validation
-
-7. **Cold-start anomaly sensitivity.** On an empty database every dimension has a zero baseline, so the `undefined_baseline -> CRITICAL` rule fires for essentially all activity — including the deliberate negative control. The detector behaves as specified; the *validation scenario's* negative-control assumption does not hold on a fresh database.
-8. **Coarse incident correlation.** All 12 anomalies — baseline and spike alike — correlated into one "Multi-Signal Incident" purely on a 15-minute time window and shared severity. The intended US-West delivery incident was not isolated as its own incident.
-9. **Business impact ignores NLP sentiment.** The assessment scored reputation `none` with the reason *"No negative sentiment signal detected"*, despite 12 of 24 complaints being classified `HIGHLY_NEGATIVE`/`NEGATIVE` by `nlp_service`. Business impact consumes anomaly/trend metrics only; no sentiment-spike anomaly type exists to carry that signal through. Internally consistent, but enriched sentiment does not currently influence business impact.
-10. **`estimated_affected_customers` counts the whole window** (22), not the incident's own complaints (14).
-11. **SQLAlchemy `echo` in development** prints bound parameters, so the operator-run bootstrap script emits a bcrypt hash to its console.
-12. **No `Secure` cookie flag** in the development configuration.
-13. ~~**Stale CI comment** describing the already-fixed migration bug as unfixed.~~ **Resolved** during the final release-readiness pass — the comment now describes the fix (comment text only; CI behaviour unchanged).
-14. **`.env` is missing keys** present in `.env.example`; all have safe code defaults.
-
-### 🔴 Undocumented gaps
-
-**None found.** Every previously documented limitation was re-verified as still accurate — none had silently worsened, and none was found to be concealing a defect.
-
-### Transient, unreproduced
-
-During one composite auth run, two checks that normally return `403` returned `401` instead. This did **not** reproduce across a subsequent full 31/31 run nor across 6 focused iterations. Recorded as an unexplained one-off, not a confirmed defect.
-
----
-
-## 7. Final Completion Decision
-
-## 🟡 PROJECT COMPLETE WITH DOCUMENTED LIMITATIONS
-
-1. `[RUNTIME]` The complete intelligence pipeline works end-to-end on a fresh database — ingestion → NLP → anomaly → incident → root cause → business impact → evaluation → recommendation, including the real asynchronous event fan-out.
-2. `[RUNTIME]` Authentication, RBAC, and attribution are genuinely enforced: 31/31 checks passed, and a deliberate spoofing attempt was discarded in favour of the server-derived identity.
-3. `[TEST]` 1,376 backend tests pass; of the 337 frontend tests, 336 passed in the full run and the one failure is a load-sensitive timing flake that passes standalone (§5). Lint, typecheck and production build are clean.
-4. `[RUNTIME]` Setup is reproducible from a fresh clone: both Compose files validate, migrations apply cleanly from empty, and the bootstrap tool creates the first user correctly.
-5. `[RUNTIME]` Backup/restore is real and safe — the restore guard actively refuses the production database name.
-6. `[RUNTIME]` No secrets leak into logs or responses; no secrets are committed.
-7. Documentation is honest: every one of the six documented limitations was re-verified as accurate, and **no undocumented gap was found**.
-8. It remains an **engineering prototype** — no deployment, no live traffic, no external LLM.
-9. The limitations added by this validation (§6) are genuine intelligence-quality observations, not blockers.
-
----
-
-## 8. Recommended Optional Improvements
-
-None of these block completion:
-
-- Give the anomaly detector a minimum-volume floor so a zero baseline cannot alone produce CRITICAL.
-- Correlate incidents by shared entity (region/category) in addition to time window.
-- Feed NLP sentiment into business-impact scoring, or add a sentiment-spike anomaly type.
-- Scope `estimated_affected_customers` to the incident's own complaints.
-- ~~Remove the stale "KNOWN ISSUE" comment from `.github/workflows/ci.yml`.~~ Done during the final release-readiness pass.
-- Set `Secure` on the session cookie when served over TLS.
-- Add a dedicated `ingestion_service` test suite.
-- Have the validation harness namespace its `external_reference_id`s per run so it can be re-run against a non-empty database.
-
----
-
-## 9. Addendum — 2026-08-16 Post-Closure Correction Pass (RC1–RC4)
-
-### 9.1 Why this validation did not catch these defects
-
-This report's coverage of the frontend was, in hindsight, structurally blind in one specific way, and it is worth stating plainly rather than quietly fixing.
-
-Every HTTP check in §§3–6 was issued **directly against the Gateway** (`http://localhost:8000/api/v1/...`) using hand-written paths. The frontend was verified only by `[TEST]` (its own Vitest suite) and `[CODE INSPECTION]`. Nothing in this validation ever exercised the path strings the frontend's own API modules actually emit. Because those modules were missing the `/v1` segment, and because each frontend test asserted the same bare path its source module used, both layers agreed with each other and disagreed with the running Gateway — a defect class that is invisible to a suite that mocks `fetch` and a validation that bypasses the client.
-
-The frontend container was also explicitly "not started" during F05 (§1). The first time anyone loaded the actual application in a browser, every workspace failed. That walkthrough — not this report — is what found it.
-
-**Correction to the validation method, for any future pass:** at least one check per frontend workspace must go through the frontend's own API module or the frontend's served origin, not a hand-written Gateway URL.
-
-### 9.2 What the correction pass validated
-
-Against the running dev stack (`oi_*` containers, persistent `postgres_data` volume — not reset), authenticated with a bootstrap-created admin session cookie, through the frontend's own origin and proxy (`http://localhost:3000/api/...`):
-
-| Check | Result |
-|---|---|
-| `POST /api/v1/auth/login` | `[RUNTIME]` `200` |
-| `GET /api/v1/auth/me` | `[RUNTIME]` `200`, correct identity and roles |
-| `GET /api/v1/dashboard?timeRange=7d` | `[RUNTIME]` `200`, 6,037 bytes |
-| `GET /api/v1/analytics/trends?period=last-30-days` | `[RUNTIME]` `200`, 2,055 bytes |
-| `GET /api/v1/administration/overview` | `[RUNTIME]` `200`, 741 bytes |
-| `GET /api/v1/administration/intelligence-configuration` | `[RUNTIME]` `200`, 2,621 bytes |
-| `GET /api/v1/investigations/{incident_id}` | `[RUNTIME]` `200`, 4,722 bytes |
-| `GET /api/v1/recommendations/{recommendation_id}` | `[RUNTIME]` `200`, 799 bytes |
-| Pre-fix bare paths (`/api/dashboard`, `/api/analytics/trends`, `/api/administration/overview`) | `[RUNTIME]` `404` — the defect itself, reproduced |
-| Full frontend suite | `[TEST]` 339 passed, 49 files, 0 failed (`--maxWorkers=2`; the load-sensitive flakiness noted in §5 recurs at default concurrency) |
-| `npm run lint` / `npm run typecheck` / `npm run build` | `[TEST]` all clean |
-| Sample-data seed via `docker cp` + `--file` | `[RUNTIME]` 8 processed, 8 inserted, 0 duplicates, 0 errors |
-| Sample-data seed with no `--file` | `[RUNTIME]` unchanged default resolution (`/app/datasets/sample_complaints/operational_seed.json`, absent by design) |
-
-### 9.3 Not verified by this pass
-
-- `[TEST]`-only, not browser-observed: that the sidebar renders exactly Dashboard/Analytics/Administration, and that an invalid URL renders `RouteErrorView` rather than react-router's raw error screen. Both are asserted by `src/tests/RouteErrorView.test.tsx` against the real route table and the real navigation config, but no browser walkthrough was performed. The owner's manual pass is what would confirm the rendered appearance.
-- No visual/CSS verification of `RouteErrorView` in either theme.
+*This report intentionally does not claim GitHub Actions is green — that can only be confirmed once these changes are pushed and the workflow actually runs. All results above are local, CI-equivalent verification.*

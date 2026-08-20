@@ -137,9 +137,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # frontend/package.json's actual test/build dependencies (vitest@4,
+      # jsdom@30, undici@8, whatwg-url@17) all declare a Node engines floor
+      # above 20.x (vitest: ^20.19.0 || ^22.13.0 || >=24; jsdom: ^22.22.2 ||
+      # ^24.15.0 || >=26; undici: >=22.19.0). Node 20 crashes outright
+      # ("webidl.util.markAsUncloneable is not a function") the moment
+      # jsdom's cacheStorage polyfill (pulled in transitively by undici)
+      # initializes, because that internal Node webidl API doesn't exist
+      # yet on Node 20 -- this is a Node-runtime floor, not a broken
+      # package; verified locally on Node 22 with the exact same
+      # package-lock.json. frontend/Dockerfile intentionally stays on
+      # node:20-alpine -- it only runs `npm run dev`/`npm run build`
+      # there, never vitest's jsdom environment, so it never exercises
+      # this codepath.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 

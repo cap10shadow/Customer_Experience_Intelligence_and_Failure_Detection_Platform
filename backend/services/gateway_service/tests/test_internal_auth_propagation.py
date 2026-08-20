@@ -60,6 +60,8 @@ async def test_recommendation_decision_patch_attaches_the_internal_secret(overri
             body={
                 "recommendation_id": str(uuid.uuid4()),
                 "incident_id": "INC-1",
+                "dataset_id": str(uuid.uuid4()),
+                "dataset_version_id": str(uuid.uuid4()),
                 "generation_id": str(uuid.uuid4()),
                 "category": "escalate",
                 "priority": "high",
@@ -88,6 +90,8 @@ async def test_recommendation_decision_patch_attaches_the_gateway_attested_princ
             body={
                 "recommendation_id": str(uuid.uuid4()),
                 "incident_id": "INC-1",
+                "dataset_id": str(uuid.uuid4()),
+                "dataset_version_id": str(uuid.uuid4()),
                 "generation_id": str(uuid.uuid4()),
                 "category": "escalate",
                 "priority": "high",
@@ -142,6 +146,8 @@ async def test_a_read_only_downstream_call_does_not_carry_the_internal_secret(ov
             body={
                 "recommendation_id": str(uuid.uuid4()),
                 "incident_id": "INC-1",
+                "dataset_id": str(uuid.uuid4()),
+                "dataset_version_id": str(uuid.uuid4()),
                 "generation_id": str(uuid.uuid4()),
                 "category": "escalate",
                 "priority": "high",
