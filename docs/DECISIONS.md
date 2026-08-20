@@ -1474,3 +1474,252 @@ CI's `backend-tests` job should, after `alembic upgrade head` succeeds, invoke t
 - No public self-service registration, now or as a default.
 - No password-reset flow, no email verification, no MFA, no OAuth/SSO — already Phase 13 non-goals, unaffected.
 - No new secrets-management platform — the two new variables follow the exact `env_file`-injected convention every other secret in this repository already uses.
+
+---
+
+## AD-9 — Frontend API Path Contract and Primary Navigation Scope
+
+**Status:** Accepted
+
+**Date:** 2026-08-16
+
+### Context
+
+The first genuine end-to-end walkthrough of the running application found that every workspace failed to load, and that two of the five sidebar entries produced a router error. Two independent root causes, both structural rather than incidental:
+
+1. **Path contract split.** `frontend/src/app/configuration/env.ts` sets `apiBaseUrl` to `/api` (correct — `vite.config.ts` proxies `/api` to the Gateway same-origin, and Phase 13 AD-6 depends on that same-origin arrangement for the `HttpOnly` cookie). The Gateway mounts its routers at `/api/v1/...`. Nothing in the codebase stated where the `/v1` segment was supposed to live, so it was written inconsistently: `authApi.ts` and `copilotApi.ts` included it, the five workspace API modules did not. Login and Copilot worked; every workspace 404'd. The frontend test suite could not catch this, because each test asserted the same bare path its own source module used — the tests encoded the bug rather than the contract.
+
+2. **Navigation offered routes that were never built.** `PRIMARY_NAVIGATION` listed Investigations and Recommendations at bare `/investigations` and `/recommendations` paths. The router only ever defined parameterized detail routes for them. There is no list endpoint on the Gateway and no list view in either workspace — both are, by design, per-record surfaces reached by drilling down from the Dashboard.
+
+### Decision
+
+**1. The `/v1` segment belongs in the caller's path, not in `apiBaseUrl`.** `apiBaseUrl` stays `/api` — it names the proxy boundary, not an API version. Every API module writes `/v1/...` explicitly. This keeps a future `/v2` route addable alongside `/v1` without a base-URL fork, and keeps the one thing `env.ts` configures (where the Gateway is) separate from the one thing each module declares (which contract it speaks).
+
+**2. Primary navigation lists only workspaces that have a real index route.** Investigations and Recommendations are removed from `PRIMARY_NAVIGATION`. Building list pages and the Gateway list endpoints they would need was considered and rejected for this correction: it is new product capability, not a defect fix, and inventing it under a bug-fix heading would have been the same failure mode as the navigation entries themselves — an affordance offered before the thing behind it exists.
+
+**3. An unresolvable URL is a product surface, not a developer screen.** `RouteErrorView` is mounted as the authenticated root's `errorElement` and as a `path: '*'` catch-all child, so it renders inside `AppShell` with navigation intact. It is composed from the existing `EmptyState` foundation; no new UI primitive and no new dependency were introduced for it.
+
+### Consequences
+
+**Pros**
+
+- The API path contract is now stated in one direction only and is asserted by tests at the module level.
+- The sidebar can no longer offer a destination the router cannot resolve; a test asserts the navigation set directly.
+- Any bad URL — typed, stale, or from a deleted record — now lands somewhere recoverable.
+
+**Cons**
+
+- `/v1` is repeated in every API module rather than centralized; the tradeoff is deliberate (see decision 1), but it is repetition.
+- Investigations and Recommendations are now reachable only by drill-down. Until list views exist, a user with a recommendation ID and no Dashboard context has no in-product way to navigate to it.
+
+### Explicit Non-Goals
+
+- No Investigations or Recommendations list pages, and no Gateway list endpoints for them.
+- No change to `apiBaseUrl`, the Vite proxy, or any Gateway router prefix.
+- No change to the parameterized route templates, the drill-down path helpers, or either workspace's components.
+
+---
+
+## AD-10 — Analytics Visualization Scope, and Why Data Ingestion Has No Frontend Workflow
+
+**Status:** Accepted
+
+**Date:** 2026-08-16
+
+### Context
+
+A final frontend/product-experience audit examined every workspace against the capability actually behind it. Two findings were product decisions rather than defects, and are recorded here rather than in the changelog alone.
+
+1. **Analytics fetched real trend data and then discarded almost all of it.** `GET /api/v1/analytics/trends` returns five populated numeric series — daily complaint volume, category totals, region totals, daily sentiment (average score plus a per-label breakdown), and urgency totals. `toAnalyticsViewModel` reduced each series to at most three sentences naming one or two entries, and dropped everything else. On the dev database that meant 22 daily volume observations, 10 categories, 9 regions and 4 urgency levels were fetched and then represented by roughly six sentences. The component that displayed them rendered a small dashed box containing a static `trendUp` icon, captioned in code as a "reserved chart area" — a chart affordance that had never been drawn from anything. The frozen Analytics shape (Trend → Narrative → Supporting Evidence) explicitly anticipated charts as the supporting-evidence tier: *"charts, when they exist, will support this narrative, never replace it."*
+
+2. **The ingestion API is real, but it is not reachable from a browser.** `ingestion_service` exposes a genuine, working `POST /complaints` with deduplication, plus filtered list and get-by-id routes. It is not exposed through the Gateway: `PHASE_13_ARCHITECTURE.md` §Service Impact records Ingestion as *"None (not Gateway-exposed today)"*, `gateway_service/app/main.py` mounts no ingestion router, and only `gateway_service` and `postgres` are host-published. A frontend upload screen therefore cannot reach it. Data enters the platform today through the operator-run seed tooling (`backend/tooling/seed_data/load_sample_complaints.py`) and through direct API calls from inside the Docker network.
+
+### Decision
+
+**1. Charts are built, from the real series, as the supporting-evidence tier — and from nothing else.** The Analytics view model now carries the Gateway's trend arrays through unchanged alongside the narratives, and `TrendVisualization` renders five charts, each mapped 1:1 to one returned array. Charts sit *below* the narratives, preserving Trend → Narrative → Supporting Evidence. A series the backend returned empty draws no chart at all rather than an empty axis, which would read as a measured zero. Nothing is smoothed, forecast, ranked, re-bucketed, or annotated with an interpretation. The "reserved chart area" placeholder is removed, now that a real chart exists.
+
+**2. No charting dependency is added.** The two chart forms required (a single-series line/area over time, and horizontal categorical bars) are implemented as ~200 lines of hand-drawn SVG and CSS against the existing token system. This follows the precedent the API client already set for `fetch` ("nothing in the frozen architecture requires a library, and this repository doesn't have one installed"), and avoids adding a runtime dependency, its bundle weight, and a second theming layer to a design system that is already fully tokenized in light and dark.
+
+**3. There is no categorical/multi-hue chart palette.** Every charted dimension is a magnitude or a single measure over time, so one hue carries the data and the axis labels carry identity. The one exception is urgency, which is a genuine operational *state* and therefore reuses the existing reserved `--color-status-*` tokens, always beside a visible text label — colour is never the sole signal.
+
+**4. Data ingestion gets no frontend workflow in this pass.** Building one would require adding a Gateway ingestion route — new backend capability, not a frontend defect fix. That is the same reasoning AD-9 used to reject building list pages and their Gateway endpoints under a bug-fix heading, and it is deliberately consistent with it. The audit's scope authorized new *frontend* construction on top of capability the backend genuinely exposes; ingestion is real but is not exposed. Rather than build an upload screen against an endpoint the browser cannot reach, or invent the Gateway route to make one possible, the platform states plainly where data actually comes from: Administration's Data Sources & Integrations section now discloses that its connected-systems content is illustrative and names the real paths (the ingestion API and the operator-run seed tooling).
+
+### Consequences
+
+**Pros**
+
+- The whole Analytics response is now used. The five series the platform already pays to compute, aggregate, and transfer are visible instead of summarized away.
+- Every chart ships an equivalent data table, so a value the platform asserts is never encoded only as geometry — better for screen readers, exact figures, and the project's own "presentation is never a second source of truth" rule.
+- No new dependency, no new theming surface, no bundle growth beyond the components themselves.
+- The ingestion gap is now stated *in the product*, where a user looks, rather than only in a limitations list.
+
+**Cons**
+
+- The chart primitives are ours to maintain. They cover exactly two forms; a third (stacked composition, small multiples) is real work rather than a library option. The per-day sentiment label breakdown is reported in the data table rather than charted for this reason.
+- Hover is a native SVG `<title>` per mark, not a custom crosshair tooltip — adequate and dependency-free, but less rich than a charting library's default.
+- A frontend ingestion workflow remains genuinely absent. A non-technical user still cannot get data into the platform without an operator running a script.
+
+### Explicit Non-Goals
+
+- No Gateway ingestion route, and no frontend upload screen.
+- No change to `GET /api/v1/analytics/trends`, its schema, or `analytics_aggregator.py`.
+- No new trend, forecast, ranking, or comparison computed anywhere in the frontend.
+- No charting library, and no categorical colour palette.
+- No charts elsewhere (Dashboard, Investigations, Recommendations) — those workspaces' payloads are narrative/evidence records, not numeric series, and inventing a series to plot would be exactly the fabrication this decision rules out.
+
+---
+
+## AD-11 — Ingestion Gateway Exposure, Root-Cause Lifecycle Actions, and the Administration Capability Badge
+
+**Status:** Accepted
+
+**Date:** 2026-08-17
+
+### Context
+
+A full product-experience reconstruction pass compared documented intent, actual backend capability, and actual frontend exposure across every workspace (methodology: three independent explorations of docs, frontend, and backend, reconciled into a gap matrix). Most of the platform's apparent gaps were found to already be deliberate, disclosed decisions (AD-9, AD-10) rather than defects — Analytics' four placeholder sections, Copilot's `NullLLMProvider` default, and four of Administration's six sections are all honestly presented as such already and were left untouched.
+
+Four gaps were verified as real and closed under this decision, all satisfying the same test AD-10 §4 applied and declined to meet at the time: real backend capability, not yet exposed through the Gateway, versus capability that does not exist at all.
+
+1. **Ingestion — reversing AD-10 §4's non-goal.** AD-10 explicitly declined to add a Gateway ingestion route "under a bug-fix heading." This pass is not a bug fix — it is the scoped exception AD-10 itself anticipated ("Rather than... invent the Gateway route to make one possible" was a scope decision for that audit, not a permanent architectural prohibition). `ingestion_service`'s `POST/GET /complaints` were unchanged and already correct; only a thin Gateway proxy (`gateway_service/app/api/ingestion.py`, `services/ingestion_proxy.py`) and a frontend workspace were added.
+2. **Root-cause lifecycle actions.** `root_cause_service`'s `PATCH /root-causes/{id}/confirm`, `/reject`, and `POST /refresh` were fully implemented (Phase 6) but never proxied by the Gateway or called by the Investigation workspace, leaving Investigations read-only where the backend was not. `RootCauseExplanationDTO` also silently dropped the real `status` field the service already returned.
+3. **Administration's real-vs-illustrative split was disclosed only in prose.** Each of the four illustrative sections already carries its own `AdvisoryNotice` (added under AD-10-adjacent work); nothing made the two real sections (Platform Overview, Intelligence Configuration) distinguishable from the other four without reading each section's body text.
+4. **No shared Button/Card/Table/Modal primitive existed.** Every workspace hand-rolled its own card component (15+ near-duplicates) and raw `<button>` elements; `--color-scrim` (tokens.css) had been reserved for a modal that had never been built.
+
+### Decision
+
+**1. Ingestion is exposed exactly as it exists — one record per request, no more.** `ingestion_service` has no bulk/CSV endpoint, so the Gateway adds none: `POST /api/v1/ingestion/complaints` forwards one `ComplaintCreateRequest`-shaped body at a time (`operator`-gated, matching Recommendation's decision route precedent), plus `viewer`-gated list/get-by-id reads. The new Data workspace (`/data`, first in primary navigation) parses an uploaded CSV/JSON file entirely client-side into rows, previews and validates them against the same real field contract, then submits each valid row as a genuine, separate `POST` with a real per-row outcome (success/duplicate/failed) — never a fabricated "batch ingested" response. `ingestion_service` also gained its first automated test suite (`tests/test_api_complaints.py`) — it had none.
+
+**2. Root-cause actions are exposed by incident, not by root-cause id.** The frontend only ever knows `incidentId` (Investigation's one correlation key, ARB-007); the new Gateway routes (`PATCH/POST /api/v1/investigations/{incident_id}/root-cause/{confirm,reject,refresh}`) resolve the real `RootCause` by incident first, then act on it by its own id, so no new identity concept crosses the Gateway boundary. `root_cause_service`'s real 409 (an invalid lifecycle transition — confirming an already-rejected cause, etc.) is translated to the Gateway's own `ConflictError`, not masked as a generic 502 (required a new `patch_resource` raw-response helper in `core/downstream.py`, mirroring `post_resource`'s existing rationale). `RootCauseExplanationDTO.status` is now populated, and `RootCauseAnalysis` renders real Confirm/Reject/Refresh controls, `operator`-gated the same way Recommendation's `Decision` section already is.
+
+**3. Administration sections carry a status Badge, not the word "live."** `AdministrationStatusBadge` reads "Real data" / "Not yet operational" — deliberately not "Live," "real-time," or "monitoring," all of which ADM-004 forbids appearing anywhere in Administration (asserted by `AdministrationWorkspace.test.tsx`) because Administration must never read as an operational monitoring surface. The badge makes the existing prose disclosure scannable; it adds no capability and changes no section's underlying data source.
+
+**4. Shared primitives are additive, not a migration.** `shared/components/primitives/{Button,Card,DataTable,Modal}` were built and are used by all new work in this pass (Data workspace, root-cause actions) and by one flagship retrofit (`ConnectedSystemCard`, Administration's Data Sources & Integrations). The other ~14 duplicate card components are deliberately left as they are — migrating them is cosmetic, touches every existing workspace, and carries real regression risk against a working product for no functional gain; it is recorded as a remaining gap, not silently done or silently ignored.
+
+### Consequences
+
+**Pros**
+
+- A user can now get data into the platform through the UI, with real per-row validation and outcomes, without shell or database access.
+- Investigations is no longer read-only where the backend already supported a real decision.
+- Administration's real/illustrative split is scannable in under a second, not just discoverable by reading.
+- Three new reusable primitives exist for future work, without a repository-wide rewrite risk.
+
+**Cons**
+
+- Ingestion remains single-record-per-request end-to-end (client-side batching over many real requests, not a real bulk endpoint) — a large file ingests as many sequential requests, with no server-side bulk optimization.
+- The other ~14 hand-rolled card components are still inconsistent with the new `Card` primitive; visual consistency across the whole product is therefore still partial, not complete.
+- `deriveWorkspaceContext` (Copilot) does not yet recognize `/data` as its own workspace and falls back to labeling it "Dashboard" when Copilot is opened there — a pre-existing fallback, not a new defect, but not corrected in this pass either.
+
+### Explicit Non-Goals
+
+- No bulk/CSV Gateway endpoint — client-side parsing over the real single-record endpoint only.
+- No change to Analytics, Copilot's LLM configuration, or Administration's four illustrative sections' underlying data.
+- No repository-wide Button/Card migration.
+- No Investigations/Recommendations list views or list endpoints — AD-9's reasoning is unchanged and still applies.
+
+---
+
+## AD-12 — Dataset/DatasetVersion Domain Model
+
+**Status:** Accepted
+
+**Date:** 2026-08-17
+
+### Context
+
+Before this decision, the platform had no concept of a dataset. Every complaint ever ingested — real, seeded, or from an earlier demo — lived in one global `complaints` table, and every downstream query (anomaly detection, trend aggregation, incident correlation, root cause, business impact, recommendations, the Dashboard, Analytics) scanned that entire table unconditionally. There was no way to upload an unrelated batch of records without it silently contaminating every existing chart, incident, and recommendation; no way to add new data to an existing analytical subject and see only the incremental effect; and no orchestrator at all — running the full pipeline over a batch of new complaints required an operator to manually call six services in sequence in the right order.
+
+The task requiring this decision asked for the reverse: an uploaded dataset must be a persistent analytical workspace, isolated from every other dataset, extensible without destroying prior history, with derived intelligence (anomalies, incidents, root causes, business impact, recommendations) traceable back to the dataset/version that produced it, and with every workspace (Dashboard, Analytics, Investigations, Recommendations, Data) scoped to one active dataset at a time — never a silent global fallback.
+
+### Decision
+
+**1. `Dataset`/`DatasetVersion` tables live in `ingestion_service`, not a new service.** `ingestion_service` already owns `Complaint`, the highest-cardinality relationship to a dataset; this keeps `Complaint.dataset_id`/`Complaint.dataset_version_id` real, same-service ORM foreign keys rather than a cross-service reference from day one.
+
+**2. A dataset's analyzable record set is always cumulative, never a per-version partition.** "Current data" for dataset X means every complaint where `dataset_id = X`, regardless of which version ingested it. A `DatasetVersion` row is a finalized snapshot marker (record counts, pipeline status, timestamps at that moment) — not a data partition, and not a copy. Extending a dataset with new records and finalizing a new version therefore re-analyzes the *whole* dataset (old records plus new), which is what makes "reconcile/re-analyse" in the brief's Extend flow honest rather than an incremental illusion.
+
+**3. Every downstream service (anomaly, root_cause, business_impact, recommendation) references `dataset_id` as a plain UUID column with a raw Alembic `ForeignKeyConstraint`, never an ORM `ForeignKey`/`relationship()` across a service boundary.** This is the pre-existing DATA-002 convention already used by `root_causes.incident_id` and `recommendations.decided_by`; dataset scoping introduces no new cross-service pattern. `ActiveAnomaly.fingerprint` uniqueness changes from global to the composite `(fingerprint, dataset_id)`, since two unrelated datasets can legitimately produce the identical fingerprint (e.g. `complaint_spike:global:ALL`) without that being a collision.
+
+**4. Every pre-existing row is backfilled into one deterministic "Legacy / Demo Data" dataset**, via two fixed UUID constants (`LEGACY_DATASET_ID`, `LEGACY_DATASET_VERSION_ID`) defined once in `backend/shared/constants/seed_ids.py` and imported identically by every migration and the seed loader. `dataset_id` is `NOT NULL` everywhere from the start — there is no nullable "not yet scoped" escape hatch anywhere in the schema.
+
+**5. The Gateway owns dataset-analysis orchestration, synchronously, with no new task-queue infrastructure.** `dataset_analysis_orchestrator.py` extends the Gateway's existing multi-service-fetch aggregation pattern (`investigation_aggregator.py`) to a multi-service *write* orchestration: `POST /api/v1/datasets/{id}/versions/finalize` closes the draft version and drives enrichment → anomaly detection → incident correlation → per-incident root-cause and business-impact analysis, all before the HTTP response returns. This is a known, deliberate scale limitation (large datasets hold the request open for the whole pipeline) — acceptable at this platform's prototype scale, since introducing a task queue for one feature would be new infrastructure the rest of the codebase has never needed.
+
+**6. Existing lifecycle mechanisms are reused for the "still-valid / changed / resolved / new" incident/anomaly lifecycle the brief asked for — nothing new was invented.** `anomaly_service`'s pre-existing fingerprint-based active/resolved reconciliation and the correlation engine's existing incident open/resolve logic are simply scoped by `dataset_id`.
+
+**7. NLP enrichment (`complaint_enrichments`) gets no schema change.** Sentiment/category/urgency are permanent per-complaint properties, independent of dataset; dataset scope is derived transitively via a join to `complaints.dataset_id` wherever a query needs it.
+
+**8. Recommendations are dataset-scoped via the existing event-driven pipeline, not a new one.** `BusinessImpactCompletedEvent` now carries `dataset_id`, threaded into the recommendation payload consumer. It is deliberately **not** threaded into the evaluation payload — `evaluation_service` is not Gateway-exposed or user-facing, so extending its persistence for a capability nothing surfaces was out of scope for this pass.
+
+**9. The Dashboard's recommendation fetch is scoped by filtering, not by a new downstream query parameter.** `dashboard_aggregator.py` fetches recommendations with a larger limit and filters in-process to only those whose `incident_id` belongs to the dataset's own already-fetched incidents, so correctness does not depend on every downstream list endpoint growing a `dataset_id` filter.
+
+**10. Frontend dataset selection is global app state in `localStorage`, not a route/query param.** `DatasetContext` (`selectedDatasetId`, `selectedDatasetName`) is mounted in `AppProviders`, inside `AuthProvider`, outside the router — it survives navigation and a hard refresh, matching the existing theme/sidebar-collapsed precedent, and respects `routePaths.ts`'s own precedent against `?id=` query strings for entity identity. `ingestion_service`'s Gateway routes remain the sole owner of the Dataset API surface (`workspaces/ingestion/api`); other workspaces read `selectedDatasetId`/`selectedDatasetName` from context rather than importing across a workspace boundary or issuing their own redundant `GET /datasets/{id}` fetch. This means Dashboard's and Analytics' dataset-context banners show the dataset's name (captured at selection time by the Data workspace) but not a live version/status badge — showing that would require either a second network request per workspace (breaking the "one Gateway call per workspace" invariant every existing integration test enforces) or a context field that goes stale the moment a version's pipeline advances elsewhere. Live version/pipeline status is deliberately only ever shown where it is actually fetched and kept current: the Data workspace itself.
+
+**11. `GET /api/v1/dashboard` and `GET /api/v1/analytics/trends` require `datasetId` — there is no "all datasets" fallback.** A request with no dataset scope is rejected, not silently served from a global query; the frontend never issues one; both hooks (`useDashboardData`, `useAnalyticsData`) return "nothing fetched yet" when `selectedDatasetId` is `null`, and both workspaces render an explicit empty state ("No dataset selected") rather than an empty or loading chart.
+
+**12. Investigation and Recommendation detail routes stay ID-keyed, not `datasetId`-keyed.** They are already transitively dataset-scoped through the incident/recommendation they display (both now carry `dataset_id`); adding a redundant query parameter to an already-unambiguous identity lookup would be the same anti-pattern AD-9 rejected for list-route identity.
+
+### Consequences
+
+**Pros**
+
+- Two unrelated datasets can never contaminate each other's anomalies, incidents, or recommendations — enforced at the schema level (`(fingerprint, dataset_id)` uniqueness), not just by convention in application code.
+- Extending a dataset with new records and finalizing a new version re-analyzes honestly over the dataset's full, cumulative record set; prior versions remain queryable rows, never overwritten or deleted.
+- No workspace can silently fall back to a global, unscoped query — the Gateway rejects the request outright, and the frontend never constructs one.
+- No new infrastructure (task queue, second orchestration service, ORM cross-service coupling) was introduced; every mechanism used already existed elsewhere in the codebase for a different purpose.
+
+**Cons**
+
+- `POST /api/v1/datasets/{id}/versions/finalize` is a long-held synchronous request for a large dataset — there is no progress streaming, and a client that gives up waiting (e.g. a browser tab closed) leaves the pipeline running server-side with no way to reattach to its progress mid-flight, only to poll the version's terminal status afterward.
+- Dashboard's and Analytics' dataset-context banners can show a stale name if a dataset is renamed elsewhere while a stale selection persists in another tab's `localStorage` — corrected the next time the dataset is reselected, not before.
+- `evaluation_service` still has no `dataset_id` on its own persistence — a pre-existing, disclosed gap (evaluation output has no Gateway route regardless, per prior audits), not newly introduced but not closed by this decision either.
+- Dataset version **comparison** and **report generation/export** were explicitly requested in the originating brief and explicitly deferred (confirmed with the user before implementation) — no backend or frontend capability for either exists after this decision.
+- **Copilot's `analytics_trends` tool is now always broken.** `anomaly_service`'s `/trends*` routes (which the tool calls) now require `dataset_id`; the tool was never updated to supply one, so every call fails with a real `422` — caught and reported honestly as `found: false` (no crash, no fabrication), but the capability is gone. Fixing it requires adding a field to `WorkspaceContext`, which Phase 12's architecture document defines as a frozen, `extra="forbid"` five-field contract — an architectural change this decision deliberately did not make unilaterally. Copilot's incident-id-keyed tools (investigation, root-cause, recommendation, business-impact) are unaffected.
+
+### Explicit Non-Goals
+
+- No dataset version comparison (diffing two versions' record sets or derived intelligence against each other).
+- No report generation or export capability — no backend capability exists for this anywhere in the platform, and none was added.
+- No task queue, message broker, or async job runner — the orchestrator remains synchronous, matching the codebase's pre-existing all-synchronous convention.
+- No `dataset_id` on `evaluation_service`'s persistence or event payload — it is not Gateway-exposed and extending it was out of scope.
+- No `datasetId` parameter on Investigation/Recommendation detail routes — they remain ID-keyed per AD-9's reasoning.
+- No live version/status data in Dashboard's or Analytics' dataset-context banners — that remains the Data workspace's responsibility alone.
+
+## AD-12 Addendum — True Version-Addressable Intelligence, Investigation/Recommendation Provenance, Copilot Fix
+
+**Status:** Accepted
+
+**Date:** 2026-08-17
+
+### Context
+
+A follow-up brutal audit found two of AD-12's own disclosed cons were real, closeable gaps rather than accepted tradeoffs: (1) the Copilot `analytics_trends` regression, and (2) derived intelligence (root cause, business impact, recommendations) carried `dataset_id` but no `dataset_version_id` — so after extending a dataset from Version 1 to Version 2, there was no way to independently retrieve "the intelligence Version 1's analysis run produced" versus Version 2's, and no schema-level guarantee that Version 1's already-produced rows were never silently overwritten.
+
+### Decision
+
+**1. Copilot fix — `filters.datasetId`, not a WorkspaceContext schema change.** `WorkspaceContext` (`copilot_service/app/schemas/copilot.py`) remains the frozen, `extra="forbid"` five-field contract AD-12 declined to touch. Instead, the active dataset rides its existing generic `filters: Dict[str,str]` field — the same "context text the LLM copies into a tool argument" mechanism `incident_id`/`recommendation_id` already use for every other tool. `AnalyticsToolInput` gained an optional `dataset_id` field; `analytics_tool.py` reports an honest `found:false` when it's absent rather than firing a request guaranteed to 422. The frontend `Copilot.tsx` merges `DatasetContext.selectedDatasetId` into `filters.datasetId` — safe because `DatasetContext` is real app-wide state (mounted in `AppProviders`, outside the router), unlike the per-workspace contexts `deriveWorkspaceContext.ts` already declined to reach into.
+
+**2. `dataset_version_id` added as an immutable, set-once-at-creation column to `root_causes`, `business_impact_assessments`, `recommendation_generations`/`recommendations`, and `anomaly_history`** — deliberately distinct from `active_anomalies`/`incidents`' existing `last_analysis_version_id`, which is a mutable "last touched by" pointer on a row that's continuously reconciled by fingerprint (AD-12 point 2's deliberate, unchanged design). `RootCause` is create-once-per-incident, so its `dataset_version_id` documents provenance only (which version's analysis first identified it) — it is still never auto-recomputed for a later version, protecting any human confirm/reject decision, per AD-12's original reasoning. `BusinessImpactAssessment` and `Recommendation`/`RecommendationGeneration` already accumulated a new row per analysis run rather than overwriting the previous one; tagging each row with the version that produced it turns that pre-existing append-only behavior into a genuinely queryable fact.
+
+**3. `GET /business-impact` and `GET /incidents/{id}/recommendations` gained an optional `dataset_version_id` filter**, so "the assessment(s)/recommendation(s) produced for Version N" is a real, independently retrievable query — verified live: extending a real dataset from Version N to Version N+1 (re-touching the same incident) produced a second, distinct assessment/recommendation row tagged with the new version, while the Version N row remained unchanged and separately retrievable by its own `dataset_version_id`.
+
+**4. Investigation/Recommendation Gateway responses gained real, non-fabricated provenance fields**, sourced from data each already carried internally: `InvestigationResponse.datasetId`/`datasetVersionId` (from the Incident's own `dataset_id`/`last_analysis_version_id` — the latter honestly labeled as "last touched by," not creation-time), and `RecommendationResponse.datasetId`/`datasetVersionId` (from the Recommendation's own immutable fields). The frontend shows this on both workspaces, including an explicit warning when a record's dataset doesn't match the currently-selected one (reachable via a direct link/bookmark).
+
+**5. The one remaining, disclosed gap: `Incident`/`ActiveAnomaly` current-state fields (severity, confidence, summary) are still mutated in place on each touching analysis run, not append-only.** A full point-in-time Incident-content history (a new `incident_history` table mirroring `anomaly_history`'s existing pattern) was assessed and deliberately not built in this pass — `anomaly_history` already captures genuine per-anomaly point-in-time snapshots (now version-tagged), and root cause/business impact/recommendation (the actual analytical conclusions investigators and operators act on) are now fully version-addressable; only the Incident's own summary-level fields lack an equivalent history. This is real, bounded remaining work, not silently downgraded to "won't fix."
+
+### Consequences
+
+**Pros**
+
+- Extending a dataset no longer risks a false impression that Version 1's business-impact/recommendation intelligence was silently discarded or overwritten — it wasn't, and is now independently retrievable by version.
+- Copilot's dataset-context regression is fixed without touching the frozen `WorkspaceContext` contract.
+- No new tables, services, or infrastructure were introduced — every fix is an additive column plus an optional filter parameter, following the exact migration/backfill pattern (`LEGACY_DATASET_VERSION_ID`) AD-12 itself established.
+
+**Cons**
+
+- Incident-level summary/severity history remains unavailable (see point 5) — a real, disclosed limitation, not yet closed.
+- `RootCause.dataset_version_id` can go stale relative to its Incident's current (mutated) state once the incident is touched by a later version's analysis and the root cause is not refreshed — an existing, deliberate tradeoff (protecting human decisions) now made visible rather than hidden.
+
+### Explicit Non-Goals (unchanged from AD-12, reaffirmed)
+
+- No Incident-content history table in this pass (see Decision point 5) — assessed, scoped, and deferred, not silently dropped.
+- No dataset version comparison/diff UI or report generation/export capability — still no backend capability for either.

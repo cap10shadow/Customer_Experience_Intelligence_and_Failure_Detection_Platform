@@ -75,6 +75,8 @@ class BusinessImpactCompletedConsumer:
 
         request = RecommendationExecutionRequest(
             event_id=payload.event_id,
+            dataset_id=payload.dataset_id,
+            dataset_version_id=payload.dataset_version_id,
             intelligence_context=payload.intelligence_context,
         )
 

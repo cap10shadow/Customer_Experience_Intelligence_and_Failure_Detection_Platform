@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend.services.ingestion_service.app.api.complaints import router as complaints_router
+from backend.services.ingestion_service.app.api.datasets import router as datasets_router
+from backend.services.ingestion_service.app.api.field_mappings import router as field_mappings_router
 from backend.shared.database.database import engine
 from backend.shared.database.health import check_database_connection
 from backend.shared.observability.correlation import CorrelationIdMiddleware
@@ -30,6 +32,8 @@ mount_unhandled_exception_logging(app)
 init_tracing("ingestion_service", app, engine=engine)
 
 app.include_router(complaints_router)
+app.include_router(datasets_router)
+app.include_router(field_mappings_router)
 
 
 @app.get("/health")

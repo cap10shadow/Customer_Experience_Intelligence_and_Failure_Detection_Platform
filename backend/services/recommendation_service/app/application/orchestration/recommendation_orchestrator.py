@@ -56,16 +56,25 @@ class RecommendationOrchestrator:
         context: IntelligenceContext,
         *,
         generation_id: uuid.UUID,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
         event_id: Optional[uuid.UUID] = None,
     ) -> Tuple[RecommendationRecord, ...]:
         """
         Runs the Recommendation Engine against `context` and persists every
         Recommendation it produced (zero or more) under the given
         `generation_id`. Returns the persisted, identity-bearing result.
+
+        `dataset_id`/`dataset_version_id` (docs/DECISIONS.md AD-12) are
+        forwarded verbatim to the Repository -- execution metadata supplied
+        by the triggering event, not part of `IntelligenceContext`, so the
+        (frozen) Recommendation Engine never sees or needs either.
         """
         recommendations = self._engine.generate(context)
         records = await self._repository.save_many(
             recommendations,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
             incident_id=context.incident.incident_id,
             generation_id=generation_id,
             event_id=event_id,

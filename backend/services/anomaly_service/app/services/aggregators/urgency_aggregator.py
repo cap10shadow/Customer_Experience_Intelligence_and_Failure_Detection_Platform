@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 from backend.services.anomaly_service.app.repositories.trend_repository import TrendRepository
@@ -11,6 +12,6 @@ class UrgencyAggregator:
     def __init__(self, repository: TrendRepository) -> None:
         self.repository = repository
 
-    async def aggregate(self, window: TrendWindow) -> List[UrgencyTrendPoint]:
-        rows = await self.repository.count_enrichments_by_urgency(window.start, window.end)
+    async def aggregate(self, window: TrendWindow, dataset_id: uuid.UUID) -> List[UrgencyTrendPoint]:
+        rows = await self.repository.count_enrichments_by_urgency(window.start, window.end, dataset_id)
         return [UrgencyTrendPoint(urgency=urgency.value, count=count) for urgency, count in rows]

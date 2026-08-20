@@ -3,6 +3,8 @@ import { apiClient } from '@/app/api/client'
 import type { DashboardApiResponse } from './types'
 
 export interface DashboardApiQuery {
+  /** Required (docs/DECISIONS.md AD-12) -- the Gateway rejects a Dashboard request with no Dataset scope, since there is no "all datasets combined" view. */
+  datasetId: string
   timeRange: string
   region?: string | null
   businessUnit?: string | null
@@ -23,8 +25,9 @@ export interface GetDashboardOptions {
  * Gateway's base URL.
  */
 export function getDashboard(query: DashboardApiQuery, options: GetDashboardOptions = {}): Promise<DashboardApiResponse> {
-  return apiClient.get<DashboardApiResponse>('/dashboard', {
+  return apiClient.get<DashboardApiResponse>('/v1/dashboard', {
     query: {
+      datasetId: query.datasetId,
       timeRange: query.timeRange,
       region: query.region ?? undefined,
       businessUnit: query.businessUnit ?? undefined,

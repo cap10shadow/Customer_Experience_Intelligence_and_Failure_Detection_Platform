@@ -18,11 +18,15 @@ def _make_anomaly(
     baseline_value=10.0,
     current_value=30.0,
     percentage_change=200.0,
+    dataset_id=None,
+    last_analysis_version_id=None,
 ) -> ActiveAnomaly:
     """Builds a plain (unpersisted) ActiveAnomaly for rule/engine unit tests."""
     timestamp = first_detected_at or datetime.now(timezone.utc)
     return ActiveAnomaly(
         id=uuid.uuid4(),
+        dataset_id=dataset_id or uuid.uuid4(),
+        last_analysis_version_id=last_analysis_version_id or uuid.uuid4(),
         fingerprint=f"{type.value}:{entity_type}:{entity_value or 'ALL'}",
         type=type,
         severity=severity,

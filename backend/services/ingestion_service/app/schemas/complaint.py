@@ -47,7 +47,10 @@ class ComplaintResponse(BaseModel):
     """
     id: uuid.UUID
     inserted_at: datetime
-    
+
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
+
     external_reference_id: Optional[str]
     complaint_title: Optional[str]
     complaint_text: str

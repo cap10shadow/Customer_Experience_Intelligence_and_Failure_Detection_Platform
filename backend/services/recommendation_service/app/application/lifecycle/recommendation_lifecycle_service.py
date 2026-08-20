@@ -143,6 +143,8 @@ class RecommendationLifecycleService:
                 records = await orchestrator.execute(
                     request.intelligence_context,
                     generation_id=generation_id,
+                    dataset_id=request.dataset_id,
+                    dataset_version_id=request.dataset_version_id,
                     event_id=request.event_id,
                 )
             except DuplicateGenerationEventError as exc:

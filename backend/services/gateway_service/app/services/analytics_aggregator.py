@@ -15,14 +15,15 @@ from backend.services.gateway_service.app.schemas.analytics import (
 )
 
 
-async def build_analytics(client: httpx.AsyncClient, days: int) -> AnalyticsResponse:
+async def build_analytics(client: httpx.AsyncClient, days: int, dataset_id: str) -> AnalyticsResponse:
     """
     Retrieves anomaly_service's real trend summary (`GET /api/v1/trends`,
     which already aggregates complaint volume, categories, regions,
     sentiment, and urgency in one call -- Part 5's backend capability
     audit found this single existing endpoint, so the Gateway issues one
     downstream call rather than five (Batch 3 SS22's "no unnecessary
-    calls" principle).
+    calls" principle), now scoped to one dataset (docs/DECISIONS.md
+    AD-12) -- Analytics never mixes another dataset's trend data in.
 
     This is treated as essential, unlike Dashboard's non-essential trend
     enrichment: Analytics' Trend Analysis section has nothing else to
@@ -32,7 +33,9 @@ async def build_analytics(client: httpx.AsyncClient, days: int) -> AnalyticsResp
     judgment: essential when the missing dependency is everything the
     endpoint exists to provide).
     """
-    trends = await get_json(client, f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends", params={"days": days})
+    trends = await get_json(
+        client, f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends", params={"days": days, "dataset_id": dataset_id}
+    )
     if trends is None:
         raise DownstreamServiceError("Trend data could not be retrieved.")
     return _to_response(trends)

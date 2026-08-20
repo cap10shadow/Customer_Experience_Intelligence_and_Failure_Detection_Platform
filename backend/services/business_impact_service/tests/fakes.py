@@ -34,6 +34,9 @@ from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
 from backend.shared.constants.enums.business_impact_assessment import BusinessImpactAssessmentStatus
 from backend.shared.constants.enums.root_cause import RootCause
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
 
 class FakeIncidentReadRepository:
     """In-memory stand-in for IncidentReadRepository -- same async contract, no database."""
@@ -87,6 +90,8 @@ class FakeBusinessImpactRepository:
         severity: Optional[ImpactLevel] = None,
         priority: Optional[BusinessPriority] = None,
         incident_id: Optional[uuid.UUID] = None,
+        dataset_id: Optional[uuid.UUID] = None,
+        dataset_version_id: Optional[uuid.UUID] = None,
     ) -> Sequence[BusinessImpactAssessmentEntity]:
         results = list(self.by_id.values())
         if severity is not None:
@@ -95,6 +100,10 @@ class FakeBusinessImpactRepository:
             results = [r for r in results if r.business_priority == priority]
         if incident_id is not None:
             results = [r for r in results if r.incident_id == incident_id]
+        if dataset_id is not None:
+            results = [r for r in results if r.dataset_id == dataset_id]
+        if dataset_version_id is not None:
+            results = [r for r in results if r.dataset_version_id == dataset_version_id]
         return results
 
 

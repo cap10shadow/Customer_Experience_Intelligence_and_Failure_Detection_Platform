@@ -137,6 +137,17 @@ These improve anomaly realism.
 
 ---
 
+## Other Candidate Sources Considered
+
+Also considered during early planning, but not detailed above and not integrated into the platform:
+
+* E-commerce complaint datasets
+* Kaggle customer-support datasets
+
+Like the datasets above, these were candidate sources only. The platform's actual seed/validation data is a small set of hand-written sample and synthetic complaints — see `datasets/sample_complaints/` and `datasets/validation/`, and the "Current authority" table in `docs/design/README.md`.
+
+---
+
 # 5. SYNTHETIC OPERATIONAL EVENT STRATEGY
 
 Real operational telemetry is difficult to obtain publicly.

@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 
 import { AppShell } from '@/app/layouts/AppShell'
 import { AppProviders } from '@/app/providers/AppProviders'
+import { DATASET_STORAGE_KEY } from '@/app/context/DatasetContext'
 import { ROUTE_PATHS } from '@/app/routing/routePaths'
 import { PRIMARY_NAVIGATION } from '@/app/configuration/navigation.config'
 import { DashboardWorkspace } from '@/workspaces/dashboard'
@@ -32,6 +33,14 @@ function renderApp(initialPath: string) {
 }
 
 describe('AppShell', () => {
+  beforeEach(() => {
+    window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+  })
+
+  afterEach(() => {
+    window.localStorage.removeItem(DATASET_STORAGE_KEY)
+  })
+
   it('renders the persistent primary landmarks', async () => {
     renderApp('/')
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument()

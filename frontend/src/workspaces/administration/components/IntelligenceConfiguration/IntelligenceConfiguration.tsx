@@ -1,6 +1,6 @@
 import { Stack } from '@/shared/components/layout'
 
-import { AdministrationEmptyState, AdministrationSection } from '../foundation'
+import { AdministrationEmptyState, AdministrationSection, AdministrationStatusBadge } from '../foundation'
 import type { ConfigurationItem } from '../../types'
 import { ReadOnlyConfigurationItemCard } from './ReadOnlyConfigurationItemCard'
 import styles from './IntelligenceConfiguration.module.css'
@@ -45,6 +45,7 @@ export function IntelligenceConfiguration({ items, isLoading = false }: Intellig
       title="Intelligence Configuration"
       description="How is platform intelligence configured? Values shown are current and read-only."
       register="configuration"
+      statusBadge={<AdministrationStatusBadge isLive />}
     >
       <div className={styles.container}>
         {!isLoading && items && items.length === 0 ? (

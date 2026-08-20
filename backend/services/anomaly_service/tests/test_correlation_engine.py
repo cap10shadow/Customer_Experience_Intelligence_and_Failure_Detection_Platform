@@ -8,6 +8,10 @@ from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyStatu
 from backend.shared.constants.enums.incident import IncidentStatus
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 class FakeAnomalyRepository:
     """In-memory stand-in for AnomalyRepository — the Correlation Engine
     only ever reads active anomalies, never writes to this table."""
@@ -15,7 +19,7 @@ class FakeAnomalyRepository:
     def __init__(self, anomalies):
         self.anomalies = anomalies
 
-    async def list_active(self):
+    async def list_active(self, dataset_id):
         return [a for a in self.anomalies if a.status == AnomalyStatus.ACTIVE]
 
 
@@ -39,7 +43,7 @@ class FakeIncidentRepository:
     async def get_by_id(self, incident_id):
         return self.incidents.get(incident_id)
 
-    async def list_open(self):
+    async def list_open(self, dataset_id):
         return [i for i in self.incidents.values() if i.status == IncidentStatus.OPEN]
 
     async def get_open_incident_for_anomaly(self, active_anomaly_id):
@@ -80,7 +84,7 @@ async def test_five_related_anomalies_within_ten_minutes_form_one_incident(make_
     ]
     engine, incident_repo, _ = _engine(anomalies)
 
-    result = await engine.run(window_minutes=15)
+    result = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
 
     assert len(result.created) == 1
     assert result.created[0].linked_anomaly_count == 5
@@ -107,7 +111,7 @@ async def test_distant_regions_form_separate_incidents(make_anomaly):
     ]
     engine, incident_repo, _ = _engine(south_cluster + north_cluster)
 
-    result = await engine.run(window_minutes=15)
+    result = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
 
     assert len(result.created) == 2
     titles = {item.incident.title for item in result.created}
@@ -118,7 +122,7 @@ async def test_distant_regions_form_separate_incidents(make_anomaly):
 @pytest.mark.anyio
 async def test_single_anomaly_never_forms_an_incident(make_anomaly):
     engine, incident_repo, _ = _engine([make_anomaly()])
-    result = await engine.run(window_minutes=15)
+    result = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
     assert result.created == []
     assert incident_repo.incidents == {}
 
@@ -134,7 +138,7 @@ async def test_low_confidence_cluster_does_not_form_an_incident(make_anomaly):
     ]
     engine, incident_repo, _ = _engine(anomalies)
 
-    result = await engine.run(window_minutes=15)
+    result = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
 
     assert result.created == []
     assert incident_repo.incidents == {}
@@ -149,8 +153,8 @@ async def test_duplicate_prevention_no_new_incident_or_links_on_rerun(make_anoma
     ]
     engine, incident_repo, _ = _engine(anomalies)
 
-    first = await engine.run(window_minutes=15)
-    second = await engine.run(window_minutes=15)
+    first = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
+    second = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
 
     assert len(first.created) == 1
     assert second.created == []
@@ -167,7 +171,7 @@ async def test_new_anomaly_joining_cluster_updates_existing_incident(make_anomal
     anomalies = [a1, a2]
     engine, incident_repo, anomaly_repo = _engine(anomalies)
 
-    first = await engine.run(window_minutes=15)
+    first = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
     incident_id = first.created[0].incident.id
 
     # A third, related anomaly appears just after the first run.
@@ -175,7 +179,7 @@ async def test_new_anomaly_joining_cluster_updates_existing_incident(make_anomal
     anomalies.append(a3)
     incident_repo.anomalies_by_id[a3.id] = a3
 
-    second = await engine.run(window_minutes=15)
+    second = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
 
     assert second.created == []
     assert len(second.updated) == 1
@@ -192,13 +196,13 @@ async def test_incident_resolves_when_all_linked_anomalies_resolve(make_anomaly)
     anomalies = [a1, a2]
     engine, incident_repo, _ = _engine(anomalies)
 
-    first = await engine.run(window_minutes=15)
+    first = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
     incident_id = first.created[0].incident.id
 
     a1.status = AnomalyStatus.RESOLVED
     a2.status = AnomalyStatus.RESOLVED
 
-    second = await engine.run(window_minutes=15)
+    second = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
 
     assert len(second.resolved) == 1
     assert second.resolved[0].incident.id == incident_id
@@ -214,12 +218,12 @@ async def test_incident_not_resolved_while_any_linked_anomaly_still_active(make_
     anomalies = [a1, a2]
     engine, incident_repo, _ = _engine(anomalies)
 
-    first = await engine.run(window_minutes=15)
+    first = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
     incident_id = first.created[0].incident.id
 
     a1.status = AnomalyStatus.RESOLVED  # only one of the two resolves
 
-    second = await engine.run(window_minutes=15)
+    second = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
 
     assert second.resolved == []
     assert incident_repo.incidents[incident_id].status == IncidentStatus.OPEN
@@ -234,10 +238,10 @@ async def test_get_active_and_get_by_id(make_anomaly):
     ]
     engine, _, _ = _engine(anomalies)
 
-    result = await engine.run(window_minutes=15)
+    result = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
     incident_id = result.created[0].incident.id
 
-    active = await engine.get_active()
+    active = await engine.get_active(DATASET_ID)
     assert len(active) == 1
     assert active[0].id == incident_id
 
@@ -257,7 +261,7 @@ async def test_get_anomalies_for_incident(make_anomaly):
     ]
     engine, _, _ = _engine(anomalies)
 
-    result = await engine.run(window_minutes=15)
+    result = await engine.run(DATASET_ID, DATASET_VERSION_ID, window_minutes=15)
     incident_id = result.created[0].incident.id
 
     linked = await engine.get_anomalies_for_incident(incident_id)

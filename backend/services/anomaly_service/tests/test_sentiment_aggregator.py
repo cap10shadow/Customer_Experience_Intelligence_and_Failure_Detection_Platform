@@ -1,5 +1,7 @@
 from datetime import date
 
+import uuid
+
 import pytest
 
 from backend.services.anomaly_service.app.services.aggregators.sentiment_aggregator import SentimentAggregator
@@ -7,11 +9,14 @@ from backend.services.anomaly_service.app.utils.time_window import resolve_windo
 from backend.shared.constants.enums.complaint import SentimentLabel
 
 
+DATASET_ID = uuid.uuid4()
+
+
 class FakeRepository:
     def __init__(self, rows):
         self.rows = rows
 
-    async def count_enrichments_by_day_and_sentiment(self, start, end):
+    async def count_enrichments_by_day_and_sentiment(self, start, end, dataset_id):
         return self.rows
 
 
@@ -23,7 +28,7 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_no_enrichments_returns_empty_list():
     aggregator = SentimentAggregator(FakeRepository([]))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert points == []
 
 
@@ -31,7 +36,7 @@ async def test_no_enrichments_returns_empty_list():
 async def test_single_enrichment_produces_matching_average():
     rows = [(date(2026, 7, 1), SentimentLabel.NEGATIVE, 1)]
     aggregator = SentimentAggregator(FakeRepository(rows))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert len(points) == 1
     assert points[0].date == date(2026, 7, 1)
     assert points[0].average_score == -1
@@ -46,7 +51,7 @@ async def test_mixed_sentiment_computes_weighted_average():
         (date(2026, 7, 1), SentimentLabel.POSITIVE, 2),
     ]
     aggregator = SentimentAggregator(FakeRepository(rows))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert len(points) == 1
     assert points[0].average_score == -0.5
     assert points[0].label_counts == {"highly_negative": 2, "positive": 2}
@@ -59,7 +64,7 @@ async def test_multiple_days_are_kept_separate():
         (date(2026, 7, 2), SentimentLabel.POSITIVE, 5),
     ]
     aggregator = SentimentAggregator(FakeRepository(rows))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert len(points) == 2
     assert points[0].date == date(2026, 7, 1)
     assert points[0].average_score == 0

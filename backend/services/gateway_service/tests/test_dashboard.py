@@ -9,6 +9,7 @@ from backend.services.gateway_service.app.core.config import settings
 from backend.services.gateway_service.app.dependencies.http_client import get_http_client
 from backend.services.gateway_service.app.main import app
 
+DATASET_ID = str(uuid.uuid4())
 INCIDENT_ID = str(uuid.uuid4())
 RESOLVED_INCIDENT_ID = str(uuid.uuid4())
 RECOMMENDATION_ID = str(uuid.uuid4())
@@ -221,7 +222,7 @@ async def test_dashboard_aggregates_real_downstream_data(override_http_client):
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     body = response.json()
@@ -264,7 +265,7 @@ async def test_decision_summary_never_claims_a_lifecycle_or_approval_state(overr
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     opportunity = response.json()["decisionSummary"][0]
     combined_text = " ".join([opportunity["headline"], opportunity["reason"], opportunity["nextDecision"]]).lower()
@@ -280,7 +281,7 @@ async def test_resolved_incidents_are_excluded_from_active_sections(override_htt
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     body = response.json()
     situation_ids = [situation["id"] for situation in body["operationalBrief"]["criticalSituations"]]
@@ -295,7 +296,7 @@ async def test_root_cause_not_yet_identified_degrades_gracefully_not_as_a_failur
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     story = response.json()["investigationEntryPoints"][0]
@@ -314,7 +315,7 @@ async def test_essential_incidents_failure_fails_the_whole_request(override_http
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 502
     body = response.json()
@@ -328,7 +329,7 @@ async def test_non_essential_trend_failure_degrades_with_a_warning_not_a_total_f
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     body = response.json()
@@ -343,7 +344,7 @@ async def test_non_essential_recommendation_failure_degrades_with_a_warning(over
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     body = response.json()
@@ -357,7 +358,7 @@ async def test_invalid_time_range_returns_400(override_http_client):
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard", params={"timeRange": "last-quarter"})
+        response = await test_client.get("/api/v1/dashboard", params={"timeRange": "last-quarter", "datasetId": DATASET_ID})
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
@@ -370,7 +371,7 @@ async def test_no_fake_filter_rule_rejects_unsupported_filters(override_http_cli
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard", params={field: value})
+        response = await test_client.get("/api/v1/dashboard", params={field: value, "datasetId": DATASET_ID})
 
     assert response.status_code == 400
     body = response.json()
@@ -384,7 +385,7 @@ async def test_no_fake_filter_rule_allows_a_blank_or_absent_filter(override_http
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard", params={"region": ""})
+        response = await test_client.get("/api/v1/dashboard", params={"region": "", "datasetId": DATASET_ID})
 
     assert response.status_code == 200
 
@@ -419,7 +420,7 @@ async def test_time_range_maps_to_the_real_days_window(override_http_client):
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard", params={"timeRange": "30d"})
+        response = await test_client.get("/api/v1/dashboard", params={"timeRange": "30d", "datasetId": DATASET_ID})
 
     assert response.status_code == 200
     assert seen_days["days"] == "30"
@@ -435,7 +436,7 @@ async def test_incidents_trends_and_recommendations_are_fetched_concurrently(ove
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
         start = time.perf_counter()
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
         elapsed = time.perf_counter() - start
 
     assert response.status_code == 200
@@ -476,7 +477,7 @@ async def test_no_more_than_two_incidents_are_enriched_with_root_cause_and_busin
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     assert len(response.json()["investigationEntryPoints"]) == 2
@@ -493,7 +494,7 @@ async def test_supporting_evidence_reports_factual_counts_only_no_ranking_or_sev
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     body = response.json()
     combined_text = " ".join(f"{item['headline']} {item['description']}" for item in body["supportingEvidence"]).lower()
@@ -509,7 +510,7 @@ async def test_supporting_evidence_dimension_is_omitted_on_failure_and_recorded_
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     body = response.json()
@@ -532,7 +533,7 @@ async def test_supporting_evidence_reports_a_genuine_zero_result_honestly(overri
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     body = response.json()
     sentiment_item = next(item for item in body["supportingEvidence"] if item["id"] == "sentiment-trend")
@@ -552,7 +553,7 @@ async def test_supporting_evidence_fetched_concurrently_with_the_rest_of_the_das
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
         start = time.perf_counter()
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
         elapsed = time.perf_counter() - start
 
     assert response.status_code == 200
@@ -580,7 +581,7 @@ async def test_focus_areas_empty_when_the_incident_has_no_recommendation_yet(ove
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     assert response.json()["operationalBrief"]["focusAreas"] == []
@@ -593,7 +594,7 @@ async def test_focus_areas_empty_when_the_recommended_incident_is_not_high_or_cr
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     assert response.json()["operationalBrief"]["focusAreas"] == []
@@ -605,7 +606,7 @@ async def test_focus_areas_never_contain_ranking_or_scoring_language(override_ht
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     focus_areas = response.json()["operationalBrief"]["focusAreas"]
     assert len(focus_areas) == 1
@@ -656,7 +657,7 @@ async def test_focus_areas_capped_at_three(override_http_client):
     override_http_client(client)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
-        response = await test_client.get("/api/v1/dashboard")
+        response = await test_client.get("/api/v1/dashboard", params={"datasetId": DATASET_ID})
 
     assert response.status_code == 200
     assert len(response.json()["operationalBrief"]["focusAreas"]) == 3

@@ -94,6 +94,26 @@ async def post_resource(
         raise DownstreamUnavailableError(f"Could not reach {url}.") from exc
 
 
+async def put_resource(
+    client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None, extra_headers: Optional[dict] = None
+) -> httpx.Response:
+    """
+    Issues one bounded PUT and returns the raw `httpx.Response`, mirroring
+    `post_resource`'s rationale (see its docstring) -- the one current
+    caller (`ingestion_proxy.update_alias_suggestion`) needs to translate
+    a downstream 422 into the Gateway's own `GatewayValidationError`, not
+    have it masked behind a generic 502. Only connection failure and
+    timeout are handled here -- every status-code interpretation is the
+    caller's.
+    """
+    try:
+        return await client.put(url, json=json, headers={**correlation_headers(), **(extra_headers or {})})
+    except httpx.TimeoutException as exc:
+        raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
+    except httpx.RequestError as exc:
+        raise DownstreamUnavailableError(f"Could not reach {url}.") from exc
+
+
 async def delete_resource(
     client: httpx.AsyncClient, url: str, *, extra_headers: Optional[dict] = None
 ) -> httpx.Response:
@@ -112,6 +132,28 @@ async def delete_resource(
     """
     try:
         return await client.delete(url, headers={**correlation_headers(), **(extra_headers or {})})
+    except httpx.TimeoutException as exc:
+        raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
+    except httpx.RequestError as exc:
+        raise DownstreamUnavailableError(f"Could not reach {url}.") from exc
+
+
+async def patch_resource(
+    client: httpx.AsyncClient, url: str, *, json: Optional[dict] = None, extra_headers: Optional[dict] = None
+) -> httpx.Response:
+    """
+    Issues one bounded PATCH and returns the raw `httpx.Response` --
+    unlike `patch_json`, deliberately not status-mapped here, mirroring
+    `post_resource`'s rationale (see its docstring): a caller whose
+    downstream resource carries its own real conflict semantics (e.g.
+    root_cause_service's 409 on an invalid confirm/reject lifecycle
+    transition) must be able to translate that into the Gateway's own
+    `ConflictError`, not have it masked behind a generic 502. Only
+    connection failure and timeout are handled here -- every status-code
+    interpretation is the caller's.
+    """
+    try:
+        return await client.patch(url, json=json, headers={**correlation_headers(), **(extra_headers or {})})
     except httpx.TimeoutException as exc:
         raise DownstreamTimeoutError(f"Timed out calling {url}.") from exc
     except httpx.RequestError as exc:

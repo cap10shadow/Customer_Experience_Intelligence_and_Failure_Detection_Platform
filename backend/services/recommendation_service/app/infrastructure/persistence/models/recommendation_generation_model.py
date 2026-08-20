@@ -55,6 +55,18 @@ class RecommendationGenerationModel(Base):
     __tablename__ = "recommendation_generations"
 
     generation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    # Dataset scoping (docs/DECISIONS.md AD-12) -- see RecommendationModel's
+    # identical field for the full rationale. Carried through unchanged
+    # from the triggering `BusinessImpactCompleted` event's own
+    # `dataset_id`.
+    dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    # True version-addressable intelligence (AD-12 follow-up): which
+    # DatasetVersion's analysis run produced this generation. Set once at
+    # creation, never updated -- generations already accumulate one row
+    # per analysis run rather than overwriting the previous one, so this
+    # makes "the recommendation(s) generated for Version N" a real,
+    # directly queryable fact.
+    dataset_version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     incident_id: Mapped[str] = mapped_column(String(64), nullable=False)
     event_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(

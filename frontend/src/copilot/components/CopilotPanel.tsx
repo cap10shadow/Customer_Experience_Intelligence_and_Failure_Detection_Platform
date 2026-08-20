@@ -1,9 +1,10 @@
 import { useEffect, useRef, type KeyboardEvent, type RefObject } from 'react'
 
 import { Icon } from '@/shared/icons'
+import { AdvisoryNotice } from '@/shared/components/feedback'
 import { Panel } from '@/shared/components/layout'
 
-import type { ApiError } from '@/app/api/errors'
+import { describeApiError, type ApiError } from '@/app/api/errors'
 import type { CopilotTranscriptMessage } from '../hooks/useCopilotConversation'
 import type { CopilotWorkspaceName } from '../api/types'
 import { CopilotMessageList } from './CopilotMessageList'
@@ -18,18 +19,22 @@ const WORKSPACE_LABEL: Record<CopilotWorkspaceName, string> = {
   administration: 'Administration',
 }
 
+/**
+ * Delegates to the shared `describeApiError` (app/api/errors.ts) rather
+ * than keeping Copilot's own partial copy of the same status mapping --
+ * the previous local version handled only `0` and `5xx`, so a `403` (a
+ * `viewer` sending a message: Copilot is operator-only at the Gateway)
+ * surfaced as a bare authorization string that never mentioned the
+ * user's role.
+ */
 function friendlyErrorMessage(error: ApiError): string {
-  if (error.status === 0) {
-    return 'Copilot could not reach the platform. Check your connection and try again.'
-  }
-  if (error.status >= 500) {
-    return 'Copilot is temporarily unavailable. Please try again.'
-  }
-  return error.message || 'Something went wrong answering that question.'
+  return describeApiError(error, { subject: 'answer that question' })
 }
 
 export interface CopilotPanelProps {
   workspace: CopilotWorkspaceName
+  /** Whether this session holds the `operator` role the Gateway requires to send a message. Defaults to `true` so standalone/component tests keep their existing behaviour. */
+  canUseCopilot?: boolean
   messages: CopilotTranscriptMessage[]
   isLoading: boolean
   error: ApiError | null
@@ -52,6 +57,7 @@ export interface CopilotPanelProps {
  */
 export function CopilotPanel({
   workspace,
+  canUseCopilot = true,
   messages,
   isLoading,
   error,
@@ -127,6 +133,15 @@ export function CopilotPanel({
             <Icon name="close" size={18} />
           </button>
         </header>
+
+        {!canUseCopilot ? (
+          <div className={styles.roleNotice}>
+            <AdvisoryNotice
+              title="Asking Copilot requires the operator role"
+              description="Your account holds read access to the platform. Copilot will refuse a question sent from this session; an operator or administrator can ask it."
+            />
+          </div>
+        ) : null}
 
         <CopilotMessageList messages={messages} isLoading={isLoading} />
 

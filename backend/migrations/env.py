@@ -22,6 +22,12 @@ from backend.shared.database.base import Base
 # These imports are intentional side-effects: they register each model's table
 # into Base.metadata so Alembic autogenerate can detect schema changes.
 from backend.services.ingestion_service.app.models.complaint import Complaint  # noqa: F401
+from backend.services.ingestion_service.app.models.dataset import Dataset, DatasetVersion  # noqa: F401
+from backend.services.ingestion_service.app.models.field_value_mapping import FieldValueMapping  # noqa: F401
+from backend.services.ingestion_service.app.models.field_alias_suggestion import FieldAliasSuggestion  # noqa: F401
+from backend.services.ingestion_service.app.models.field_value_mapping_occurrence_session import (  # noqa: F401
+    FieldValueMappingOccurrenceSession,
+)
 from backend.services.nlp_service.app.models.complaint_enrichment import ComplaintEnrichment  # noqa: F401
 from backend.services.copilot_service.app.models.conversation import CopilotConversation  # noqa: F401
 from backend.services.copilot_service.app.models.message import CopilotMessage  # noqa: F401

@@ -7,13 +7,13 @@
 
 # Last Updated
 
-**Date:** 2026-08-16
+**Date:** 2026-08-17
 
 ---
 
 # Overall Progress
 
-**Estimated Completion:** ~96%
+**Estimated Completion:** ~98%
 
 > Progress is measured against the planned roadmap, verified implementations, and completed engineering milestones.
 
@@ -23,9 +23,15 @@
 
 **Current Phase:** Phase 13 – Production Hardening
 
-**Current Step:** Documentation and repository organization closure
+**Current Step:** Closed — final synthetic-data validation complete; post-closure correction pass RC1–RC4 applied
 
-**Status:** In progress. Ten of the eleven original implementation batches (identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, CI) are complete, along with two closure-phase architecture decisions (AD-7, AD-8) and their implementation. Documentation and repository organization are now current. The eleventh batch — the final synthetic-data validation report — has not started. See Phase 13 Progress below.
+**Status:** Complete. All eleven original implementation batches (identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, CI) are complete, along with two closure-phase architecture decisions (AD-7, AD-8) and their implementation. Documentation and repository organization are current. The final closure item — the end-to-end synthetic-data validation report (F05/F06) — was completed on 2026-08-16 against real running services and a genuinely fresh database; outcome **complete with documented limitations**, with no undocumented gaps found. Full record: `docs/VALIDATION_REPORT.md`. See Phase 13 Progress below.
+
+**Post-closure correction pass (2026-08-16, RC1–RC4).** The first genuine browser walkthrough of the running application found four user-facing defects that neither the test suite nor the F05/F06 validation could have caught, because both verified the Gateway directly while the frontend's own API modules emitted a different path: five workspace API modules were missing the `/v1` segment (every workspace 404'd), primary navigation linked to two routes that were never defined, there was no not-found/router-error surface, and the documented sample-data seed command had never worked against the container image. All four are fixed and validated; the frontend suite is now 339 passed across 49 files, and all seven Gateway routes the workspaces depend on return `200` through the frontend's own origin and proxy. Decision record: `docs/DECISIONS.md` AD-9. Validation record: `docs/VALIDATION_REPORT.md` §9, which also documents the gap in the F05/F06 method that allowed this defect class.
+
+**Dataset/DatasetVersion domain model (2026-08-17).** Before this pass the platform had no concept of a dataset — every complaint ever ingested lived in one global table, and every downstream query scanned it unconditionally, so an unrelated upload silently contaminated every existing chart, incident, and recommendation. This pass added real dataset identity and versioning: new `Dataset`/`DatasetVersion` tables in `ingestion_service`; `dataset_id` scoping across `anomaly_service`, `root_cause_service`, `business_impact_service`, and `recommendation_service`; a Gateway orchestrator (`POST /api/v1/datasets/{id}/versions/finalize`) that drives the full enrichment → anomaly → incident → root-cause → business-impact pipeline synchronously per dataset version; a rebuilt Data workspace (dataset list/create, dataset detail with upload/finalize/version-history); and required `datasetId` scoping on the Dashboard and Analytics Gateway routes and frontend hooks, with an explicit "No dataset selected" empty state rather than any global fallback. Full decision record: `docs/DECISIONS.md` AD-12. Explicitly deferred: dataset version comparison and report generation/export (both requested in the originating brief, both confirmed out of scope with the user before implementation). `PYTHONPATH=. python -m pytest backend -q` — 1232 passed, 21 failed (identical pre-existing PostgreSQL-dependent baseline), 161 skipped. Frontend — `tsc -b`, lint, build all clean; `vitest run` — 366 passed / 366, 51 files. Migration-time verification against a real, isolated, empty PostgreSQL container found and fixed two genuine defects the static test suite could not have caught: two divergent Alembic heads (the dataset chain was branched from a stale revision) and an enum/`bulk_insert` bug that made the first dataset migration fail outright on a fresh database — both fixed, and the full chain now verified to apply and downgrade cleanly. A real, confirmed regression was found and fixed in a follow-up pass, without amending the frozen `WorkspaceContext` contract: Copilot's `analytics_trends` tool now receives the active dataset via the existing generic `filters.datasetId` field (the same "context text the LLM copies into a tool argument" channel `incident_id`/`recommendation_id` already used), and reports an honest `found:false` when no dataset is selected rather than issuing a request guaranteed to fail.
+
+**True version-addressable intelligence (2026-08-17, same-day follow-up).** A further brutal audit found that `dataset_id` scoping alone could not distinguish which `DatasetVersion`'s analysis run produced a given RootCause/BusinessImpactAssessment/Recommendation — after extending a dataset to a new version, there was no way to independently retrieve the prior version's already-produced intelligence, and no schema-level guarantee it hadn't been silently overwritten. Fixed additively: `dataset_version_id`, set once at creation and never mutated, was added to `root_causes`, `business_impact_assessments`, `recommendation_generations`/`recommendations`, and `anomaly_history` (migration `f7b1c4d8e953`); `GET /business-impact` and `GET /incidents/{id}/recommendations` gained an optional `dataset_version_id` filter; Gateway `InvestigationResponse`/`RecommendationResponse` gained real `datasetId`/`datasetVersionId` provenance fields, shown in both frontend workspaces with an explicit mismatch warning. Verified live against a real running stack (not just tests): extending a real dataset to a new version and re-touching the same incident produced a second, distinct business-impact assessment and recommendation generation tagged with the new version, while the prior version's rows remained unchanged and independently retrievable by their own `dataset_version_id`. One disclosed gap remains open: `Incident`/`ActiveAnomaly` summary-level fields are still mutated in place on each touching analysis run (no append-only Incident-content history), a real, bounded, deliberately-deferred limitation, not a silently dropped one. Full decision record: `docs/DECISIONS.md` AD-12 Addendum. Also fixed in this pass: the runtime `GET`/`POST /api/v1/datasets` 502 (an unapplied Alembic migration in the running environment — `alembic upgrade head` resolved it) and a real pre-existing test/implementation drift in `recommendation_service`'s `save_many()` signature. Backend: 900 passed across anomaly_service/root_cause_service/business_impact_service/recommendation_service/copilot_service; gateway_service 193 passed (excluding the pre-existing 51-test bare-metal-DB-hostname-resolution baseline, unchanged, unrelated to this pass). Frontend: 384/384 vitest, `tsc -b`/lint/build all clean. Migration chain verified: single head (`f7b1c4d8e953`), clean downgrade/upgrade cycle.
 
 ---
 
@@ -45,7 +51,7 @@
 | ✅ Phase 10 – Executive Dashboard         | Complete    |
 | ✅ Phase 11 – Observability & Reliability | Complete (2/3 dashboards; 1 explicitly deferred) |
 | ✅ Phase 12 – AI Copilot                  | Complete (6/6 batches; see limitations below) |
-| 🟡 Phase 13 – Production Hardening        | In Progress (identity/auth/RBAC/internal-trust/attribution/ownership/backup/CI/docker complete; documentation closure in progress; final validation report outstanding) |
+| ✅ Phase 13 – Production Hardening        | Complete (identity/auth/RBAC/internal-trust/attribution/ownership/backup/CI/docker, documentation closure, and the final end-to-end validation report all complete) |
 
 ---
 
@@ -108,11 +114,11 @@ Phase 12 closes with a real, evidence-grounded, read-only Copilot capability —
 | ✅ F01/F09 — Corrective Alembic migration (fresh-database compatibility, AD-7) | Complete |
 | ✅ F02 — Controlled first-user bootstrap (AD-8)                  | Complete    |
 | ✅ F03/F04 — README, onboarding, and project-status documentation closure | Complete |
-| ⬜ F05/F06 — Final twelve-stage synthetic-data validation report | Not started |
+| ✅ F05/F06 — Final end-to-end synthetic-data validation report | Complete (`docs/VALIDATION_REPORT.md`) |
 
 ### Phase 13 — Closure Note
 
-An independent whole-project audit (and a subsequent finding-challenge pass) identified six genuine closure blockers before Phase 13 could be honestly called complete: a fresh-database Alembic migration failure (F01, which also blocked CI — F09), a missing first-user bootstrap mechanism (F02), an incomplete onboarding path (F03), stale top-level documentation that had not been updated since Phase 12 (F04, this document and `README.md` both previously described Phase 13 as unstarted and claimed no authentication existed), and a missing final validation artifact (F05/F06). F01/F09 and F02 are complete and independently verified (real fresh-database migrations across three independent databases; real login/`/auth/me`/RBAC verification through a running Gateway; see `docs/DECISIONS.md` AD-7/AD-8). This update resolves F03/F04. F05/F06 remains open — no twelve-stage validation report has been produced yet, and this document does not claim otherwise.
+An independent whole-project audit (and a subsequent finding-challenge pass) identified six genuine closure blockers before Phase 13 could be honestly called complete: a fresh-database Alembic migration failure (F01, which also blocked CI — F09), a missing first-user bootstrap mechanism (F02), an incomplete onboarding path (F03), stale top-level documentation that had not been updated since Phase 12 (F04, this document and `README.md` both previously described Phase 13 as unstarted and claimed no authentication existed), and a missing final validation artifact (F05/F06). F01/F09 and F02 are complete and independently verified (real fresh-database migrations across three independent databases; real login/`/auth/me`/RBAC verification through a running Gateway; see `docs/DECISIONS.md` AD-7/AD-8). F03/F04 were resolved by the preceding documentation update. F05/F06 is now also complete: an end-to-end synthetic-data validation was executed on 2026-08-16 against real running services and a genuinely fresh database, with every claim labelled by evidence type and every previously documented limitation re-verified as still accurate. No undocumented gap was found. Full record: `docs/VALIDATION_REPORT.md`. All six closure blockers are therefore closed.
 
 ---
 
@@ -604,17 +610,17 @@ The Business Impact Analysis Engine is a pure, persistence-independent domain en
 
 # Current Focus
 
-**Phase 13 – Production Hardening (closure in progress)**
+**Phase 13 – Production Hardening (closed)**
 
-> Identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, and CI are all implemented and merged. Two closure-blocking defects discovered by a whole-project audit — a fresh-database migration failure and a missing first-user bootstrap mechanism — are now fixed and independently verified (`docs/DECISIONS.md` AD-7/AD-8). This update brings `README.md` and this document into agreement with that reality (F03/F04).
+> Identity, authentication, RBAC, internal service trust, recommendation attribution, Copilot ownership, backup/restore, investigation concurrency, Docker hardening, and CI are all implemented and merged. All six closure blockers found by the whole-project audit are resolved, ending with the F05/F06 end-to-end validation (`docs/VALIDATION_REPORT.md`).
 
 ---
 
 # Next Milestone
 
-**F05/F06 — Final twelve-stage synthetic-data validation**
+**Post-prototype improvements (none scheduled)**
 
-> With F01/F02/F03/F04 closed, the remaining Phase 13 closure item is a saved, honest, twelve-stage synthetic-data validation report (ingestion → NLP → anomaly → incident → root cause → business impact → evaluation → recommendation → analytics → Copilot → observability → authentication/authorization), distinguishing tested-successfully / partially-tested / unavailable / known-limitation for every stage, with no fabricated result. Not yet started.
+> Phase 13 and the platform's planned scope are complete. A subsequent product-experience reconstruction pass (AD-11) exposed the Gateway ingestion route and root-cause lifecycle actions the earlier scope had deliberately deferred, added a Data workspace, gave `ingestion_service` its first test suite, and added Administration's Real-data/Not-yet-operational badge. Remaining work is the optional-improvement set in `ROADMAP.md` — a real LLM provider for Copilot, surfacing evaluation output, a bulk/CSV ingestion backend endpoint, repository-wide design-system primitive adoption, and the three intelligence-quality refinements identified by the final validation (cold-start anomaly sensitivity, entity-scoped incident correlation, sentiment-aware business impact). None is a closure blocker.
 
 ---
 

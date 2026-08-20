@@ -65,9 +65,12 @@ class CorrelationEngine:
         self.incident_repository = incident_repository
         self.anomaly_repository = anomaly_repository
 
-    async def run(self, window_minutes: int = DEFAULT_TIME_WINDOW_MINUTES) -> IncidentRunResult:
+    async def run(
+        self, dataset_id: uuid.UUID, dataset_version_id: uuid.UUID, window_minutes: int = DEFAULT_TIME_WINDOW_MINUTES
+    ) -> IncidentRunResult:
+        """Dataset scoping (docs/DECISIONS.md AD-12): clusters only this dataset's active anomalies, and only ever creates/updates/resolves incidents that already belong to it."""
         run_at = datetime.now(timezone.utc)
-        active_anomalies = await self.anomaly_repository.list_active()
+        active_anomalies = await self.anomaly_repository.list_active(dataset_id)
 
         created: List[IncidentRunItem] = []
         updated: List[IncidentRunItem] = []
@@ -84,18 +87,20 @@ class CorrelationEngine:
 
             existing = await self._find_existing_incident(cluster)
             if existing is None:
-                created.append(await self._create_incident(cluster, confidence, run_at))
+                created.append(
+                    await self._create_incident(cluster, confidence, run_at, dataset_id, dataset_version_id)
+                )
             else:
-                item = await self._update_incident(existing, cluster, confidence, run_at)
+                item = await self._update_incident(existing, cluster, confidence, run_at, dataset_version_id)
                 if item is not None:
                     updated.append(item)
 
-        resolved = await self._resolve_completed_incidents(run_at)
+        resolved = await self._resolve_completed_incidents(run_at, dataset_id, dataset_version_id)
 
         return IncidentRunResult(run_at=run_at, created=created, updated=updated, resolved=resolved)
 
-    async def get_active(self) -> List[IncidentResponse]:
-        incidents = await self.incident_repository.list_open()
+    async def get_active(self, dataset_id: uuid.UUID) -> List[IncidentResponse]:
+        incidents = await self.incident_repository.list_open(dataset_id)
         return [IncidentResponse.model_validate(i) for i in incidents]
 
     async def get_by_id(self, incident_id: uuid.UUID) -> Optional[IncidentResponse]:
@@ -128,9 +133,16 @@ class CorrelationEngine:
         return None
 
     async def _create_incident(
-        self, cluster: List[ActiveAnomaly], confidence: ConfidenceScore, run_at: datetime
+        self,
+        cluster: List[ActiveAnomaly],
+        confidence: ConfidenceScore,
+        run_at: datetime,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
     ) -> IncidentRunItem:
         incident = Incident(
+            dataset_id=dataset_id,
+            last_analysis_version_id=dataset_version_id,
             incident_key=generate_incident_key(),
             title=build_title(cluster),
             severity=aggregate_severity(cluster),
@@ -152,7 +164,12 @@ class CorrelationEngine:
         )
 
     async def _update_incident(
-        self, incident: Incident, cluster: List[ActiveAnomaly], confidence: ConfidenceScore, run_at: datetime
+        self,
+        incident: Incident,
+        cluster: List[ActiveAnomaly],
+        confidence: ConfidenceScore,
+        run_at: datetime,
+        dataset_version_id: uuid.UUID,
     ) -> Optional[IncidentRunItem]:
         newly_linked = []
         for anomaly in cluster:
@@ -174,6 +191,7 @@ class CorrelationEngine:
         incident.title = build_title(all_linked)
         incident.summary = build_summary(all_linked, confidence)
         incident.last_updated_at = run_at
+        incident.last_analysis_version_id = dataset_version_id
         await self.incident_repository.save(incident)
 
         reason = (
@@ -187,14 +205,17 @@ class CorrelationEngine:
             reason=reason,
         )
 
-    async def _resolve_completed_incidents(self, run_at: datetime) -> List[IncidentRunItem]:
+    async def _resolve_completed_incidents(
+        self, run_at: datetime, dataset_id: uuid.UUID, dataset_version_id: uuid.UUID
+    ) -> List[IncidentRunItem]:
         resolved: List[IncidentRunItem] = []
-        for incident in await self.incident_repository.list_open():
+        for incident in await self.incident_repository.list_open(dataset_id):
             linked = await self.incident_repository.list_linked_anomalies(incident.id)
             if linked and all(a.status == AnomalyStatus.RESOLVED for a in linked):
                 incident.status = IncidentStatus.RESOLVED
                 incident.resolved_at = run_at
                 incident.last_updated_at = run_at
+                incident.last_analysis_version_id = dataset_version_id
                 await self.incident_repository.save(incident)
                 resolved.append(
                     IncidentRunItem(

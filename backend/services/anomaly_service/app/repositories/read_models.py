@@ -16,6 +16,7 @@ complaints_table = Table(
     "complaints",
     read_models_metadata,
     Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("dataset_id", UUID(as_uuid=True), nullable=False),
     Column("customer_region", String(100)),
     Column("event_occurred_at", DateTime(timezone=True)),
     Column("is_deleted", Boolean, nullable=False),

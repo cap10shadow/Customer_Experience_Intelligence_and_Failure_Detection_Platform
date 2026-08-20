@@ -21,6 +21,10 @@ def anyio_backend():
     return "asyncio"
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 def _orchestrator(repository=None) -> RecommendationOrchestrator:
     return RecommendationOrchestrator(
         engine=RecommendationEngine(rules=default_rules()),
@@ -34,7 +38,7 @@ async def test_invokes_the_real_recommendation_engine(make_incident, make_busine
         incident=make_incident(), business_impact=make_business_impact_summary(overall_severity="critical")
     )
 
-    result = await _orchestrator().execute(context, generation_id=uuid.uuid4())
+    result = await _orchestrator().execute(context, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert len(result) > 0
     assert all(isinstance(record, RecommendationRecord) for record in result)
@@ -50,7 +54,7 @@ async def test_persists_recommendation_generation_and_recommendations(
     )
     generation_id = uuid.uuid4()
 
-    result = await _orchestrator(repository).execute(context, generation_id=generation_id)
+    result = await _orchestrator(repository).execute(context, generation_id=generation_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert len(repository.by_id) == len(result)
     assert all(record.generation_id == generation_id for record in result)
@@ -66,7 +70,7 @@ async def test_generation_id_propagates_to_every_persisted_recommendation(
     )
     generation_id = uuid.uuid4()
 
-    result = await _orchestrator().execute(context, generation_id=generation_id)
+    result = await _orchestrator().execute(context, generation_id=generation_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert len(result) > 1  # a critical scenario fires multiple rules
     assert all(record.generation_id == generation_id for record in result)
@@ -80,7 +84,7 @@ async def test_event_id_forwarded_to_the_repository(make_incident, make_business
     )
     event_id = uuid.uuid4()
 
-    await _orchestrator(repository).execute(context, generation_id=uuid.uuid4(), event_id=event_id)
+    await _orchestrator(repository).execute(context, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, event_id=event_id)
 
     assert await repository.get_generation_by_event_id(event_id) is not None
 
@@ -99,7 +103,7 @@ async def test_zero_recommendations_still_persists_the_generation(
     )
     generation_id = uuid.uuid4()
 
-    result = await _orchestrator(repository).execute(context, generation_id=generation_id)
+    result = await _orchestrator(repository).execute(context, generation_id=generation_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert result == ()
     assert repository.generations_by_incident["INC-ZERO"][0][0] == generation_id
@@ -111,7 +115,7 @@ async def test_result_is_an_immutable_tuple(make_incident, make_business_impact_
         incident=make_incident(), business_impact=make_business_impact_summary(overall_severity="critical")
     )
 
-    result = await _orchestrator().execute(context, generation_id=uuid.uuid4())
+    result = await _orchestrator().execute(context, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert isinstance(result, tuple)
 
@@ -124,7 +128,7 @@ async def test_never_creates_its_own_generation_id(make_incident, make_business_
     )
     supplied_generation_id = uuid.uuid4()
 
-    result = await _orchestrator().execute(context, generation_id=supplied_generation_id)
+    result = await _orchestrator().execute(context, generation_id=supplied_generation_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert all(record.generation_id == supplied_generation_id for record in result)
 
@@ -136,7 +140,7 @@ async def test_is_deterministic_across_repeated_calls(make_incident, make_busine
     )
     orchestrator = _orchestrator()
 
-    first = await orchestrator.execute(context, generation_id=uuid.uuid4())
-    second = await orchestrator.execute(context, generation_id=uuid.uuid4())
+    first = await orchestrator.execute(context, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    second = await orchestrator.execute(context, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert [r.recommendation for r in first] == [r.recommendation for r in second]

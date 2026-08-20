@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
+import { DATASET_STORAGE_KEY, DatasetProvider } from '@/app/context/DatasetContext'
 import { AnalyticsWorkspace } from '@/workspaces/analytics'
 import type { AnalyticsApiResponse } from '@/workspaces/analytics/api'
 
@@ -28,11 +29,21 @@ function jsonResponse(body: unknown, status = 200) {
 
 function renderWorkspace() {
   return render(
-    <MemoryRouter>
-      <AnalyticsWorkspace />
-    </MemoryRouter>,
+    <DatasetProvider>
+      <MemoryRouter>
+        <AnalyticsWorkspace />
+      </MemoryRouter>
+    </DatasetProvider>,
   )
 }
+
+beforeEach(() => {
+  window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+})
+
+afterEach(() => {
+  window.localStorage.removeItem(DATASET_STORAGE_KEY)
+})
 
 async function waitForLoaded() {
   await waitFor(() => expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(0))
@@ -43,7 +54,7 @@ describe('Analytics real Gateway integration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('requests /analytics/trends, never a raw backend service host', async () => {
+  it('requests /v1/analytics/trends, never a raw backend service host', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_ANALYTICS_RESPONSE)))
 
     renderWorkspace()
@@ -51,7 +62,7 @@ describe('Analytics real Gateway integration', () => {
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = String(requestedUrl)
-    expect(url).toContain('/analytics/trends')
+    expect(url).toContain('/v1/analytics/trends')
     expect(url).not.toMatch(/:800[1-8]/)
   })
 

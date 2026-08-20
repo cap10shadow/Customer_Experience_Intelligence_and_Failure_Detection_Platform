@@ -27,7 +27,7 @@ function getActiveWorkspaceLabel(pathname: string): string {
 export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user, hasRole, logout } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(
     () => typeof window !== 'undefined' && window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true',
   )
@@ -77,8 +77,12 @@ export function AppShell() {
         </main>
       </div>
       {/* Mounted once, application-wide, as a sibling of the routed
-          content -- never per-workspace (architecture §4/§32). */}
-      <Copilot />
+          content -- never per-workspace (architecture §4/§32). Copilot is
+          operator-level at the Gateway; the role is read here (the one
+          place already consuming AuthContext) and passed down, so the
+          panel can state the restriction rather than let a viewer
+          discover it as a 403 after sending. */}
+      <Copilot canUseCopilot={hasRole('operator')} />
     </div>
   )
 }

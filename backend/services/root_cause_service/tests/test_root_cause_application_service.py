@@ -1,4 +1,5 @@
-import uuid
+﻿import uuid
+from typing import Optional
 
 import pytest
 
@@ -21,6 +22,9 @@ from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
 from backend.shared.constants.enums.incident import IncidentStatus
 from backend.shared.constants.enums.root_cause import RootCause as RootCauseEnum
 from backend.shared.constants.enums.root_cause import RootCauseStatus
+
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
 
 
 class FakeIncidentReadRepository:
@@ -56,8 +60,11 @@ class FakeRootCauseRepository:
     async def get_by_incident(self, incident_id):
         return self.by_incident_id.get(incident_id)
 
-    async def list(self):
-        return list(self.by_id.values())
+    async def list(self, dataset_id: Optional[uuid.UUID] = None):
+        values = list(self.by_id.values())
+        if dataset_id is not None:
+            values = [rc for rc in values if rc.dataset_id == dataset_id]
+        return values
 
 
 def _persisted_incident(incident_id, **anomaly_kwargs):
@@ -84,7 +91,7 @@ async def test_create_root_cause_runs_engine_and_persists_result():
     root_cause_repo = FakeRootCauseRepository()
     service = RootCauseApplicationService(incident_repo, root_cause_repo, RootCauseEngine())
 
-    root_cause = await service.create_root_cause(incident_id)
+    root_cause = await service.create_root_cause(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert root_cause.incident_id == incident_id
     assert root_cause.cause == RootCauseEnum.PAYMENT_GATEWAY_FAILURE
@@ -100,7 +107,7 @@ async def test_create_root_cause_raises_not_found_for_missing_incident():
     service = RootCauseApplicationService(incident_repo, root_cause_repo, RootCauseEngine())
 
     with pytest.raises(IncidentNotFoundError):
-        await service.create_root_cause(uuid.uuid4())
+        await service.create_root_cause(uuid.uuid4(), DATASET_ID, DATASET_VERSION_ID)
 
 
 @pytest.mark.anyio
@@ -110,10 +117,10 @@ async def test_create_root_cause_raises_conflict_when_already_exists():
     root_cause_repo = FakeRootCauseRepository()
     service = RootCauseApplicationService(incident_repo, root_cause_repo, RootCauseEngine())
 
-    await service.create_root_cause(incident_id)
+    await service.create_root_cause(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     with pytest.raises(RootCauseAlreadyExistsError):
-        await service.create_root_cause(incident_id)
+        await service.create_root_cause(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
 
 @pytest.mark.anyio
@@ -123,7 +130,7 @@ async def test_create_root_cause_returns_unknown_when_no_rule_matches():
     root_cause_repo = FakeRootCauseRepository()
     service = RootCauseApplicationService(incident_repo, root_cause_repo, RootCauseEngine())
 
-    root_cause = await service.create_root_cause(incident_id)
+    root_cause = await service.create_root_cause(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert root_cause.cause == RootCauseEnum.UNKNOWN
     assert root_cause.confidence_score == 0
@@ -139,7 +146,7 @@ async def test_get_root_cause_by_id_and_by_incident():
     root_cause_repo = FakeRootCauseRepository()
     service = RootCauseApplicationService(incident_repo, root_cause_repo, RootCauseEngine())
 
-    created = await service.create_root_cause(incident_id)
+    created = await service.create_root_cause(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     by_id = await service.get_root_cause(created.id)
     by_incident = await service.get_root_cause_by_incident(incident_id)
@@ -162,8 +169,8 @@ async def test_list_root_causes():
     root_cause_repo = FakeRootCauseRepository()
     service = RootCauseApplicationService(incident_repo, root_cause_repo, RootCauseEngine())
 
-    await service.create_root_cause(incident_id_1)
-    await service.create_root_cause(incident_id_2)
+    await service.create_root_cause(incident_id_1, DATASET_ID, DATASET_VERSION_ID)
+    await service.create_root_cause(incident_id_2, DATASET_ID, DATASET_VERSION_ID)
 
     all_root_causes = await service.list_root_causes()
     assert len(all_root_causes) == 2
@@ -178,7 +185,7 @@ async def _service_with_root_cause(incident_id, anomalies=()):
     incident_repo = FakeIncidentReadRepository(incidents_by_id)
     root_cause_repo = FakeRootCauseRepository()
     service = RootCauseApplicationService(incident_repo, root_cause_repo, RootCauseEngine())
-    root_cause = await service.create_root_cause(incident_id)
+    root_cause = await service.create_root_cause(incident_id, DATASET_ID, DATASET_VERSION_ID)
     return service, root_cause, incidents_by_id
 
 

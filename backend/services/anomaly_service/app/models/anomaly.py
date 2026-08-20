@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,7 +30,23 @@ class ActiveAnomaly(Base, PrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "active_anomalies"
 
-    fingerprint: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    # Dataset scoping (docs/DECISIONS.md AD-12) -- plain cross-service
+    # columns (DATA-002: this service never imports ingestion_service's
+    # ORM models), enforced at the DB level by the migration's raw
+    # ForeignKeyConstraint. `dataset_id` determines isolation: every
+    # query that lists/reconciles anomalies filters by it, so Dataset A's
+    # anomalies can never appear while Dataset B is selected.
+    # `last_analysis_version_id` is provenance only -- "as of which
+    # analysis run was this anomaly's state last confirmed" -- and is
+    # updated every time a run touches this row (create/reactivate/
+    # update), never on a run that doesn't.
+    dataset_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    last_analysis_version_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+
+    # A fingerprint is only unique *within* a dataset -- two different
+    # datasets can independently produce the identical fingerprint (e.g.
+    # "complaint_spike:global:ALL") without colliding.
+    fingerprint: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     type: Mapped[AnomalyType] = mapped_column(Enum(AnomalyType), nullable=False, index=True)
     severity: Mapped[AnomalySeverity] = mapped_column(Enum(AnomalySeverity), nullable=False, index=True)
 
@@ -53,6 +69,10 @@ class ActiveAnomaly(Base, PrimaryKeyMixin, TimestampMixin):
     )
     status: Mapped[AnomalyStatus] = mapped_column(
         Enum(AnomalyStatus), nullable=False, default=AnomalyStatus.ACTIVE, index=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("fingerprint", "dataset_id", name="uq_active_anomalies_fingerprint_dataset_id"),
     )
 
 
@@ -82,6 +102,18 @@ class AnomalyHistory(Base, PrimaryKeyMixin, TimestampMixin):
     active_anomaly_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("active_anomalies.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # True version-addressable intelligence (AD-12 follow-up): which
+    # DatasetVersion's analysis run wrote this history event. Combined
+    # with `metrics_snapshot` (already a genuine point-in-time snapshot),
+    # this makes "what did this anomaly look like as of Version N" a
+    # real, queryable fact -- unlike `active_anomalies` itself (mutated
+    # in place on every touching run), this table is append-only by
+    # design, so no `dataset_version_id` history is ever overwritten. No
+    # ORM ForeignKey to `dataset_versions` in the ingestion/gateway
+    # sense is needed here beyond the raw FK the migration already
+    # declares (DATA-001) -- this service never imports another
+    # service's Dataset/DatasetVersion ORM model (DATA-002).
+    dataset_version_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
     event_type: Mapped[AnomalyEventType] = mapped_column(Enum(AnomalyEventType), nullable=False, index=True)
     old_severity: Mapped[Optional[AnomalySeverity]] = mapped_column(Enum(AnomalySeverity))
     new_severity: Mapped[Optional[AnomalySeverity]] = mapped_column(Enum(AnomalySeverity))

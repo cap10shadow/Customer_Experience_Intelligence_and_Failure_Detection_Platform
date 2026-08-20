@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { ApiError } from '@/app/api/errors'
+import { useDatasetContext } from '@/app/context/DatasetContext'
 
 import { useAnalyticsContext } from '../context'
 import { getAnalytics, toAnalyticsViewModel, type AnalyticsViewModel } from '../api'
@@ -23,21 +24,33 @@ const INITIAL_STATE: AnalyticsFetchState = { data: null, isLoading: true, error:
  * module -> centralized HTTP client -> Gateway. Reads `selectedAnalysisPeriod`
  * from AnalyticsContext (UX-005's one shared scope) and re-fetches
  * whenever it changes, exactly as useDashboardData reacts to timeRange.
+ *
+ * Also reads the global `selectedDatasetId` (docs/DECISIONS.md AD-12):
+ * the Gateway's `/analytics/trends` route requires a `datasetId` and has
+ * no "all datasets" fallback, so this hook fetches nothing at all --
+ * never a global/unscoped request -- while no dataset is selected.
  */
 export function useAnalyticsData(): UseAnalyticsDataResult {
   const { selectedAnalysisPeriod } = useAnalyticsContext()
+  const { selectedDatasetId } = useDatasetContext()
 
   const [state, setState] = useState<AnalyticsFetchState>(INITIAL_STATE)
   const [retryToken, setRetryToken] = useState(0)
   const refetch = useCallback(() => setRetryToken((token) => token + 1), [])
 
   useEffect(() => {
+    if (!selectedDatasetId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors useDataset's identical "nothing to fetch" branch.
+      setState({ data: null, isLoading: false, error: null })
+      return
+    }
+
     const controller = new AbortController()
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- see useDashboardData's identical, documented justification.
     setState((previous) => ({ ...previous, isLoading: true, error: null }))
 
-    getAnalytics({ period: selectedAnalysisPeriod }, { signal: controller.signal })
+    getAnalytics({ datasetId: selectedDatasetId, period: selectedAnalysisPeriod }, { signal: controller.signal })
       .then((response) => {
         setState({ data: toAnalyticsViewModel(response), isLoading: false, error: null })
       })
@@ -56,7 +69,7 @@ export function useAnalyticsData(): UseAnalyticsDataResult {
       })
 
     return () => controller.abort()
-  }, [selectedAnalysisPeriod, retryToken])
+  }, [selectedDatasetId, selectedAnalysisPeriod, retryToken])
 
   return { ...state, refetch }
 }

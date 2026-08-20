@@ -105,10 +105,21 @@ async def list_recommendations_for_incident(
     incident_id: str,
     limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
+    dataset_version_id: Optional[uuid.UUID] = Query(
+        default=None, description="Optional filter to only the recommendation(s) produced for one DatasetVersion."
+    ),
     repository: RecommendationRepository = Depends(get_recommendation_repository),
 ):
-    """Lists every Recommendation ever produced for one incident, across every generation, most recent first."""
-    records = await repository.list_by_incident(incident_id, limit=limit, offset=offset)
+    """
+    Lists every Recommendation ever produced for one incident, across every
+    generation, most recent first. `dataset_version_id` (AD-12 follow-up)
+    scopes this to the recommendation(s) a specific DatasetVersion's
+    analysis run produced -- how "the recommendation(s) for Version N"
+    stays independently retrievable after a later version's re-analysis.
+    """
+    records = await repository.list_by_incident(
+        incident_id, limit=limit, offset=offset, dataset_version_id=dataset_version_id
+    )
     return [RecommendationSummaryResponse.from_record(record) for record in records]
 
 

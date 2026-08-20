@@ -20,6 +20,10 @@ from backend.services.recommendation_service.app.infrastructure.persistence.repo
 )
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 def _simulate_flush(model: RecommendationModel) -> None:
     """Mimics what a real PostgreSQL flush would populate (recommendation_id default, created_at server_default)."""
     model.recommendation_id = uuid.uuid4()
@@ -30,10 +34,11 @@ def test_to_orm_maps_every_relational_field(make_recommendation):
     recommendation = make_recommendation(category=RecommendationCategory.ESCALATE, priority=RecommendationPriority.CRITICAL, score=90)
     generation_id = uuid.uuid4()
 
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=generation_id)
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=generation_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert isinstance(model, RecommendationModel)
     assert model.incident_id == recommendation.incident_id
+    assert model.dataset_id == DATASET_ID
     assert model.generation_id == generation_id
     assert model.category == RecommendationCategory.ESCALATE
     assert model.priority == RecommendationPriority.CRITICAL
@@ -44,7 +49,7 @@ def test_to_orm_maps_every_relational_field(make_recommendation):
 def test_to_orm_serializes_rationale_and_priority_rationale_as_plain_jsonb_strings(make_recommendation):
     recommendation = make_recommendation(rationale="Reason A.", priority_rationale="Priority reason A.")
 
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert model.recommendation_rationale == "Reason A."
     assert model.priority_rationale == "Priority reason A."
@@ -57,7 +62,7 @@ def test_to_orm_serializes_supporting_evidence_as_jsonb_list(make_recommendation
     )
     recommendation = make_recommendation(supporting_evidence=evidence)
 
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert model.supporting_evidence == [
         {"source": "incident", "description": "signal one", "weight": 10},
@@ -79,20 +84,21 @@ def test_round_trip_to_orm_then_to_domain_preserves_every_field(make_recommendat
     )
     generation_id = uuid.uuid4()
 
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=generation_id)
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=generation_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
     _simulate_flush(model)
 
     record = RecommendationModelMapper.to_domain(model)
 
     assert record.recommendation_id == model.recommendation_id
     assert record.generation_id == generation_id
+    assert record.dataset_id == DATASET_ID
     assert record.created_at == model.created_at
     assert record.recommendation == recommendation
 
 
 def test_round_trip_preserves_category_and_priority_enum_types(make_recommendation):
     recommendation = make_recommendation()
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
     _simulate_flush(model)
 
     record = RecommendationModelMapper.to_domain(model)
@@ -104,7 +110,7 @@ def test_round_trip_preserves_category_and_priority_enum_types(make_recommendati
 def test_round_trip_preserves_evidence_source_enum_type(make_recommendation):
     evidence = (SupportingEvidence(source=EvidenceSource.ANOMALY_INTELLIGENCE, description="sla breach", weight=15),)
     recommendation = make_recommendation(supporting_evidence=evidence)
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
     _simulate_flush(model)
 
     record = RecommendationModelMapper.to_domain(model)
@@ -116,7 +122,7 @@ def test_round_trip_preserves_evidence_source_enum_type(make_recommendation):
 def test_to_domain_defaults_decision_fields_to_none_for_a_never_decided_row(make_recommendation):
     """A freshly-mapped ORM row (decision/decision_note/decided_at all unset, i.e. NULL) maps to None -- never a fabricated PENDING sentinel."""
     recommendation = make_recommendation()
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
     _simulate_flush(model)
 
     record = RecommendationModelMapper.to_domain(model)
@@ -132,7 +138,7 @@ def test_to_domain_carries_decision_fields_through_when_present(make_recommendat
     from backend.services.recommendation_service.app.domain.recommendation_decision import RecommendationDecision
 
     recommendation = make_recommendation()
-    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4())
+    model = RecommendationModelMapper.to_orm(recommendation, generation_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
     _simulate_flush(model)
     decided_at = datetime.now(timezone.utc)
     model.decision = RecommendationDecision.DEFERRED

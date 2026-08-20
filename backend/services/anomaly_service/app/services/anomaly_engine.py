@@ -59,13 +59,23 @@ class AnomalyEngine:
             SentimentDetector(trend_repository),
         ]
 
-    async def run(self, days: int) -> AnomalyRunResult:
+    async def run(self, days: int, dataset_id: uuid.UUID, dataset_version_id: uuid.UUID) -> AnomalyRunResult:
+        """
+        Dataset scoping (docs/DECISIONS.md AD-12): every candidate is
+        detected and reconciled strictly within `dataset_id` -- two
+        datasets never influence each other's anomaly state, and a
+        fingerprint that recurs in a different dataset is a distinct row,
+        not a collision. `dataset_version_id` is stamped onto every
+        row this run touches (create/reactivate/update) as provenance --
+        "as of which analysis run was this anomaly's state last
+        confirmed" -- never on a row this run left untouched.
+        """
         current_window, previous_window = resolve_comparison_windows(days)
         run_at = datetime.now(timezone.utc)
 
         candidates: List[AnomalyCandidate] = []
         for detector in self.detectors:
-            candidates.extend(await detector.detect(current_window, previous_window))
+            candidates.extend(await detector.detect(current_window, previous_window, dataset_id))
 
         detected: List[AnomalyRunItem] = []
         updated: List[AnomalyRunItem] = []
@@ -76,19 +86,19 @@ class AnomalyEngine:
             fingerprint = compute_fingerprint(candidate.type, candidate.entity_type, candidate.entity_value)
             seen_fingerprints.add(fingerprint)
 
-            existing = await self.repository.get_active_by_fingerprint(fingerprint)
+            existing = await self.repository.get_active_by_fingerprint(fingerprint, dataset_id)
             if existing is None:
-                detected.append(await self._create_new(fingerprint, candidate, run_at))
+                detected.append(await self._create_new(fingerprint, candidate, run_at, dataset_id, dataset_version_id))
             elif existing.status == AnomalyStatus.RESOLVED:
-                detected.append(await self._reactivate(existing, candidate, run_at))
+                detected.append(await self._reactivate(existing, candidate, run_at, dataset_version_id))
             else:
-                item = await self._update_existing(existing, candidate, run_at)
+                item = await self._update_existing(existing, candidate, run_at, dataset_version_id)
                 if item is not None:
                     updated.append(item)
 
-        for anomaly in await self.repository.list_active():
+        for anomaly in await self.repository.list_active(dataset_id):
             if anomaly.fingerprint not in seen_fingerprints:
-                resolved.append(await self._resolve(anomaly, run_at))
+                resolved.append(await self._resolve(anomaly, run_at, dataset_version_id))
 
         return AnomalyRunResult(
             run_at=run_at,
@@ -98,21 +108,22 @@ class AnomalyEngine:
             resolved=resolved,
         )
 
-    async def get_active(self) -> List[ActiveAnomalyResponse]:
-        anomalies = await self.repository.list_active()
+    async def get_active(self, dataset_id: uuid.UUID) -> List[ActiveAnomalyResponse]:
+        anomalies = await self.repository.list_active(dataset_id)
         return [ActiveAnomalyResponse.model_validate(a) for a in anomalies]
 
     async def get_by_id(self, anomaly_id: uuid.UUID) -> Optional[ActiveAnomalyResponse]:
         anomaly = await self.repository.get_by_id(anomaly_id)
         return ActiveAnomalyResponse.model_validate(anomaly) if anomaly else None
 
-    async def get_latest(self) -> AnomalyRunResult:
+    async def get_latest(self, dataset_id: uuid.UUID) -> AnomalyRunResult:
         """
-        Reconstructs the outcome of the most recent `run()` from persisted
-        state, without re-running detection: every history event whose
-        `event_timestamp` matches the latest run's timestamp.
+        Reconstructs the outcome of the most recent `run()` for one dataset
+        from persisted state, without re-running detection: every history
+        event whose `event_timestamp` matches that dataset's latest run
+        timestamp.
         """
-        latest_ts = await self.repository.get_latest_run_timestamp()
+        latest_ts = await self.repository.get_latest_run_timestamp(dataset_id)
         if latest_ts is None:
             return AnomalyRunResult()
 
@@ -120,7 +131,7 @@ class AnomalyEngine:
         updated: List[AnomalyRunItem] = []
         resolved: List[AnomalyRunItem] = []
 
-        for event in await self.repository.list_history_at(latest_ts):
+        for event in await self.repository.list_history_at(latest_ts, dataset_id):
             anomaly = await self.repository.get_by_id(event.active_anomaly_id)
             if anomaly is None:
                 continue
@@ -138,8 +149,17 @@ class AnomalyEngine:
     # Reconciliation transitions
     # ------------------------------------------------------------------
 
-    async def _create_new(self, fingerprint: str, candidate: AnomalyCandidate, run_at: datetime) -> AnomalyRunItem:
+    async def _create_new(
+        self,
+        fingerprint: str,
+        candidate: AnomalyCandidate,
+        run_at: datetime,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
+    ) -> AnomalyRunItem:
         anomaly = ActiveAnomaly(
+            dataset_id=dataset_id,
+            last_analysis_version_id=dataset_version_id,
             fingerprint=fingerprint,
             type=candidate.type,
             severity=candidate.severity,
@@ -160,6 +180,7 @@ class AnomalyEngine:
         await self.repository.add_history_event(
             AnomalyHistory(
                 active_anomaly_id=created.id,
+                dataset_version_id=dataset_version_id,
                 event_type=AnomalyEventType.DETECTED,
                 old_severity=None,
                 new_severity=candidate.severity,
@@ -170,13 +191,17 @@ class AnomalyEngine:
         )
         return AnomalyRunItem(anomaly=ActiveAnomalyResponse.model_validate(created), reason=reason)
 
-    async def _reactivate(self, existing: ActiveAnomaly, candidate: AnomalyCandidate, run_at: datetime) -> AnomalyRunItem:
+    async def _reactivate(
+        self, existing: ActiveAnomaly, candidate: AnomalyCandidate, run_at: datetime, dataset_version_id: uuid.UUID
+    ) -> AnomalyRunItem:
         """A fingerprint that was RESOLVED is detected again: reopen the same row
-        (the fingerprint is unique, so this updates in place rather than inserting).
-        `first_detected_at` is left untouched — it always reflects the very first
-        detection of this fingerprint, not this re-detection."""
+        (the fingerprint is unique within its dataset, so this updates in place
+        rather than inserting). `first_detected_at` is left untouched — it always
+        reflects the very first detection of this fingerprint, not this
+        re-detection."""
         _apply_candidate(existing, candidate)
         existing.last_seen_at = run_at
+        existing.last_analysis_version_id = dataset_version_id
         existing.status = AnomalyStatus.ACTIVE
         await self.repository.save(existing)
 
@@ -184,6 +209,7 @@ class AnomalyEngine:
         await self.repository.add_history_event(
             AnomalyHistory(
                 active_anomaly_id=existing.id,
+                dataset_version_id=dataset_version_id,
                 event_type=AnomalyEventType.DETECTED,
                 old_severity=None,
                 new_severity=candidate.severity,
@@ -195,11 +221,12 @@ class AnomalyEngine:
         return AnomalyRunItem(anomaly=ActiveAnomalyResponse.model_validate(existing), reason=reason)
 
     async def _update_existing(
-        self, existing: ActiveAnomaly, candidate: AnomalyCandidate, run_at: datetime
+        self, existing: ActiveAnomaly, candidate: AnomalyCandidate, run_at: datetime, dataset_version_id: uuid.UUID
     ) -> Optional[AnomalyRunItem]:
         old_severity = existing.severity
         _apply_candidate(existing, candidate)
         existing.last_seen_at = run_at
+        existing.last_analysis_version_id = dataset_version_id
         await self.repository.save(existing)
 
         if candidate.severity == old_severity:
@@ -211,6 +238,7 @@ class AnomalyEngine:
         await self.repository.add_history_event(
             AnomalyHistory(
                 active_anomaly_id=existing.id,
+                dataset_version_id=dataset_version_id,
                 event_type=AnomalyEventType.UPDATED,
                 old_severity=old_severity,
                 new_severity=candidate.severity,
@@ -221,14 +249,16 @@ class AnomalyEngine:
         )
         return AnomalyRunItem(anomaly=ActiveAnomalyResponse.model_validate(existing), reason=reason)
 
-    async def _resolve(self, anomaly: ActiveAnomaly, run_at: datetime) -> AnomalyRunItem:
+    async def _resolve(self, anomaly: ActiveAnomaly, run_at: datetime, dataset_version_id: uuid.UUID) -> AnomalyRunItem:
         anomaly.status = AnomalyStatus.RESOLVED
+        anomaly.last_analysis_version_id = dataset_version_id
         await self.repository.save(anomaly)
 
         reason = build_resolved_reason(anomaly.entity_type, anomaly.entity_value)
         await self.repository.add_history_event(
             AnomalyHistory(
                 active_anomaly_id=anomaly.id,
+                dataset_version_id=dataset_version_id,
                 event_type=AnomalyEventType.RESOLVED,
                 old_severity=anomaly.severity,
                 new_severity=None,

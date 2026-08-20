@@ -17,12 +17,12 @@ describe('recommendationApi.getRecommendation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('requests /recommendations/:recommendationId with the given recommendation id', async () => {
+  it('requests /v1/recommendations/:recommendationId with the given recommendation id', async () => {
     await getRecommendation('rec-1')
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
-    expect(url.pathname).toContain('/recommendations/rec-1')
+    expect(url.pathname).toContain('/v1/recommendations/rec-1')
   })
 
   it('URL-encodes the recommendation id', async () => {
@@ -42,12 +42,12 @@ describe('recommendationApi.patchRecommendationDecision', () => {
     vi.unstubAllGlobals()
   })
 
-  it('issues a PATCH to /recommendations/:recommendationId/decision with the decision and note', async () => {
+  it('issues a PATCH to /v1/recommendations/:recommendationId/decision with the decision and note', async () => {
     await patchRecommendationDecision('rec-1', 'approved', 'Looks correct.')
 
     const [requestedUrl, init] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
-    expect(url.pathname).toContain('/recommendations/rec-1/decision')
+    expect(url.pathname).toContain('/v1/recommendations/rec-1/decision')
     expect(init?.method).toBe('PATCH')
     expect(JSON.parse(String(init?.body))).toEqual({ decision: 'approved', note: 'Looks correct.' })
   })
@@ -67,6 +67,8 @@ describe('recommendationApi.patchRecommendationDecision', () => {
 const SAMPLE_RESPONSE: RecommendationApiResponse = {
   recommendationId: 'rec-1',
   incidentId: 'incident-1',
+  datasetId: 'dataset-1',
+  datasetVersionId: 'version-1',
   generationId: 'gen-1',
   category: 'escalate',
   priority: 'high',

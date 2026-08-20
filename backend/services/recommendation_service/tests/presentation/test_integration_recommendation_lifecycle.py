@@ -23,6 +23,10 @@ def anyio_backend():
     return "asyncio"
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 @pytest.mark.anyio
 async def test_full_lifecycle_engine_to_persistence_to_api(
     make_incident, make_business_impact_summary, make_intelligence_context
@@ -38,7 +42,7 @@ async def test_full_lifecycle_engine_to_persistence_to_api(
 
     generation_id = uuid.uuid4()
     persisted = await repository.save_many(
-        recommendations, incident_id=context.incident.incident_id, generation_id=generation_id
+        recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id=context.incident.incident_id, generation_id=generation_id
     )
     assert len(persisted) == len(recommendations)
 
@@ -76,7 +80,7 @@ async def test_full_lifecycle_is_reachable_via_list_and_latest_endpoints(
     recommendations = RecommendationEngine(rules=default_rules()).generate(context)
     generation_id = uuid.uuid4()
     persisted = await repository.save_many(
-        recommendations, incident_id=context.incident.incident_id, generation_id=generation_id
+        recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id=context.incident.incident_id, generation_id=generation_id
     )
 
     app.dependency_overrides[get_recommendation_repository] = lambda: repository
@@ -113,7 +117,7 @@ async def test_zero_recommendation_engine_output_still_persists_the_generation(
     assert recommendations == ()
 
     generation_id = uuid.uuid4()
-    persisted = await repository.save_many(recommendations, incident_id="INC-ZERO", generation_id=generation_id)
+    persisted = await repository.save_many(recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-ZERO", generation_id=generation_id)
     assert persisted == []
 
     app.dependency_overrides[get_recommendation_repository] = lambda: repository
@@ -141,11 +145,11 @@ async def test_multiple_generations_for_the_same_incident_are_independently_addr
 
     first_recommendations = RecommendationEngine(rules=default_rules()).generate(first_context)
     first_generation = uuid.uuid4()
-    await repository.save_many(first_recommendations, incident_id="INC-MULTI", generation_id=first_generation)
+    await repository.save_many(first_recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-MULTI", generation_id=first_generation)
 
     second_recommendations = RecommendationEngine(rules=default_rules()).generate(second_context)
     second_generation = uuid.uuid4()
-    second_persisted = await repository.save_many(second_recommendations, incident_id="INC-MULTI", generation_id=second_generation)
+    second_persisted = await repository.save_many(second_recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-MULTI", generation_id=second_generation)
 
     app.dependency_overrides[get_recommendation_repository] = lambda: repository
     try:

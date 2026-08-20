@@ -17,12 +17,13 @@ describe('dashboardApi.getDashboard', () => {
     vi.unstubAllGlobals()
   })
 
-  it('requests /dashboard with only the supplied timeRange query parameter', async () => {
-    await getDashboard({ timeRange: '7d' })
+  it('requests /v1/dashboard with the required datasetId and the supplied timeRange query parameter', async () => {
+    await getDashboard({ datasetId: 'dataset-1', timeRange: '7d' })
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
-    expect(url.pathname).toContain('/dashboard')
+    expect(url.pathname).toContain('/v1/dashboard')
+    expect(url.searchParams.get('datasetId')).toBe('dataset-1')
     expect(url.searchParams.get('timeRange')).toBe('7d')
     expect(url.searchParams.has('region')).toBe(false)
     expect(url.searchParams.has('businessUnit')).toBe(false)
@@ -31,7 +32,7 @@ describe('dashboardApi.getDashboard', () => {
   })
 
   it('omits null/undefined scope fields from the query string rather than sending them as literal "null"', async () => {
-    await getDashboard({ timeRange: 'current', region: null, businessUnit: undefined })
+    await getDashboard({ datasetId: 'dataset-1', timeRange: 'current', region: null, businessUnit: undefined })
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
@@ -40,7 +41,7 @@ describe('dashboardApi.getDashboard', () => {
   })
 
   it('forwards a real scope value when one is supplied', async () => {
-    await getDashboard({ timeRange: 'current', region: 'EMEA' })
+    await getDashboard({ datasetId: 'dataset-1', timeRange: 'current', region: 'EMEA' })
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))

@@ -71,17 +71,25 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
         self,
         recommendations: Sequence[Recommendation],
         *,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
         incident_id: str,
         generation_id: uuid.UUID,
         event_id: Optional[uuid.UUID] = None,
     ) -> List[RecommendationRecord]:
         generation_model = RecommendationGenerationModel(
-            generation_id=generation_id, incident_id=incident_id, event_id=event_id
+            generation_id=generation_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
+            incident_id=incident_id,
+            event_id=event_id,
         )
         self.session.add(generation_model)
 
         models = [
-            RecommendationModelMapper.to_orm(recommendation, generation_id=generation_id)
+            RecommendationModelMapper.to_orm(
+                recommendation, generation_id=generation_id, dataset_id=dataset_id, dataset_version_id=dataset_version_id
+            )
             for recommendation in recommendations
         ]
         self.session.add_all(models)
@@ -108,11 +116,18 @@ class PostgreSQLRecommendationRepository(RecommendationRepository):
         return RecommendationModelMapper.to_domain(model) if model is not None else None
 
     async def list_by_incident(
-        self, incident_id: Optional[str] = None, *, limit: int, offset: int
+        self,
+        incident_id: Optional[str] = None,
+        *,
+        limit: int,
+        offset: int,
+        dataset_version_id: Optional[uuid.UUID] = None,
     ) -> List[RecommendationRecord]:
         stmt = select(RecommendationModel)
         if incident_id is not None:
             stmt = stmt.where(RecommendationModel.incident_id == incident_id)
+        if dataset_version_id is not None:
+            stmt = stmt.where(RecommendationModel.dataset_version_id == dataset_version_id)
         stmt = stmt.order_by(RecommendationModel.created_at.desc()).limit(limit).offset(offset)
 
         result = await self.session.execute(stmt)

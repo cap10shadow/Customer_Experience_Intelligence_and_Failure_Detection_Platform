@@ -24,9 +24,13 @@ def wired_repository():
     app.dependency_overrides.clear()
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 async def _seed(repository, make_recommendation, count, incident_id="INC-PAGINATION"):
     recommendations = [make_recommendation(incident_id=incident_id) for _ in range(count)]
-    await repository.save_many(recommendations, incident_id=incident_id, generation_id=uuid.uuid4())
+    await repository.save_many(recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id=incident_id, generation_id=uuid.uuid4())
 
 
 @pytest.mark.anyio
@@ -125,7 +129,7 @@ async def test_incident_recommendations_enforces_maximum_limit(wired_repository)
 async def test_generation_recommendations_supports_pagination(wired_repository, make_recommendation):
     generation_id = uuid.uuid4()
     recommendations = [make_recommendation(incident_id="INC-GEN") for _ in range(5)]
-    await wired_repository.save_many(recommendations, incident_id="INC-GEN", generation_id=generation_id)
+    await wired_repository.save_many(recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-GEN", generation_id=generation_id)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:

@@ -49,10 +49,10 @@ class IncidentRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_open(self) -> Sequence[Incident]:
+    async def list_open(self, dataset_id: uuid.UUID) -> Sequence[Incident]:
         stmt = (
             select(Incident)
-            .where(Incident.status == IncidentStatus.OPEN)
+            .where(Incident.status == IncidentStatus.OPEN, Incident.dataset_id == dataset_id)
             .order_by(Incident.confidence_score.desc(), Incident.last_updated_at.desc())
         )
         result = await self.session.execute(stmt)

@@ -42,6 +42,26 @@ class RootCause(Base, PrimaryKeyMixin):
 
     __tablename__ = "root_causes"
 
+    # Dataset scoping (docs/DECISIONS.md AD-12) -- a plain, cross-service
+    # UUID column (see DATA-002), never an ORM ForeignKey: the Root Cause
+    # Service does not import the Ingestion Service's `Dataset` model.
+    # Set once at creation from the caller-supplied `dataset_id` (this
+    # service has no independent way to know which dataset an Incident
+    # belongs to) and never changed afterward, including on refresh.
+    dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
+    # True version-addressable intelligence (AD-12 follow-up): which
+    # DatasetVersion's analysis run created this RootCause. Immutable --
+    # set once at creation, never touched by `refresh` (see
+    # RootCauseMapper.apply, which deliberately excludes it), unlike
+    # `active_anomalies`/`incidents`' own mutable `last_analysis_version_id`
+    # "last touched by" pointer. Since RootCause is create-once-per-incident
+    # (unique `incident_id`), this documents which version's analysis first
+    # identified it -- it is never regenerated automatically for a later
+    # version (see the orchestrator's own "protects human confirm/reject
+    # decisions" rationale).
+    dataset_version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
     incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
     cause: Mapped[RootCauseEnum] = mapped_column(Enum(RootCauseEnum), nullable=False, index=True)
     confidence_score: Mapped[int] = mapped_column(Integer, nullable=False)

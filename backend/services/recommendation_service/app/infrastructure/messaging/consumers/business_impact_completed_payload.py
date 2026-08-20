@@ -46,12 +46,16 @@ class BusinessImpactCompletedPayload:
     """
 
     event_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
     intelligence_context: IntelligenceContext
 
     @staticmethod
     def from_raw(raw: Dict[str, Any]) -> "BusinessImpactCompletedPayload":
         try:
             event_id = uuid.UUID(str(raw["event_id"]))
+            dataset_id = uuid.UUID(str(raw["dataset_id"]))
+            dataset_version_id = uuid.UUID(str(raw["dataset_version_id"]))
             incident = BusinessImpactCompletedPayload._parse_incident(raw["incident"])
             business_impact = BusinessImpactCompletedPayload._parse_business_impact(raw["business_impact"])
             root_cause = BusinessImpactCompletedPayload._parse_root_cause(raw.get("root_cause"))
@@ -73,7 +77,9 @@ class BusinessImpactCompletedPayload:
         except ValueError as exc:
             raise MalformedPayloadError(f"Malformed BusinessImpactCompleted payload: {exc}") from exc
 
-        return BusinessImpactCompletedPayload(event_id=event_id, intelligence_context=context)
+        return BusinessImpactCompletedPayload(
+            event_id=event_id, dataset_id=dataset_id, dataset_version_id=dataset_version_id, intelligence_context=context
+        )
 
     @staticmethod
     def _parse_incident(payload: Dict[str, Any]) -> Incident:

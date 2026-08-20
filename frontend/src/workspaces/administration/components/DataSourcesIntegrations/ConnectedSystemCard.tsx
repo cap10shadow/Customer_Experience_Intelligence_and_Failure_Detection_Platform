@@ -1,4 +1,5 @@
-import { Panel, Stack } from '@/shared/components/layout'
+import { Panel } from '@/shared/components/layout'
+import { Card } from '@/shared/components/primitives'
 import { StatusIndicator } from '@/shared/components/utility'
 
 import { AdministrationLoadingState } from '../foundation'
@@ -18,7 +19,10 @@ export interface ConnectedSystemCardProps {
  * critical/warning tone -- this is a descriptive fact, never live
  * monitoring, never an operational alert (per the frozen section
  * responsibility: "Never live monitoring. Never operational monitoring.
- * Never DevOps.").
+ * Never DevOps."). Built on the shared `Card` primitive as this
+ * workspace's first retrofit of a hand-rolled card onto the design
+ * system's shared surface (see docs/PROJECT_STATUS.md's design-system
+ * gap note for the remaining, not-yet-migrated cards).
  */
 export function ConnectedSystemCard({ system, isLoading = false }: ConnectedSystemCardProps) {
   if (isLoading) {
@@ -30,13 +34,9 @@ export function ConnectedSystemCard({ system, isLoading = false }: ConnectedSyst
   }
 
   return (
-    <Panel>
-      <Stack gap={2}>
-        <p className={styles.kind}>External business system</p>
-        <p className={styles.name}>{system.name}</p>
-        <p className={styles.description}>{system.description}</p>
-        <StatusIndicator tone="info" label={`Connection health (descriptive): ${system.connectionHealth}`} />
-      </Stack>
-    </Panel>
+    <Card title={system.name} description={<span className={styles.kind}>External business system</span>}>
+      <p className={styles.description}>{system.description}</p>
+      <StatusIndicator tone="info" label={`Connection health (descriptive): ${system.connectionHealth}`} />
+    </Card>
   )
 }

@@ -3,6 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
+import { DATASET_STORAGE_KEY } from '@/app/context/DatasetContext'
+import { DatasetProvider } from '@/app/context/DatasetContext'
 import { Copilot } from '@/copilot'
 
 function jsonResponse(status: number, body: unknown) {
@@ -198,6 +200,30 @@ describe('Copilot message flow', () => {
     expect(await screen.findByText(SUCCESS_RESPONSE.limitations[0])).toBeInTheDocument()
   })
 
+  it('renders the backend\'s real NullLLMProvider response as an honest "not configured" notice, not ordinary assistant prose', async () => {
+    const NO_LLM_RESPONSE = {
+      answer: 'Copilot\'s language model is not configured in this environment, so this request cannot be interpreted.',
+      keyFindings: [],
+      evidenceReferences: [],
+      relatedEntities: [],
+      visualizationHint: null,
+      limitations: ['No LLM provider is configured (LLM_PROVIDER is unset); no tool was called.'],
+      conversationId: 'conv-1',
+      requestId: 'req-1',
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, NO_LLM_RESPONSE)))
+    renderCopilot()
+    const user = await openPanel()
+
+    await user.type(screen.getByLabelText('Ask Copilot a question'), 'why?')
+    await user.click(screen.getByRole('button', { name: 'Send message' }))
+
+    expect(await screen.findByText('Copilot is not configured in this environment')).toBeInTheDocument()
+    expect(screen.getByText(/no language model is currently connected/)).toBeInTheDocument()
+    // The raw backend sentence is not duplicated as ordinary assistant prose alongside the notice.
+    expect(screen.queryByText(NO_LLM_RESPONSE.answer)).not.toBeInTheDocument()
+  })
+
   it('maps a known visualizationHint to a neutral badge, never a fabricated chart', async () => {
     renderCopilot()
     const user = await openPanel()
@@ -325,6 +351,54 @@ describe('Copilot workspace context', () => {
     const [, init] = vi.mocked(fetch).mock.calls[0]
     const body = JSON.parse(String(init?.body))
     expect(body.workspaceContext).toEqual({ workspace: 'investigations', incidentId: 'INC-77' })
+
+    vi.unstubAllGlobals()
+  })
+
+  it('includes the active dataset as filters.datasetId when one is selected', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, SUCCESS_RESPONSE)))
+    window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <DatasetProvider>
+          <Copilot />
+        </DatasetProvider>
+      </MemoryRouter>,
+    )
+    const user = await openPanel()
+
+    await user.type(screen.getByLabelText('Ask Copilot a question'), 'why?')
+    await user.click(screen.getByRole('button', { name: 'Send message' }))
+
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1))
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    const body = JSON.parse(String(init?.body))
+    expect(body.workspaceContext).toEqual({ workspace: 'dashboard', filters: { datasetId: 'dataset-1' } })
+
+    window.localStorage.removeItem(DATASET_STORAGE_KEY)
+    vi.unstubAllGlobals()
+  })
+
+  it('omits filters entirely when no dataset is selected', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, SUCCESS_RESPONSE)))
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <DatasetProvider>
+          <Copilot />
+        </DatasetProvider>
+      </MemoryRouter>,
+    )
+    const user = await openPanel()
+
+    await user.type(screen.getByLabelText('Ask Copilot a question'), 'why?')
+    await user.click(screen.getByRole('button', { name: 'Send message' }))
+
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1))
+    const [, init] = vi.mocked(fetch).mock.calls[0]
+    const body = JSON.parse(String(init?.body))
+    expect(body.workspaceContext).toEqual({ workspace: 'dashboard' })
 
     vi.unstubAllGlobals()
   })

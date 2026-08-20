@@ -12,6 +12,8 @@ const INCIDENT_ID = 'incident-42'
 const SAMPLE_RECOMMENDATION_RESPONSE: RecommendationApiResponse = {
   recommendationId: RECOMMENDATION_ID,
   incidentId: INCIDENT_ID,
+  datasetId: 'dataset-1',
+  datasetVersionId: 'version-1',
   generationId: 'gen-1',
   category: 'escalate',
   priority: 'high',
@@ -43,6 +45,14 @@ function renderAtRecommendation(recommendationId: string) {
 describe('Recommendation real routing + Gateway integration', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('shows the recommendation\'s real datasetId when no dataset context is available (never silently omitted)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_RECOMMENDATION_RESPONSE)))
+
+    renderAtRecommendation(RECOMMENDATION_ID)
+
+    expect(await screen.findByText(/Dataset:.*dataset-1/)).toBeInTheDocument()
   })
 
   it('shows a loading state, then renders real Gateway-sourced content for the routed recommendationId', async () => {

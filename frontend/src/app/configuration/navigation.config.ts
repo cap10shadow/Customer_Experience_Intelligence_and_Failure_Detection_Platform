@@ -13,25 +13,18 @@ import type { NavigationItemConfig } from '@/shared/types/navigation'
  */
 export const PRIMARY_NAVIGATION: NavigationItemConfig[] = [
   {
+    id: 'ingestion',
+    label: 'Data',
+    path: ROUTE_PATHS.ingestion,
+    icon: 'upload',
+    description: 'Bring complaint records into the platform -- the entry point into the operational intelligence lifecycle.',
+  },
+  {
     id: 'dashboard',
     label: 'Dashboard',
     path: ROUTE_PATHS.dashboard,
     icon: 'dashboard',
     description: 'Immediate operational awareness -- what changed, why it matters, and where to go next.',
-  },
-  {
-    id: 'investigations',
-    label: 'Investigations',
-    path: ROUTE_PATHS.investigations,
-    icon: 'investigations',
-    description: 'Understand operational problems from complaint through to recommendation.',
-  },
-  {
-    id: 'recommendations',
-    label: 'Recommendations',
-    path: ROUTE_PATHS.recommendations,
-    icon: 'recommendations',
-    description: 'The complete recommendation decision and action lifecycle -- review, approval, implementation, and outcome.',
   },
   {
     id: 'analytics',

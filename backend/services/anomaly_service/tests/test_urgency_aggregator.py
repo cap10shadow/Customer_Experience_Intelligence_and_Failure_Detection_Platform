@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from backend.services.anomaly_service.app.services.aggregators.urgency_aggregator import UrgencyAggregator
@@ -5,11 +7,14 @@ from backend.services.anomaly_service.app.utils.time_window import resolve_windo
 from backend.shared.constants.enums.complaint import UrgencyLabel
 
 
+DATASET_ID = uuid.uuid4()
+
+
 class FakeRepository:
     def __init__(self, rows):
         self.rows = rows
 
-    async def count_enrichments_by_urgency(self, start, end):
+    async def count_enrichments_by_urgency(self, start, end, dataset_id):
         return self.rows
 
 
@@ -21,14 +26,14 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_no_enrichments_returns_empty_list():
     aggregator = UrgencyAggregator(FakeRepository([]))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert points == []
 
 
 @pytest.mark.anyio
 async def test_single_urgency_produces_single_point():
     aggregator = UrgencyAggregator(FakeRepository([(UrgencyLabel.CRITICAL, 1)]))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert len(points) == 1
     assert points[0].urgency == "critical"
     assert points[0].count == 1
@@ -43,6 +48,6 @@ async def test_full_urgency_distribution():
         (UrgencyLabel.CRITICAL, 1),
     ]
     aggregator = UrgencyAggregator(FakeRepository(rows))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     urgency = {p.urgency: p.count for p in points}
     assert urgency == {"low": 4, "medium": 6, "high": 3, "critical": 1}

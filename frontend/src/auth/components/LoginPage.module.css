@@ -73,6 +73,19 @@
   color: var(--color-status-critical);
 }
 
+/* Informational, not an error: the session ending is normal platform
+   behaviour, so this is styled in the calm "info" register rather than
+   the critical one `.error` uses for a rejected credential. */
+.notice {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--color-status-info-subtle);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
 .submit {
   padding: var(--space-3);
   border: none;

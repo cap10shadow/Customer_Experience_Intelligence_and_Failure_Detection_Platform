@@ -1,3 +1,4 @@
+import uuid
 from collections import OrderedDict
 from datetime import date
 from typing import Dict, List, TypedDict
@@ -26,8 +27,8 @@ class SentimentAggregator:
     def __init__(self, repository: TrendRepository) -> None:
         self.repository = repository
 
-    async def aggregate(self, window: TrendWindow) -> List[SentimentTrendPoint]:
-        rows = await self.repository.count_enrichments_by_day_and_sentiment(window.start, window.end)
+    async def aggregate(self, window: TrendWindow, dataset_id: uuid.UUID) -> List[SentimentTrendPoint]:
+        rows = await self.repository.count_enrichments_by_day_and_sentiment(window.start, window.end, dataset_id)
 
         by_day: "OrderedDict[date, _DailySentimentBucket]" = OrderedDict()
         for day, label, count in rows:

@@ -12,6 +12,10 @@ class OperationalArea(BaseStringEnum):
     ACCOUNT_MANAGEMENT = "account_management"
     SUBSCRIPTION_SERVICES = "subscription_services"
     TECHNICAL_PLATFORM = "technical_platform"
+    PACKAGING = "packaging"
+    REFUNDS = "refunds"
+    ORDER_MANAGEMENT = "order_management"
+    FULFILLMENT = "fulfillment"
 
 
 class ServiceType(BaseStringEnum):

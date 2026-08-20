@@ -2,6 +2,7 @@ import type { BreadcrumbSegment } from '@/shared/types/navigation'
 import { Icon } from '@/shared/icons'
 
 import { Breadcrumbs } from './Breadcrumbs'
+import { DatasetSelector } from './DatasetSelector'
 import { NotificationButton } from './NotificationButton'
 import { SearchBox } from './SearchBox'
 import { UserMenu } from './UserMenu'
@@ -37,6 +38,7 @@ export function TopBar({ breadcrumbSegments, onOpenMobileNav, userName, onSignOu
         <Breadcrumbs segments={breadcrumbSegments} />
       </div>
       <div className={styles.trailing}>
+        <DatasetSelector />
         <div className={styles.searchSlot}>
           <SearchBox />
         </div>

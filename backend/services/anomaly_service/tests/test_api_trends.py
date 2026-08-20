@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from httpx import AsyncClient, ASGITransport
 
@@ -12,9 +14,11 @@ from backend.services.anomaly_service.app.schemas.trends import (
     VolumeTrendResponse,
 )
 
+DATASET_ID = uuid.uuid4()
+
 
 class MockTrendEngine:
-    async def get_summary(self, days):
+    async def get_summary(self, days, dataset_id):
         return TrendSummaryResponse(
             period=f"Last {days} Days",
             complaint_volume=[],
@@ -24,19 +28,19 @@ class MockTrendEngine:
             urgency=[],
         )
 
-    async def get_volume_trend(self, days):
+    async def get_volume_trend(self, days, dataset_id):
         return VolumeTrendResponse(period=f"Last {days} Days", complaint_volume=[])
 
-    async def get_category_trend(self, days):
+    async def get_category_trend(self, days, dataset_id):
         return CategoryTrendResponse(period=f"Last {days} Days", categories=[])
 
-    async def get_region_trend(self, days):
+    async def get_region_trend(self, days, dataset_id):
         return RegionTrendResponse(period=f"Last {days} Days", regions=[])
 
-    async def get_sentiment_trend(self, days):
+    async def get_sentiment_trend(self, days, dataset_id):
         return SentimentTrendResponse(period=f"Last {days} Days", sentiment=[])
 
-    async def get_urgency_trend(self, days):
+    async def get_urgency_trend(self, days, dataset_id):
         return UrgencyTrendResponse(period=f"Last {days} Days", urgency=[])
 
 
@@ -60,7 +64,7 @@ def anyio_backend():
 async def test_trend_endpoints_return_200(override_dependencies, path):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get(f"/api/v1{path}")
+        response = await client.get(f"/api/v1{path}?dataset_id={DATASET_ID}")
         assert response.status_code == 200
         assert response.json()["period"] == "Last 30 Days"
 
@@ -69,7 +73,7 @@ async def test_trend_endpoints_return_200(override_dependencies, path):
 async def test_days_query_param_is_honored(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/api/v1/trends?days=7")
+        response = await client.get(f"/api/v1/trends?days=7&dataset_id={DATASET_ID}")
         assert response.status_code == 200
         assert response.json()["period"] == "Last 7 Days"
 
@@ -78,8 +82,8 @@ async def test_days_query_param_is_honored(override_dependencies):
 async def test_days_query_param_rejects_out_of_range(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/api/v1/trends?days=0")
+        response = await client.get(f"/api/v1/trends?days=0&dataset_id={DATASET_ID}")
         assert response.status_code == 422
 
-        response = await client.get("/api/v1/trends?days=366")
+        response = await client.get(f"/api/v1/trends?days=366&dataset_id={DATASET_ID}")
         assert response.status_code == 422

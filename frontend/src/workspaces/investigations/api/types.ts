@@ -4,6 +4,7 @@ import type {
   EvidenceItem,
   RecommendedAction,
   RootCauseExplanation,
+  RootCauseLifecycleStatus,
 } from '../types'
 
 /**
@@ -20,6 +21,9 @@ export interface InvestigationApiObservation {
 
 export interface InvestigationApiResponse {
   incidentId: string
+  datasetId: string
+  /** Which DatasetVersion's analysis run most recently touched this incident -- a "last touched by" pointer, not this investigation's creation-time version. */
+  datasetVersionId: string
   observation: InvestigationApiObservation
   evidence: EvidenceItem[]
   /** null = not yet analyzed (a legitimate domain state), not a failure. */
@@ -31,4 +35,13 @@ export interface InvestigationApiResponse {
   recommendedNextStep: RecommendedAction | null
   /** Human-readable notes about any non-essential source that was unavailable when this response was built. */
   warnings: string[]
+}
+
+/** Shape of the root-cause confirm/reject/refresh endpoints (RootCauseActionResponse). */
+export interface RootCauseActionApiResponse {
+  incidentId: string
+  status: RootCauseLifecycleStatus
+  headline: string
+  reasoning: string
+  confidenceLevel: ConfidenceLevel
 }

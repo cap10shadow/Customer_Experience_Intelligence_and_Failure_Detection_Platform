@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 
 import pytest
 
@@ -19,6 +19,9 @@ from backend.services.business_impact_service.app.services.exceptions import (
 from backend.services.business_impact_service.app.services.impact_engine import BusinessImpactEngine, default_rules
 from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
 from backend.shared.constants.enums.root_cause import RootCause
+
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
 
 
 class FakeIncidentReadRepository:
@@ -57,7 +60,7 @@ class FakeBusinessImpactRepository:
     async def get(self, assessment_id):
         return self.by_id.get(assessment_id)
 
-    async def list(self, *, severity=None, priority=None, incident_id=None):
+    async def list(self, *, severity=None, priority=None, incident_id=None, dataset_id=None, dataset_version_id=None):
         results = list(self.by_id.values())
         if severity is not None:
             results = [r for r in results if r.overall_severity == severity]
@@ -65,6 +68,10 @@ class FakeBusinessImpactRepository:
             results = [r for r in results if r.business_priority == priority]
         if incident_id is not None:
             results = [r for r in results if r.incident_id == incident_id]
+        if dataset_id is not None:
+            results = [r for r in results if r.dataset_id == dataset_id]
+        if dataset_version_id is not None:
+            results = [r for r in results if r.dataset_version_id == dataset_version_id]
         return results
 
 
@@ -97,7 +104,7 @@ async def test_create_assessment_runs_engine_and_persists_result():
     business_impact_repo = FakeBusinessImpactRepository()
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
-    assessment = await service.create_assessment(incident_id)
+    assessment = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert assessment.incident_id == incident_id
     assert assessment.assessment_id is not None
@@ -114,7 +121,7 @@ async def test_create_assessment_raises_not_found_for_missing_incident():
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
     with pytest.raises(IncidentNotFoundError):
-        await service.create_assessment(uuid.uuid4())
+        await service.create_assessment(uuid.uuid4(), DATASET_ID, DATASET_VERSION_ID)
 
 
 @pytest.mark.anyio
@@ -126,7 +133,7 @@ async def test_create_assessment_raises_not_found_when_root_cause_missing():
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
     with pytest.raises(RootCauseNotFoundError):
-        await service.create_assessment(incident_id)
+        await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
 
 @pytest.mark.anyio
@@ -139,8 +146,8 @@ async def test_create_assessment_allows_multiple_assessments_per_incident():
     business_impact_repo = FakeBusinessImpactRepository()
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
-    first = await service.create_assessment(incident_id)
-    second = await service.create_assessment(incident_id)
+    first = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
+    second = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert first.assessment_id != second.assessment_id
     assert len(business_impact_repo.by_id) == 2
@@ -164,7 +171,7 @@ async def test_get_assessment_returns_the_persisted_record():
     business_impact_repo = FakeBusinessImpactRepository()
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
-    created = await service.create_assessment(incident_id)
+    created = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
     fetched = await service.get_assessment(created.assessment_id)
 
     assert fetched is created
@@ -182,8 +189,8 @@ async def test_list_assessments_filters_by_incident_id():
     business_impact_repo = FakeBusinessImpactRepository()
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
-    await service.create_assessment(incident_id_1)
-    await service.create_assessment(incident_id_2)
+    await service.create_assessment(incident_id_1, DATASET_ID, DATASET_VERSION_ID)
+    await service.create_assessment(incident_id_2, DATASET_ID, DATASET_VERSION_ID)
 
     results = await service.list_assessments(incident_id=incident_id_1)
 
@@ -199,7 +206,7 @@ async def test_list_assessments_filters_by_severity_and_priority():
     business_impact_repo = FakeBusinessImpactRepository()
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
-    created = await service.create_assessment(incident_id)
+    created = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     matching = await service.list_assessments(severity=created.overall_severity, priority=created.business_priority)
     non_matching = await service.list_assessments(severity=ImpactLevel.CRITICAL)
@@ -216,7 +223,7 @@ async def test_list_assessments_returns_all_when_no_filters_given():
     business_impact_repo = FakeBusinessImpactRepository()
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
-    await service.create_assessment(incident_id)
+    await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert len(await service.list_assessments()) == 1
 
@@ -246,7 +253,7 @@ async def test_create_assessment_publishes_a_completed_event_when_a_publisher_is
         incident_repo, root_cause_repo, business_impact_repo, _engine(), event_publisher=publisher
     )
 
-    assessment = await service.create_assessment(incident_id)
+    assessment = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert len(publisher.published) == 1
     event = publisher.published[0]
@@ -267,8 +274,8 @@ async def test_create_assessment_mints_a_fresh_event_id_for_every_assessment():
         incident_repo, root_cause_repo, business_impact_repo, _engine(), event_publisher=publisher
     )
 
-    await service.create_assessment(incident_id)
-    await service.create_assessment(incident_id)
+    await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
+    await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert len(publisher.published) == 2
     assert publisher.published[0].event_id != publisher.published[1].event_id
@@ -283,7 +290,7 @@ async def test_no_event_is_published_when_no_publisher_is_configured():
     service = BusinessImpactApplicationService(incident_repo, root_cause_repo, business_impact_repo, _engine())
 
     # Must not raise merely because no publisher was configured.
-    assessment = await service.create_assessment(incident_id)
+    assessment = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
     assert assessment is not None
 
 
@@ -297,7 +304,7 @@ async def test_a_publisher_failure_never_fails_or_rolls_back_the_already_persist
         incident_repo, root_cause_repo, business_impact_repo, _engine(), event_publisher=_FailingPublisher()
     )
 
-    assessment = await service.create_assessment(incident_id)
+    assessment = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     assert assessment is not None
     assert business_impact_repo.by_id[assessment.assessment_id] is assessment

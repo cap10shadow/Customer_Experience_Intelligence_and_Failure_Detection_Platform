@@ -1,5 +1,7 @@
 from datetime import date
 
+import uuid
+
 import pytest
 
 from backend.services.anomaly_service.app.services.detectors.sentiment_detector import SentimentDetector
@@ -8,12 +10,15 @@ from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
 from backend.shared.constants.enums.complaint import SentimentLabel
 
 
+DATASET_ID = uuid.uuid4()
+
+
 class FakeRepository:
     def __init__(self, current_rows, previous_rows):
         self._responses = [current_rows, previous_rows]
         self._call_index = 0
 
-    async def count_enrichments_by_day_and_sentiment(self, start, end):
+    async def count_enrichments_by_day_and_sentiment(self, start, end, dataset_id):
         rows = self._responses[self._call_index]
         self._call_index += 1
         return rows
@@ -33,7 +38,7 @@ async def test_positive_to_highly_negative_is_a_sentiment_anomaly():
             previous_rows=[(date(2026, 6, 24), SentimentLabel.POSITIVE, 10)],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert len(candidates) == 1
     candidate = candidates[0]
     assert candidate.type == AnomalyType.SENTIMENT_SHIFT
@@ -53,7 +58,7 @@ async def test_improving_sentiment_is_not_flagged():
             previous_rows=[(date(2026, 6, 24), SentimentLabel.HIGHLY_NEGATIVE, 10)],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert candidates == []
 
 
@@ -66,7 +71,7 @@ async def test_no_data_in_a_window_is_not_flagged():
             previous_rows=[],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert candidates == []
 
 
@@ -79,5 +84,5 @@ async def test_stable_sentiment_is_not_flagged():
             previous_rows=[(date(2026, 6, 24), SentimentLabel.NEUTRAL, 10)],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert candidates == []

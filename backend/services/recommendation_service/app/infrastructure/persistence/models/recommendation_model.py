@@ -81,6 +81,20 @@ class RecommendationModel(Base):
 
     recommendation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
+    # Dataset scoping (docs/DECISIONS.md AD-12) -- a plain, cross-service
+    # UUID column (see DATA-002), never an ORM ForeignKey: the
+    # Recommendation Service does not import the Ingestion Service's
+    # `Dataset` model. Carried through unchanged from the triggering
+    # `BusinessImpactCompleted` event's own `dataset_id`, set once at
+    # creation and never changed afterward -- Recommendations are
+    # immutable and append-only.
+    dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
+    # True version-addressable intelligence (AD-12 follow-up) -- same
+    # rationale as `RecommendationGenerationModel.dataset_version_id`, set
+    # once at creation and never changed afterward.
+    dataset_version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
     incident_id: Mapped[str] = mapped_column(String(64), nullable=False)
     generation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 

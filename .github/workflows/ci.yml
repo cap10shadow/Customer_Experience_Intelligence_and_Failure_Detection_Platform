@@ -111,19 +111,16 @@ jobs:
       # into gateway_service's `users` table to exercise the cross-service
       # `decided_by`/`actor_id` foreign key honestly, so it must exist.
       #
-      # KNOWN ISSUE (carried forward from Batch 9, reproduced during this
-      # batch's own local validation against a genuinely fresh database):
-      # migration f05ea2afc3ee's `op.add_column(..., sa.Enum(...,
-      # name="recommendationdecision"))` does not create the
-      # `recommendationdecision` Postgres enum type first -- `op.add_column`
-      # (unlike `op.create_table`) does not auto-create Postgres ENUM
-      # types. Against a completely empty database this step fails with
+      # RESOLVED (AD-7, docs/DECISIONS.md): migration f05ea2afc3ee
+      # previously failed against a genuinely empty database with
       # `UndefinedObjectError: type "recommendationdecision" does not
-      # exist`. This is a pre-existing defect in a historical migration;
-      # Frozen Batch 1 (CI) is explicitly forbidden from modifying
-      # historical migrations, so it is not fixed here. See this batch's
-      # implementation report for the full reproduction and the decision
-      # this leaves open.
+      # exist`, because `op.add_column` (unlike `op.create_table`) does
+      # not auto-create a Postgres ENUM type before referencing it. The
+      # migration now explicitly creates the enum type first
+      # (`checkfirst=True`) before adding the column. `alembic upgrade
+      # head` applies the full linear chain cleanly from empty --
+      # re-confirmed during the end-to-end validation on a fresh,
+      # isolated database (docs/VALIDATION_REPORT.md §3.1).
       - name: Run database migrations
         run: python -m alembic upgrade head
 

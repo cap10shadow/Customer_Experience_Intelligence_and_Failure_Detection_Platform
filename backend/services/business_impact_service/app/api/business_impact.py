@@ -39,7 +39,7 @@ async def create_business_impact_assessment(
     new assessment rather than overwriting a prior one.
     """
     try:
-        assessment = await service.create_assessment(request.incident_id)
+        assessment = await service.create_assessment(request.incident_id, request.dataset_id, request.dataset_version_id)
     except IncidentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RootCauseNotFoundError as exc:
@@ -64,7 +64,22 @@ async def list_business_impact_assessments(
     severity: Optional[ImpactLevel] = Query(default=None),
     priority: Optional[BusinessPriority] = Query(default=None),
     incident_id: Optional[uuid.UUID] = Query(default=None),
+    dataset_id: Optional[uuid.UUID] = Query(default=None),
+    dataset_version_id: Optional[uuid.UUID] = Query(default=None),
     service: BusinessImpactApplicationService = Depends(get_business_impact_application_service),
 ):
-    """Returns persisted BusinessImpactAssessment records, optionally filtered by severity, priority, and/or incident."""
-    return await service.list_assessments(severity=severity, priority=priority, incident_id=incident_id)
+    """
+    Returns persisted BusinessImpactAssessment records, optionally filtered
+    by severity, priority, incident, dataset, and/or dataset version.
+    `dataset_version_id` (AD-12 follow-up) is what makes "the assessment(s)
+    produced for Version N" a real, independently retrievable query --
+    assessments already accumulate one row per analysis run rather than
+    overwriting the previous one.
+    """
+    return await service.list_assessments(
+        severity=severity,
+        priority=priority,
+        incident_id=incident_id,
+        dataset_id=dataset_id,
+        dataset_version_id=dataset_version_id,
+    )

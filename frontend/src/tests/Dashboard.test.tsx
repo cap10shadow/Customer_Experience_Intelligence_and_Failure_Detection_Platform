@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
+import { DATASET_STORAGE_KEY, DatasetProvider } from '@/app/context/DatasetContext'
 import { DashboardWorkspace } from '@/workspaces/dashboard'
 import type { DashboardApiResponse } from '@/workspaces/dashboard/api'
 
@@ -56,11 +57,21 @@ function jsonResponse(body: unknown, status = 200) {
 
 function renderDashboard() {
   return render(
-    <MemoryRouter>
-      <DashboardWorkspace />
-    </MemoryRouter>,
+    <DatasetProvider>
+      <MemoryRouter>
+        <DashboardWorkspace />
+      </MemoryRouter>
+    </DatasetProvider>,
   )
 }
+
+beforeEach(() => {
+  window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+})
+
+afterEach(() => {
+  window.localStorage.removeItem(DATASET_STORAGE_KEY)
+})
 
 describe('DashboardWorkspace composition', () => {
   beforeEach(() => {
@@ -165,9 +176,11 @@ describe('DashboardWorkspace composition', () => {
     })
   })
 
-  it('separates every section with a visible boundary, reinforcing one continuous journey', () => {
+  it('separates every top-level register with a visible boundary, reinforcing one continuous journey', () => {
     renderDashboard()
-    expect(document.querySelectorAll('hr').length).toBe(3)
+    // Operational Brief | (Decision Summary + Investigation Entry Points paired side-by-side) | Supporting Evidence
+    // -- the paired row is one register, not two, so it carries one boundary on each side rather than one per section.
+    expect(document.querySelectorAll('hr').length).toBe(2)
   })
 
   it('requests only the Gateway base path, never a raw backend service host', async () => {
@@ -177,7 +190,7 @@ describe('DashboardWorkspace composition', () => {
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = String(requestedUrl)
-    expect(url).toContain('/dashboard')
+    expect(url).toContain('/v1/dashboard')
     expect(url).not.toMatch(/:800[1-8]/)
   })
 })
@@ -267,23 +280,42 @@ describe('DashboardWorkspace failure handling', () => {
 
   it('Part 7: retry issues a genuine new GET /api/v1/dashboard request and renders real data on success', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({ error: { code: 'DOWNSTREAM_SERVICE_UNAVAILABLE', message: 'Unavailable.', requestId: 'req-1' } }, 503),
-      )
-      .mockResolvedValueOnce(jsonResponse(SAMPLE_DASHBOARD_RESPONSE))
+    // Routed by URL, not call order: the header's own `useDataset` call
+    // (GET /api/v1/datasets/{id}) shares this stubbed `fetch` with the
+    // Dashboard's aggregated fetch and would otherwise race it for a
+    // position in a plain `mockResolvedValueOnce` queue.
+    const dashboardResponses = [
+      jsonResponse({ error: { code: 'DOWNSTREAM_SERVICE_UNAVAILABLE', message: 'Unavailable.', requestId: 'req-1' } }, 503),
+      jsonResponse(SAMPLE_DASHBOARD_RESPONSE),
+    ]
+    const datasetDetailResponse = jsonResponse({
+      dataset: { id: 'dataset-1', name: 'Dataset 1', description: null, insertedAt: '2026-08-17T00:00:00Z' },
+      versions: [],
+      currentVersion: null,
+      latestVersion: null,
+    })
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/datasets/')) return Promise.resolve(datasetDetailResponse)
+      return Promise.resolve(dashboardResponses.shift() ?? jsonResponse(SAMPLE_DASHBOARD_RESPONSE))
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     renderDashboard()
 
+    // Two requests fire on mount: the Dashboard's own aggregated fetch, and
+    // the header's independent `useDataset` call (dataset + version badge)
+    // -- both share this stubbed `fetch`, so the baseline count is 2, not 1.
     await waitFor(() => expect(screen.getAllByText(/Something went wrong loading/).length).toBeGreaterThan(0))
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
 
     const retryButtons = screen.getAllByRole('button', { name: 'Try again' })
     await user.click(retryButtons[0])
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    // Retry only re-issues the Dashboard fetch (wired to `useDashboardData`'s
+    // own `refetch`) -- `useDataset` is untouched by this button, so the
+    // count advances by exactly one, not two.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
     await waitFor(() => expect(screen.getByText('Escalate to payments team')).toBeInTheDocument())
     expect(screen.queryByText(/Something went wrong loading/)).not.toBeInTheDocument()
 
@@ -299,13 +331,15 @@ describe('DashboardWorkspace failure handling', () => {
 
     renderDashboard()
 
+    // Same baseline as the test above: the Dashboard fetch plus the
+    // header's independent `useDataset` call both share this mock.
     await waitFor(() => expect(screen.getAllByText(/Something went wrong loading/).length).toBeGreaterThan(0))
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
 
     const retryButtons = screen.getAllByRole('button', { name: 'Try again' })
     await user.click(retryButtons[0])
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
     expect(screen.getAllByText(/Something went wrong loading/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Still unavailable\./).length).toBeGreaterThan(0)
 

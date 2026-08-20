@@ -1,0 +1,45 @@
+/* Deliberately shares PartialFailureNotice's calm visual register -- a
+   statement of fact is not an error and must never read like one. The
+   only difference is the accent bar, which marks the notice as being
+   *about* the content beside it rather than about a failed request. */
+.container {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-sunken);
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.description {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-secondary);
+}
+
+.action {
+  margin-top: var(--space-1);
+}

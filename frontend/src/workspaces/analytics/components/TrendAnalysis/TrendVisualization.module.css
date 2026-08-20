@@ -1,0 +1,20 @@
+.grid {
+  display: grid;
+  /* Two columns where there is room, one where there isn't -- no media
+     query needed, and no chart is ever squeezed below a legible width. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-4);
+}
+
+/* The two time-series charts read across the full width: a date axis
+   compressed into half a column collides its own labels. */
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}

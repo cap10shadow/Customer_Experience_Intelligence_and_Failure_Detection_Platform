@@ -45,6 +45,8 @@ class FakeRecommendationRepository(RecommendationRepository):
         self,
         recommendations: Sequence[Recommendation],
         *,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
         incident_id: str,
         generation_id: uuid.UUID,
         event_id: Optional[uuid.UUID] = None,
@@ -63,6 +65,8 @@ class FakeRecommendationRepository(RecommendationRepository):
                 recommendation_id=uuid.uuid4(),
                 recommendation=recommendation,
                 generation_id=generation_id,
+                dataset_id=dataset_id,
+                dataset_version_id=dataset_version_id,
                 created_at=datetime.now(timezone.utc),
             )
             self.by_id[record.recommendation_id] = record
@@ -76,11 +80,18 @@ class FakeRecommendationRepository(RecommendationRepository):
         return self.by_id.get(recommendation_id)
 
     async def list_by_incident(
-        self, incident_id: Optional[str] = None, *, limit: int, offset: int
+        self,
+        incident_id: Optional[str] = None,
+        *,
+        limit: int,
+        offset: int,
+        dataset_version_id: Optional[uuid.UUID] = None,
     ) -> List[RecommendationRecord]:
         records = list(self.by_id.values())
         if incident_id is not None:
             records = [record for record in records if record.recommendation.incident_id == incident_id]
+        if dataset_version_id is not None:
+            records = [record for record in records if record.dataset_version_id == dataset_version_id]
         records.sort(key=lambda record: record.created_at, reverse=True)
         return records[offset : offset + limit]
 
@@ -127,6 +138,8 @@ class FakeRecommendationRepository(RecommendationRepository):
             recommendation_id=existing.recommendation_id,
             recommendation=existing.recommendation,
             generation_id=existing.generation_id,
+            dataset_id=existing.dataset_id,
+            dataset_version_id=existing.dataset_version_id,
             created_at=existing.created_at,
             decision=decision,
             decision_note=note,

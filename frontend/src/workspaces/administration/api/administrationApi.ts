@@ -16,7 +16,7 @@ export interface GetAdministrationOverviewOptions {
 export function getAdministrationOverview(
   options: GetAdministrationOverviewOptions = {},
 ): Promise<AdministrationApiOverviewResponse> {
-  return apiClient.get<AdministrationApiOverviewResponse>('/administration/overview', {
+  return apiClient.get<AdministrationApiOverviewResponse>('/v1/administration/overview', {
     signal: options.signal,
   })
 }
@@ -33,7 +33,7 @@ export interface GetIntelligenceConfigurationOptions {
 export function getIntelligenceConfiguration(
   options: GetIntelligenceConfigurationOptions = {},
 ): Promise<AdministrationApiIntelligenceConfigurationResponse> {
-  return apiClient.get<AdministrationApiIntelligenceConfigurationResponse>('/administration/intelligence-configuration', {
+  return apiClient.get<AdministrationApiIntelligenceConfigurationResponse>('/v1/administration/intelligence-configuration', {
     signal: options.signal,
   })
 }

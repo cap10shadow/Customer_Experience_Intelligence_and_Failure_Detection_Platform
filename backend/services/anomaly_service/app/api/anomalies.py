@@ -16,29 +16,35 @@ DaysParam = Query(
 
 @router.post("/run", response_model=AnomalyRunResult)
 async def run_anomaly_detection(
+    dataset_id: uuid.UUID = Query(..., description="The Dataset this detection run is scoped to."),
+    dataset_version_id: uuid.UUID = Query(
+        ..., description="The DatasetVersion this run's results are attributed to (provenance)."
+    ),
     days: int = DaysParam,
     engine: AnomalyEngine = Depends(get_anomaly_engine),
 ):
-    """Runs all detectors and reconciles their findings against active anomalies."""
-    return await engine.run(days)
+    """Runs all detectors, scoped to one dataset, and reconciles their findings against that dataset's active anomalies only."""
+    return await engine.run(days, dataset_id, dataset_version_id)
 
 
 # NOTE: "/latest" must be registered before "/{anomaly_id}" — otherwise
 # FastAPI would try to parse the literal string "latest" as a UUID.
 @router.get("/latest", response_model=AnomalyRunResult)
 async def get_latest_run(
+    dataset_id: uuid.UUID = Query(..., description="The Dataset to return the latest detection run for."),
     engine: AnomalyEngine = Depends(get_anomaly_engine),
 ):
-    """Returns the outcome of the most recent detection run, without re-running detection."""
-    return await engine.get_latest()
+    """Returns the outcome of the most recent detection run for this dataset, without re-running detection."""
+    return await engine.get_latest(dataset_id)
 
 
 @router.get("", response_model=List[ActiveAnomalyResponse])
 async def list_active_anomalies(
+    dataset_id: uuid.UUID = Query(..., description="The Dataset to list active anomalies for."),
     engine: AnomalyEngine = Depends(get_anomaly_engine),
 ):
-    """Returns all currently active anomalies."""
-    return await engine.get_active()
+    """Returns all currently active anomalies for this dataset."""
+    return await engine.get_active(dataset_id)
 
 
 @router.get("/{anomaly_id}", response_model=ActiveAnomalyResponse)

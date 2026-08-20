@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -23,13 +23,17 @@ SAMPLE_ROOT_CAUSE_ID = uuid.uuid4()
 MISSING_ROOT_CAUSE_ID = uuid.uuid4()
 CONFIRMED_ROOT_CAUSE_ID = uuid.uuid4()
 REJECTED_ROOT_CAUSE_ID = uuid.uuid4()
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
 
 
 class _StubRootCause:
     """Plain object with the same attributes RootCauseResponse.model_validate reads."""
 
-    def __init__(self, incident_id):
+    def __init__(self, incident_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID):
         self.id = SAMPLE_ROOT_CAUSE_ID
+        self.dataset_id = dataset_id
+        self.dataset_version_id = dataset_version_id
         self.incident_id = incident_id
         self.cause = RootCauseEnum.PAYMENT_GATEWAY_FAILURE
         self.confidence_score = 85
@@ -43,12 +47,12 @@ class _StubRootCause:
 
 
 class MockRootCauseApplicationService:
-    async def create_root_cause(self, incident_id):
+    async def create_root_cause(self, incident_id, dataset_id, dataset_version_id):
         if incident_id == MISSING_INCIDENT_ID:
             raise IncidentNotFoundError(incident_id)
         if incident_id == CONFLICTING_INCIDENT_ID:
             raise RootCauseAlreadyExistsError(incident_id)
-        return _StubRootCause(incident_id)
+        return _StubRootCause(incident_id, dataset_id, dataset_version_id)
 
     async def get_root_cause(self, root_cause_id):
         if root_cause_id == SAMPLE_ROOT_CAUSE_ID:
@@ -60,7 +64,7 @@ class MockRootCauseApplicationService:
             return _StubRootCause(incident_id)
         return None
 
-    async def list_root_causes(self):
+    async def list_root_causes(self, dataset_id=None):
         return [_StubRootCause(EXISTING_INCIDENT_ID)]
 
     async def confirm_root_cause(self, root_cause_id):
@@ -111,7 +115,7 @@ def anyio_backend():
 async def test_post_root_causes_returns_201(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/root-causes", json={"incident_id": str(EXISTING_INCIDENT_ID)})
+        response = await client.post("/api/v1/root-causes", json={"incident_id": str(EXISTING_INCIDENT_ID), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assert response.status_code == 201
         body = response.json()
         assert body["cause"] == "payment_gateway_failure"
@@ -122,7 +126,7 @@ async def test_post_root_causes_returns_201(override_dependencies):
 async def test_post_root_causes_returns_404_when_incident_missing(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/root-causes", json={"incident_id": str(MISSING_INCIDENT_ID)})
+        response = await client.post("/api/v1/root-causes", json={"incident_id": str(MISSING_INCIDENT_ID), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assert response.status_code == 404
 
 
@@ -130,7 +134,7 @@ async def test_post_root_causes_returns_404_when_incident_missing(override_depen
 async def test_post_root_causes_returns_409_when_already_exists(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/root-causes", json={"incident_id": str(CONFLICTING_INCIDENT_ID)})
+        response = await client.post("/api/v1/root-causes", json={"incident_id": str(CONFLICTING_INCIDENT_ID), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assert response.status_code == 409
 
 

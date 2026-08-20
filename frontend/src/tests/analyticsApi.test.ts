@@ -17,21 +17,22 @@ describe('analyticsApi.getAnalytics', () => {
     vi.unstubAllGlobals()
   })
 
-  it('requests /analytics/trends with the given period', async () => {
-    await getAnalytics({ period: 'last-quarter' })
+  it('requests /v1/analytics/trends with the given dataset and period', async () => {
+    await getAnalytics({ datasetId: 'dataset-1', period: 'last-quarter' })
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
-    expect(url.pathname).toContain('/analytics/trends')
+    expect(url.pathname).toContain('/v1/analytics/trends')
+    expect(url.searchParams.get('datasetId')).toBe('dataset-1')
     expect(url.searchParams.get('period')).toBe('last-quarter')
   })
 
-  it('defaults to no other query parameters', async () => {
-    await getAnalytics({ period: 'last-30-days' })
+  it('sends only datasetId and period', async () => {
+    await getAnalytics({ datasetId: 'dataset-1', period: 'last-30-days' })
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
-    expect([...url.searchParams.keys()]).toEqual(['period'])
+    expect([...url.searchParams.keys()].sort()).toEqual(['datasetId', 'period'])
   })
 })
 

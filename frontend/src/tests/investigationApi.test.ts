@@ -17,12 +17,12 @@ describe('investigationApi.getInvestigation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('requests /investigations/:incidentId with the given incident id', async () => {
+  it('requests /v1/investigations/:incidentId with the given incident id', async () => {
     await getInvestigation('incident-1')
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
-    expect(url.pathname).toContain('/investigations/incident-1')
+    expect(url.pathname).toContain('/v1/investigations/incident-1')
   })
 
   it('URL-encodes the incident id', async () => {
@@ -37,9 +37,11 @@ describe('toInvestigationViewModel', () => {
   it('maps the Gateway InvestigationResponse into the workspace view model without inventing fields', () => {
     const response: InvestigationApiResponse = {
       incidentId: 'incident-1',
+      datasetId: 'dataset-1',
+      datasetVersionId: 'version-1',
       observation: { headline: 'h', description: 'd' },
       evidence: [{ id: 'e-1', headline: 'h', detail: 'd', source: 'Anomaly Detection' }],
-      rootCause: { headline: 'h', reasoning: 'r', confidenceLevel: 'high' },
+      rootCause: { headline: 'h', reasoning: 'r', confidenceLevel: 'high', status: 'identified' },
       businessImpact: [{ dimension: 'financial', headline: 'h', detail: 'd' }],
       businessImpactConfidenceLevel: 'high',
       recommendedNextStep: { headline: 'h', reason: 'r', recommendationId: 'rec-1' },
@@ -60,6 +62,8 @@ describe('toInvestigationViewModel', () => {
   it('preserves explicit null/empty legitimate-absence states rather than substituting defaults', () => {
     const response: InvestigationApiResponse = {
       incidentId: 'incident-1',
+      datasetId: 'dataset-1',
+      datasetVersionId: 'version-1',
       observation: { headline: 'h', description: 'd' },
       evidence: [],
       rootCause: null,

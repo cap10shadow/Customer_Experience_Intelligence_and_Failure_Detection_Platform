@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from backend.services.anomaly_service.app.services.detectors.urgency_detector import UrgencyDetector
@@ -6,12 +8,15 @@ from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
 from backend.shared.constants.enums.complaint import UrgencyLabel
 
 
+DATASET_ID = uuid.uuid4()
+
+
 class FakeRepository:
     def __init__(self, current_rows, previous_rows):
         self._responses = [current_rows, previous_rows]
         self._call_index = 0
 
-    async def count_enrichments_by_urgency(self, start, end):
+    async def count_enrichments_by_urgency(self, start, end, dataset_id):
         rows = self._responses[self._call_index]
         self._call_index += 1
         return rows
@@ -31,7 +36,7 @@ async def test_critical_2_to_15_is_an_urgency_anomaly():
             previous_rows=[(UrgencyLabel.CRITICAL, 2)],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert len(candidates) == 1
     candidate = candidates[0]
     assert candidate.type == AnomalyType.URGENCY_SPIKE
@@ -46,5 +51,5 @@ async def test_critical_2_to_15_is_an_urgency_anomaly():
 async def test_no_data_is_no_anomaly():
     current, previous = resolve_comparison_windows(7)
     detector = UrgencyDetector(FakeRepository(current_rows=[], previous_rows=[]))
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert candidates == []

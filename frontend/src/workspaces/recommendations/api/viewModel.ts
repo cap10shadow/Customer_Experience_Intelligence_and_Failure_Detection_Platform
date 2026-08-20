@@ -5,6 +5,8 @@ import type { RecommendationApiResponse, RecommendationDecisionApiValue } from '
 export interface RecommendationViewModel {
   recommendationId: string
   incidentId: string
+  datasetId: string
+  datasetVersionId: string
   overview: RecommendationOverview
   rationale: RationaleReason
   /** Undefined only when no decision has ever been persisted (backend `decision` is null) -- never a fabricated 'pending-review' default (Step 7.X G-01/A-07). */
@@ -42,6 +44,8 @@ export function toRecommendationViewModel(response: RecommendationApiResponse): 
   return {
     recommendationId: response.recommendationId,
     incidentId: response.incidentId,
+    datasetId: response.datasetId,
+    datasetVersionId: response.datasetVersionId,
     overview: {
       headline: response.action,
       summary: response.recommendationRationale,

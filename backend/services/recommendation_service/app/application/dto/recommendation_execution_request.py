@@ -28,7 +28,14 @@ class RecommendationExecutionRequest:
       `IntelligenceContext` Domain Value Object, reused verbatim -- Step 3
       does not change what the Recommendation Engine consumes, only how it
       now arrives.
+    - `dataset_id` (docs/DECISIONS.md AD-12) is carried through unchanged
+      from the triggering `BusinessImpactCompleted` event's own
+      `dataset_id`, sitting alongside `event_id` rather than inside
+      `intelligence_context` -- it is execution/scoping metadata, not
+      something any Recommendation Rule evaluates.
     """
 
     event_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
     intelligence_context: IntelligenceContext

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { AuthProvider } from '@/auth/context/AuthContext'
+import { DatasetProvider } from '@/app/context/DatasetContext'
 import { ThemeProvider } from '@/app/theme/ThemeProvider'
 
 export interface AppProvidersProps {
@@ -9,16 +10,17 @@ export interface AppProvidersProps {
 
 /**
  * Composes every application-wide context provider in one place.
- * `AuthProvider` (Phase 13 Batch 2) is the first provider to actually
- * use the composition point this component's own original comment
- * anticipated ("a future auth/session... provider is added here,
- * once") -- every call site (main.tsx, tests) still needs to know only
- * the one wrapper, not the full provider stack.
+ * `DatasetProvider` (docs/DECISIONS.md AD-12) sits inside `AuthProvider`
+ * -- dataset selection is meaningless without a session, but (like auth)
+ * must survive navigation across every workspace, so it belongs at this
+ * app-wide level rather than inside the router/AppShell.
  */
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <ThemeProvider>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        <DatasetProvider>{children}</DatasetProvider>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

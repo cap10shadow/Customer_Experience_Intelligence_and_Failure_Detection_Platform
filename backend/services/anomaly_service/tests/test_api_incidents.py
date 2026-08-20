@@ -11,11 +11,15 @@ from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyStatu
 from backend.shared.constants.enums.incident import IncidentStatus
 
 SAMPLE_ID = uuid.uuid4()
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
 
 
 def _sample_incident():
     return IncidentResponse(
         id=SAMPLE_ID,
+        dataset_id=DATASET_ID,
+        last_analysis_version_id=DATASET_VERSION_ID,
         incident_key="INC-ABCD1234",
         title="South Regional Incident",
         severity=AnomalySeverity.CRITICAL,
@@ -31,6 +35,8 @@ def _sample_incident():
 def _sample_anomaly():
     return ActiveAnomalyResponse(
         id=uuid.uuid4(),
+        dataset_id=DATASET_ID,
+        last_analysis_version_id=DATASET_VERSION_ID,
         fingerprint="complaint_spike:global:ALL",
         type=AnomalyType.COMPLAINT_SPIKE,
         severity=AnomalySeverity.CRITICAL,
@@ -48,14 +54,14 @@ def _sample_anomaly():
 
 
 class MockCorrelationEngine:
-    async def run(self, window_minutes):
+    async def run(self, dataset_id, dataset_version_id, window_minutes):
         incident = _sample_incident()
         return IncidentRunResult(
             run_at="2026-07-20T00:00:00Z",
             created=[IncidentRunItem(incident=incident, linked_anomaly_count=2, reason="New incident correlated from 2 anomalies.")],
         )
 
-    async def get_active(self):
+    async def get_active(self, dataset_id):
         return [_sample_incident()]
 
     async def get_by_id(self, incident_id):
@@ -80,7 +86,9 @@ def override_dependencies():
 async def test_post_run_returns_200_with_results(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/incidents/run?window_minutes=15")
+        response = await client.post(
+            f"/api/v1/incidents/run?window_minutes=15&dataset_id={DATASET_ID}&dataset_version_id={DATASET_VERSION_ID}"
+        )
         assert response.status_code == 200
         body = response.json()
         assert len(body["created"]) == 1
@@ -91,7 +99,7 @@ async def test_post_run_returns_200_with_results(override_dependencies):
 async def test_get_incidents_returns_active_list(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/api/v1/incidents")
+        response = await client.get(f"/api/v1/incidents?dataset_id={DATASET_ID}")
         assert response.status_code == 200
         body = response.json()
         assert len(body) == 1

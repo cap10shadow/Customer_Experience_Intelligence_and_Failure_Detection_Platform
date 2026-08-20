@@ -21,6 +21,13 @@
   gap: var(--space-3);
 }
 
+.systemNotice {
+  align-self: stretch;
+  max-width: 100%;
+  padding: 0;
+  background-color: transparent;
+}
+
 .answerText {
   margin: 0;
   white-space: pre-wrap;

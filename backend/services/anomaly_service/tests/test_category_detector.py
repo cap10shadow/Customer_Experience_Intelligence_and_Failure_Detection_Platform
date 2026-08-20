@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from backend.services.anomaly_service.app.services.detectors.category_detector import CategoryDetector
@@ -6,12 +8,15 @@ from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyType
 from backend.shared.constants.enums.complaint import IssueCategory
 
 
+DATASET_ID = uuid.uuid4()
+
+
 class FakeRepository:
     def __init__(self, current_rows, previous_rows):
         self._responses = [current_rows, previous_rows]
         self._call_index = 0
 
-    async def count_enrichments_by_category(self, start, end):
+    async def count_enrichments_by_category(self, start, end, dataset_id):
         rows = self._responses[self._call_index]
         self._call_index += 1
         return rows
@@ -31,7 +36,7 @@ async def test_billing_8_to_28_is_a_category_anomaly():
             previous_rows=[(IssueCategory.PAYMENT_ISSUE, 8)],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert len(candidates) == 1
     candidate = candidates[0]
     assert candidate.type == AnomalyType.CATEGORY_SPIKE
@@ -52,7 +57,7 @@ async def test_only_anomalous_categories_are_returned():
             previous_rows=[(IssueCategory.PAYMENT_ISSUE, 8), (IssueCategory.DELIVERY_ISSUE, 10)],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert len(candidates) == 1
     assert candidates[0].entity_value == "payment_issue"
 
@@ -66,7 +71,7 @@ async def test_category_missing_from_previous_window_treated_as_zero_baseline():
             previous_rows=[],
         )
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert len(candidates) == 1
     assert candidates[0].severity == AnomalySeverity.CRITICAL
     assert candidates[0].percentage_change is None
@@ -76,5 +81,5 @@ async def test_category_missing_from_previous_window_treated_as_zero_baseline():
 async def test_no_data_in_either_window_is_no_anomaly():
     current, previous = resolve_comparison_windows(30)
     detector = CategoryDetector(FakeRepository(current_rows=[], previous_rows=[]))
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert candidates == []

@@ -9,6 +9,8 @@ from backend.services.gateway_service.app.dependencies.http_client import get_ht
 from backend.services.gateway_service.app.main import app
 
 INCIDENT_ID = str(uuid.uuid4())
+DATASET_ID = str(uuid.uuid4())
+DATASET_VERSION_ID = str(uuid.uuid4())
 ANOMALY_ID_1 = str(uuid.uuid4())
 ANOMALY_ID_2 = str(uuid.uuid4())
 RECOMMENDATION_ID = str(uuid.uuid4())
@@ -17,6 +19,8 @@ RECOMMENDATION_ID = str(uuid.uuid4())
 def _incident():
     return {
         "id": INCIDENT_ID,
+        "dataset_id": DATASET_ID,
+        "last_analysis_version_id": DATASET_VERSION_ID,
         "incident_key": "checkout-failures",
         "title": "Checkout failures rising",
         "severity": "high",
@@ -897,3 +901,108 @@ async def test_two_concurrent_investigation_requests_do_not_cross_contaminate_re
     assert second_response.headers["X-Request-ID"] == "request-b"
     assert first_response.json()["incidentId"] == INCIDENT_ID
     assert second_response.json()["incidentId"] == other_incident_id
+
+
+# ---------------------------------------------------------------------------
+# Root-cause lifecycle actions (confirm/reject/refresh) -- previously a real
+# root_cause_service capability with no Gateway route at all.
+# ---------------------------------------------------------------------------
+
+ROOT_CAUSE_ID = str(uuid.uuid4())
+
+
+def _root_cause_action_handler(*, lookup_status=200, action_status=200, action_body=None):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+
+        if path.endswith("/root-cause"):
+            if lookup_status == 404:
+                return httpx.Response(404)
+            if lookup_status != 200:
+                return httpx.Response(lookup_status)
+            return _json({**_root_cause(), "id": ROOT_CAUSE_ID})
+
+        if f"/root-causes/{ROOT_CAUSE_ID}" in path:
+            if action_status != 200:
+                return httpx.Response(action_status)
+            body = action_body if action_body is not None else {**_root_cause(), "id": ROOT_CAUSE_ID, "status": "confirmed"}
+            return _json(body)
+
+        raise AssertionError(f"Unexpected downstream call: {request.url}")
+
+    return handler
+
+
+@pytest.mark.anyio
+async def test_confirm_root_cause_resolves_id_by_incident_then_confirms_it(override_http_client):
+    client = _client_for(_root_cause_action_handler(action_body={**_root_cause(), "id": ROOT_CAUSE_ID, "status": "confirmed"}))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.patch(f"/api/v1/investigations/{INCIDENT_ID}/root-cause/confirm")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["incidentId"] == INCIDENT_ID
+    assert body["status"] == "confirmed"
+
+
+@pytest.mark.anyio
+async def test_reject_root_cause_resolves_id_by_incident_then_rejects_it(override_http_client):
+    client = _client_for(_root_cause_action_handler(action_body={**_root_cause(), "id": ROOT_CAUSE_ID, "status": "rejected"}))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.patch(f"/api/v1/investigations/{INCIDENT_ID}/root-cause/reject")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "rejected"
+
+
+@pytest.mark.anyio
+async def test_refresh_root_cause_resolves_id_by_incident_then_refreshes_it(override_http_client):
+    client = _client_for(_root_cause_action_handler(action_body={**_root_cause(), "id": ROOT_CAUSE_ID, "status": "identified"}))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.post(f"/api/v1/investigations/{INCIDENT_ID}/root-cause/refresh")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "identified"
+
+
+@pytest.mark.anyio
+async def test_confirm_root_cause_when_none_exists_yet_is_a_real_404(override_http_client):
+    client = _client_for(_root_cause_action_handler(lookup_status=404))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.patch(f"/api/v1/investigations/{INCIDENT_ID}/root-cause/confirm")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
+@pytest.mark.anyio
+async def test_confirm_root_cause_invalid_transition_is_a_real_409_not_a_502(override_http_client):
+    """root_cause_service's own 409 (e.g. confirming an already-rejected RootCause) must survive as a real Gateway conflict."""
+    client = _client_for(_root_cause_action_handler(action_status=409))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.patch(f"/api/v1/investigations/{INCIDENT_ID}/root-cause/confirm")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CONFLICT"
+
+
+@pytest.mark.anyio
+async def test_reject_root_cause_downstream_failure_maps_to_502(override_http_client):
+    client = _client_for(_root_cause_action_handler(action_status=500))
+    override_http_client(client)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as test_client:
+        response = await test_client.patch(f"/api/v1/investigations/{INCIDENT_ID}/root-cause/reject")
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "DOWNSTREAM_SERVICE_FAILURE"

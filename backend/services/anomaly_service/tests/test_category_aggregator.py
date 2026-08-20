@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from backend.services.anomaly_service.app.services.aggregators.category_aggregator import CategoryAggregator
@@ -5,11 +7,14 @@ from backend.services.anomaly_service.app.utils.time_window import resolve_windo
 from backend.shared.constants.enums.complaint import IssueCategory
 
 
+DATASET_ID = uuid.uuid4()
+
+
 class FakeRepository:
     def __init__(self, rows):
         self.rows = rows
 
-    async def count_enrichments_by_category(self, start, end):
+    async def count_enrichments_by_category(self, start, end, dataset_id):
         return self.rows
 
 
@@ -21,14 +26,14 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_no_enrichments_returns_empty_list():
     aggregator = CategoryAggregator(FakeRepository([]))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert points == []
 
 
 @pytest.mark.anyio
 async def test_single_category_produces_single_point():
     aggregator = CategoryAggregator(FakeRepository([(IssueCategory.DELIVERY_ISSUE, 1)]))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     assert len(points) == 1
     assert points[0].category == "delivery_issue"
     assert points[0].count == 1
@@ -42,6 +47,6 @@ async def test_mixed_categories_are_all_present():
         (IssueCategory.ACCOUNT_ISSUE, 2),
     ]
     aggregator = CategoryAggregator(FakeRepository(rows))
-    points = await aggregator.aggregate(resolve_window(30))
+    points = await aggregator.aggregate(resolve_window(30), DATASET_ID)
     categories = {p.category: p.count for p in points}
     assert categories == {"delivery_issue": 10, "payment_issue": 5, "account_issue": 2}

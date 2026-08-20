@@ -26,6 +26,8 @@ class RecommendationSummaryResponse(BaseModel):
     """
 
     recommendation_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
     incident_id: str
     generation_id: uuid.UUID
     category: RecommendationCategory
@@ -39,6 +41,8 @@ class RecommendationSummaryResponse(BaseModel):
         recommendation = record.recommendation
         return RecommendationSummaryResponse(
             recommendation_id=record.recommendation_id,
+            dataset_id=record.dataset_id,
+            dataset_version_id=record.dataset_version_id,
             incident_id=recommendation.incident_id,
             generation_id=record.generation_id,
             category=recommendation.category,
@@ -57,6 +61,8 @@ class RecommendationDetailResponse(BaseModel):
     """
 
     recommendation_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
     incident_id: str
     generation_id: uuid.UUID
     category: RecommendationCategory
@@ -79,6 +85,8 @@ class RecommendationDetailResponse(BaseModel):
         recommendation = record.recommendation
         return RecommendationDetailResponse(
             recommendation_id=record.recommendation_id,
+            dataset_id=record.dataset_id,
+            dataset_version_id=record.dataset_version_id,
             incident_id=recommendation.incident_id,
             generation_id=record.generation_id,
             category=recommendation.category,

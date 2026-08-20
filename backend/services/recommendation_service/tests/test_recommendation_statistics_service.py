@@ -16,6 +16,10 @@ def anyio_backend():
     return "asyncio"
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 @pytest.mark.anyio
 async def test_empty_dataset_returns_zeroed_statistics():
     repository = FakeRecommendationRepository()
@@ -37,6 +41,7 @@ async def test_populated_dataset_aggregates_correctly(make_recommendation):
             make_recommendation(category=RecommendationCategory.ESCALATE, priority=RecommendationPriority.HIGH, score=70),
             make_recommendation(category=RecommendationCategory.MONITOR, priority=RecommendationPriority.LOW, score=30),
         ],
+        dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID,
         incident_id="INC-STATS",
         generation_id=uuid.uuid4(),
     )
@@ -53,7 +58,7 @@ async def test_populated_dataset_aggregates_correctly(make_recommendation):
 async def test_is_deterministic(make_recommendation):
     repository = FakeRecommendationRepository()
     await repository.save_many(
-        [make_recommendation(score=50), make_recommendation(score=60)], incident_id="INC-DET", generation_id=uuid.uuid4()
+        [make_recommendation(score=50), make_recommendation(score=60)], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-DET", generation_id=uuid.uuid4()
     )
     service = RecommendationStatisticsService(repository)
 
@@ -74,7 +79,7 @@ async def test_compute_spans_multiple_internal_pages_without_skipping_or_double_
     repository = FakeRecommendationRepository()
     record_count = _SCAN_PAGE_SIZE + 5
     recommendations = [make_recommendation(incident_id=f"INC-{i:05d}") for i in range(record_count)]
-    await repository.save_many(recommendations, incident_id="INC-PAGED", generation_id=uuid.uuid4())
+    await repository.save_many(recommendations, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-PAGED", generation_id=uuid.uuid4())
 
     statistics = await RecommendationStatisticsService(repository).compute()
 

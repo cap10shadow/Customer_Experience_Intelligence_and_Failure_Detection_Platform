@@ -8,6 +8,8 @@ from backend.services.gateway_service.app.main import app
 
 RECOMMENDATION_ID = str(uuid.uuid4())
 INCIDENT_ID = "incident-42"
+DATASET_ID = str(uuid.uuid4())
+DATASET_VERSION_ID = str(uuid.uuid4())
 GENERATION_ID = str(uuid.uuid4())
 
 
@@ -15,6 +17,8 @@ def _recommendation_detail():
     return {
         "recommendation_id": RECOMMENDATION_ID,
         "incident_id": INCIDENT_ID,
+        "dataset_id": DATASET_ID,
+        "dataset_version_id": DATASET_VERSION_ID,
         "generation_id": GENERATION_ID,
         "category": "escalate",
         "priority": "high",

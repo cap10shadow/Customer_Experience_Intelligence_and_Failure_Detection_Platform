@@ -6,6 +6,10 @@ from backend.services.anomaly_service.app.services.anomaly_engine import Anomaly
 from backend.shared.constants.enums.anomaly import AnomalyEventType, AnomalySeverity, AnomalyStatus
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 class FakeTrendRepository:
     """
     Serves canned rows to the 5 detectors. Each dimension is a list of
@@ -22,19 +26,19 @@ class FakeTrendRepository:
         self._urgencies = list(urgencies or [])
         self._sentiment = list(sentiment or [])
 
-    async def count_complaints_by_day(self, start, end):
+    async def count_complaints_by_day(self, start, end, dataset_id):
         return self._volume.pop(0) if self._volume else []
 
-    async def count_complaints_by_region(self, start, end):
+    async def count_complaints_by_region(self, start, end, dataset_id):
         return self._regions.pop(0) if self._regions else []
 
-    async def count_enrichments_by_category(self, start, end):
+    async def count_enrichments_by_category(self, start, end, dataset_id):
         return self._categories.pop(0) if self._categories else []
 
-    async def count_enrichments_by_urgency(self, start, end):
+    async def count_enrichments_by_urgency(self, start, end, dataset_id):
         return self._urgencies.pop(0) if self._urgencies else []
 
-    async def count_enrichments_by_day_and_sentiment(self, start, end):
+    async def count_enrichments_by_day_and_sentiment(self, start, end, dataset_id):
         return self._sentiment.pop(0) if self._sentiment else []
 
 
@@ -47,7 +51,7 @@ class FakeAnomalyRepository:
         self.by_id = {}
         self.history = []
 
-    async def get_active_by_fingerprint(self, fingerprint):
+    async def get_active_by_fingerprint(self, fingerprint, dataset_id):
         return self.by_fingerprint.get(fingerprint)
 
     async def get_by_id(self, anomaly_id):
@@ -62,7 +66,7 @@ class FakeAnomalyRepository:
     async def save(self, anomaly):
         return anomaly
 
-    async def list_active(self, status=AnomalyStatus.ACTIVE):
+    async def list_active(self, dataset_id, status=AnomalyStatus.ACTIVE):
         return [a for a in self.by_fingerprint.values() if a.status == status]
 
     async def add_history_event(self, event):
@@ -70,11 +74,11 @@ class FakeAnomalyRepository:
         self.history.append(event)
         return event
 
-    async def get_latest_run_timestamp(self):
+    async def get_latest_run_timestamp(self, dataset_id):
         timestamps = [a.last_seen_at for a in self.by_fingerprint.values()] + [e.event_timestamp for e in self.history]
         return max(timestamps) if timestamps else None
 
-    async def list_history_at(self, timestamp):
+    async def list_history_at(self, timestamp, dataset_id):
         return [e for e in self.history if e.event_timestamp == timestamp]
 
 
@@ -89,7 +93,7 @@ async def test_first_run_creates_active_anomaly_and_detected_history():
     trend_repo = FakeTrendRepository(volume=[[("d", 30)], [("d", 10)]])
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    result = await engine.run(days=7)
+    result = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert len(result.detected) == 1
     assert result.updated == []
@@ -108,8 +112,8 @@ async def test_fingerprint_matching_reuses_same_row_across_runs():
     )
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    first = await engine.run(days=7)
-    second = await engine.run(days=7)
+    first = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    second = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     first_id = first.detected[0].anomaly.id
     assert len(anomaly_repo.by_fingerprint) == 1  # no duplicate row created
@@ -126,8 +130,8 @@ async def test_duplicate_prevention_no_history_when_severity_unchanged():
     )
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    await engine.run(days=7)
-    second = await engine.run(days=7)
+    await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    second = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert second.detected == []
     assert second.updated == []  # reconfirmed, but nothing meaningful changed
@@ -143,8 +147,8 @@ async def test_severity_change_creates_updated_history():
     )
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    first = await engine.run(days=7)
-    second = await engine.run(days=7)
+    first = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    second = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert first.detected[0].anomaly.severity == AnomalySeverity.HIGH
     assert len(second.updated) == 1
@@ -165,8 +169,8 @@ async def test_anomaly_no_longer_detected_is_resolved():
     trend_repo = FakeTrendRepository(volume=[[("d", 30)], [("d", 10)], [], []])
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    first = await engine.run(days=7)
-    second = await engine.run(days=7)
+    first = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    second = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert len(first.detected) == 1
     assert len(second.resolved) == 1
@@ -192,9 +196,9 @@ async def test_resolved_anomaly_reappearing_is_reactivated_not_duplicated():
     )
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    first = await engine.run(days=7)
-    await engine.run(days=7)
-    third = await engine.run(days=7)
+    first = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    third = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
 
     assert len(anomaly_repo.by_fingerprint) == 1  # still exactly one row for this fingerprint
     assert len(third.detected) == 1
@@ -211,12 +215,12 @@ async def test_get_active_returns_only_active_status():
     trend_repo = FakeTrendRepository(volume=[[("d", 30)], [("d", 10)], [], []])
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    await engine.run(days=7)
-    active_before = await engine.get_active()
+    await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    active_before = await engine.get_active(DATASET_ID)
     assert len(active_before) == 1
 
-    await engine.run(days=7)  # resolves it
-    active_after = await engine.get_active()
+    await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)  # resolves it
+    active_after = await engine.get_active(DATASET_ID)
     assert active_after == []
 
 
@@ -226,8 +230,8 @@ async def test_get_latest_reconstructs_most_recent_run():
     trend_repo = FakeTrendRepository(volume=[[("d", 30)], [("d", 10)]])
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    run_result = await engine.run(days=7)
-    latest = await engine.get_latest()
+    run_result = await engine.run(days=7, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID)
+    latest = await engine.get_latest(DATASET_ID)
 
     assert latest.run_at == run_result.run_at
     assert len(latest.detected) == 1
@@ -240,7 +244,7 @@ async def test_get_latest_with_no_runs_returns_empty_result():
     trend_repo = FakeTrendRepository()
     engine = AnomalyEngine(anomaly_repo, trend_repo)
 
-    latest = await engine.get_latest()
+    latest = await engine.get_latest(DATASET_ID)
 
     assert latest.run_at is None
     assert latest.detected == []

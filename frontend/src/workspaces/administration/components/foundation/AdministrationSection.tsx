@@ -12,6 +12,15 @@ export interface AdministrationSectionProps {
   description: string
   /** ADM-005: a subtle, presentation-only rhythm cue for which of the three registers (State / Configuration / Record) this section belongs to -- never a navigation grouping, never a new landmark. */
   register: AdministrationRegister
+  /**
+   * A small "Live"/"Not Yet Operational" indicator next to the section
+   * title (see `AdministrationStatusBadge`) -- makes the real/placeholder
+   * distinction each section's own `AdvisoryNotice` already discloses in
+   * prose scannable at a glance, rather than requiring a read of every
+   * section's body to know which two of six are backed by a real Gateway
+   * capability.
+   */
+  statusBadge?: ReactNode
   children: ReactNode
 }
 
@@ -24,10 +33,10 @@ export interface AdministrationSectionProps {
  * spacing (see `AdministrationSection.module.css`) -- it never changes
  * heading level, landmark structure, or navigation.
  */
-export function AdministrationSection({ id, title, description, register, children }: AdministrationSectionProps) {
+export function AdministrationSection({ id, title, description, register, statusBadge, children }: AdministrationSectionProps) {
   return (
     <div id={id} data-register={register} className={classNames(styles.section, styles[register])}>
-      <SectionContainer title={title} description={description}>
+      <SectionContainer title={title} description={description} actions={statusBadge}>
         {children}
       </SectionContainer>
     </div>

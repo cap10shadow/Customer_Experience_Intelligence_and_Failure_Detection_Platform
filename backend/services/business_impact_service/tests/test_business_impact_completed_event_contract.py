@@ -39,6 +39,8 @@ def _event() -> BusinessImpactCompletedEvent:
     assessment = BusinessImpactAssessmentEntity(
         assessment_id=uuid.uuid4(),
         incident_id=incident_id,
+        dataset_id=uuid.uuid4(),
+        dataset_version_id=uuid.uuid4(),
         root_cause_id=uuid.uuid4(),
         financial=ImpactLevel.CRITICAL,
         customer=ImpactLevel.CRITICAL,
@@ -65,6 +67,7 @@ def _event() -> BusinessImpactCompletedEvent:
     return BusinessImpactCompletedEvent(
         event_id=uuid.uuid4(),
         incident_id=incident_id,
+        dataset_id=uuid.uuid4(),
         incident_severity=AnomalySeverity.CRITICAL,
         assessment=assessment,
         root_cause=root_cause,

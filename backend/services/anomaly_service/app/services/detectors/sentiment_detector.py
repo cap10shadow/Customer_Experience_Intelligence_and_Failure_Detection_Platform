@@ -1,3 +1,4 @@
+import uuid
 from typing import List, Optional
 
 from backend.services.anomaly_service.app.repositories.trend_repository import TrendRepository
@@ -23,9 +24,9 @@ class SentimentDetector:
     def __init__(self, repository: TrendRepository) -> None:
         self.repository = repository
 
-    async def detect(self, current: TrendWindow, previous: TrendWindow) -> List[AnomalyCandidate]:
-        current_avg = await self._average_sentiment(current)
-        baseline_avg = await self._average_sentiment(previous)
+    async def detect(self, current: TrendWindow, previous: TrendWindow, dataset_id: uuid.UUID) -> List[AnomalyCandidate]:
+        current_avg = await self._average_sentiment(current, dataset_id)
+        baseline_avg = await self._average_sentiment(previous, dataset_id)
 
         # No enrichment data in one of the windows: there is nothing
         # reliable to compare against, so nothing is reported.
@@ -54,9 +55,9 @@ class SentimentDetector:
             )
         ]
 
-    async def _average_sentiment(self, window: TrendWindow) -> Optional[float]:
+    async def _average_sentiment(self, window: TrendWindow, dataset_id: uuid.UUID) -> Optional[float]:
         """Returns the count-weighted average sentiment score, or None if there is no data."""
-        rows = await self.repository.count_enrichments_by_day_and_sentiment(window.start, window.end)
+        rows = await self.repository.count_enrichments_by_day_and_sentiment(window.start, window.end, dataset_id)
         weighted_sum = 0
         total = 0
         for _day, label, count in rows:

@@ -23,6 +23,9 @@ from backend.shared.security.internal_auth import INTERNAL_SECRET_HEADER
 # client-construction pattern uniform).
 _INTERNAL_AUTH_HEADERS = {INTERNAL_SECRET_HEADER: settings.INTERNAL_SERVICE_SECRET}
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
 
 @pytest.fixture
 def anyio_backend():
@@ -45,7 +48,7 @@ async def test_get_recommendation_by_id_returns_full_detail(wired_repository, ma
                 incident_id="INC-DETAIL", rationale="Full rationale text.", priority_rationale="Full priority rationale text."
             )
         ],
-        incident_id="INC-DETAIL",
+        dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-DETAIL",
         generation_id=uuid.uuid4(),
     )
     record = saved[0]
@@ -87,8 +90,8 @@ async def test_get_recommendation_by_id_422_for_malformed_uuid(wired_repository)
 
 @pytest.mark.anyio
 async def test_list_recommendations_returns_everything_by_default(wired_repository, make_recommendation):
-    await wired_repository.save_many([make_recommendation(incident_id="INC-A")], incident_id="INC-A", generation_id=uuid.uuid4())
-    await wired_repository.save_many([make_recommendation(incident_id="INC-B")], incident_id="INC-B", generation_id=uuid.uuid4())
+    await wired_repository.save_many([make_recommendation(incident_id="INC-A")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
+    await wired_repository.save_many([make_recommendation(incident_id="INC-B")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-B", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
@@ -101,10 +104,10 @@ async def test_list_recommendations_returns_everything_by_default(wired_reposito
 @pytest.mark.anyio
 async def test_list_recommendations_filters_by_category(wired_repository, make_recommendation):
     await wired_repository.save_many(
-        [make_recommendation(category=RecommendationCategory.ESCALATE)], incident_id="INC-A", generation_id=uuid.uuid4()
+        [make_recommendation(category=RecommendationCategory.ESCALATE)], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4()
     )
     await wired_repository.save_many(
-        [make_recommendation(category=RecommendationCategory.MONITOR)], incident_id="INC-B", generation_id=uuid.uuid4()
+        [make_recommendation(category=RecommendationCategory.MONITOR)], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-B", generation_id=uuid.uuid4()
     )
 
     transport = ASGITransport(app=app)
@@ -119,10 +122,10 @@ async def test_list_recommendations_filters_by_category(wired_repository, make_r
 @pytest.mark.anyio
 async def test_list_recommendations_filters_by_priority(wired_repository, make_recommendation):
     await wired_repository.save_many(
-        [make_recommendation(priority=RecommendationPriority.CRITICAL)], incident_id="INC-A", generation_id=uuid.uuid4()
+        [make_recommendation(priority=RecommendationPriority.CRITICAL)], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4()
     )
     await wired_repository.save_many(
-        [make_recommendation(priority=RecommendationPriority.LOW)], incident_id="INC-B", generation_id=uuid.uuid4()
+        [make_recommendation(priority=RecommendationPriority.LOW)], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-B", generation_id=uuid.uuid4()
     )
 
     transport = ASGITransport(app=app)
@@ -138,7 +141,7 @@ async def test_list_recommendations_filters_by_priority(wired_repository, make_r
 async def test_list_recommendations_summary_excludes_heavy_payload(wired_repository, make_recommendation):
     await wired_repository.save_many(
         [make_recommendation(rationale="Very long rationale.", priority_rationale="Very long priority rationale.")],
-        incident_id="INC-SUMMARY",
+        dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-SUMMARY",
         generation_id=uuid.uuid4(),
     )
 
@@ -152,6 +155,8 @@ async def test_list_recommendations_summary_excludes_heavy_payload(wired_reposit
     assert "priority_rationale" not in body
     assert set(body.keys()) == {
         "recommendation_id",
+        "dataset_id",
+        "dataset_version_id",
         "incident_id",
         "generation_id",
         "category",
@@ -164,8 +169,8 @@ async def test_list_recommendations_summary_excludes_heavy_payload(wired_reposit
 
 @pytest.mark.anyio
 async def test_get_recommendations_for_incident(wired_repository, make_recommendation):
-    await wired_repository.save_many([make_recommendation(incident_id="INC-A")], incident_id="INC-A", generation_id=uuid.uuid4())
-    await wired_repository.save_many([make_recommendation(incident_id="INC-B")], incident_id="INC-B", generation_id=uuid.uuid4())
+    await wired_repository.save_many([make_recommendation(incident_id="INC-A")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
+    await wired_repository.save_many([make_recommendation(incident_id="INC-B")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-B", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
@@ -180,13 +185,13 @@ async def test_get_recommendations_for_incident(wired_repository, make_recommend
 async def test_get_latest_recommendations_for_incident(wired_repository, make_recommendation):
     await wired_repository.save_many(
         [make_recommendation(incident_id="INC-A", category=RecommendationCategory.MONITOR)],
-        incident_id="INC-A",
+        dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A",
         generation_id=uuid.uuid4(),
     )
     second_generation = uuid.uuid4()
     second = await wired_repository.save_many(
         [make_recommendation(incident_id="INC-A", category=RecommendationCategory.ESCALATE)],
-        incident_id="INC-A",
+        dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A",
         generation_id=second_generation,
     )
 
@@ -214,9 +219,9 @@ async def test_get_latest_recommendations_returns_empty_list_when_none_exist(wir
 async def test_get_recommendations_by_generation(wired_repository, make_recommendation):
     generation_id = uuid.uuid4()
     saved = await wired_repository.save_many(
-        [make_recommendation(), make_recommendation()], incident_id="INC-GEN", generation_id=generation_id
+        [make_recommendation(), make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-GEN", generation_id=generation_id
     )
-    await wired_repository.save_many([make_recommendation()], incident_id="INC-OTHER", generation_id=uuid.uuid4())
+    await wired_repository.save_many([make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-OTHER", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
@@ -229,7 +234,7 @@ async def test_get_recommendations_by_generation(wired_repository, make_recommen
 
 @pytest.mark.anyio
 async def test_get_statistics_aggregates_across_recommendations(wired_repository, make_recommendation):
-    await wired_repository.save_many([make_recommendation(), make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    await wired_repository.save_many([make_recommendation(), make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
@@ -275,7 +280,7 @@ async def test_no_write_endpoints_exist(wired_repository):
 
 @pytest.mark.anyio
 async def test_get_recommendation_by_id_exposes_null_decision_fields_when_never_decided(wired_repository, make_recommendation):
-    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    saved = await wired_repository.save_many([make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
@@ -289,7 +294,7 @@ async def test_get_recommendation_by_id_exposes_null_decision_fields_when_never_
 
 @pytest.mark.anyio
 async def test_patch_decision_persists_and_get_reflects_it(wired_repository, make_recommendation):
-    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    saved = await wired_repository.save_many([make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
     recommendation_id = saved[0].recommendation_id
 
     transport = ASGITransport(app=app)
@@ -314,7 +319,7 @@ async def test_patch_decision_persists_and_get_reflects_it(wired_repository, mak
 
 @pytest.mark.anyio
 async def test_patch_decision_without_note_is_valid(wired_repository, make_recommendation):
-    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    saved = await wired_repository.save_many([make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
@@ -328,7 +333,7 @@ async def test_patch_decision_without_note_is_valid(wired_repository, make_recom
 
 @pytest.mark.anyio
 async def test_patch_decision_rejects_invalid_decision_value(wired_repository, make_recommendation):
-    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    saved = await wired_repository.save_many([make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:
@@ -352,7 +357,7 @@ async def test_patch_decision_404_when_recommendation_missing(wired_repository):
 
 @pytest.mark.anyio
 async def test_patch_decision_repeated_calls_overwrite_deterministically(wired_repository, make_recommendation):
-    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    saved = await wired_repository.save_many([make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
     recommendation_id = saved[0].recommendation_id
 
     transport = ASGITransport(app=app)
@@ -374,7 +379,7 @@ async def test_patch_decision_repeated_calls_overwrite_deterministically(wired_r
 @pytest.mark.anyio
 async def test_patch_decision_never_alters_recommendation_id_or_incident_id(wired_repository, make_recommendation):
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-IDENTITY")], incident_id="INC-IDENTITY", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-IDENTITY")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-IDENTITY", generation_id=uuid.uuid4()
     )
     recommendation_id = saved[0].recommendation_id
 
@@ -391,7 +396,7 @@ async def test_patch_decision_never_alters_recommendation_id_or_incident_id(wire
 
 @pytest.mark.anyio
 async def test_patch_decision_response_never_exposes_actor_or_owner_fields(wired_repository, make_recommendation):
-    saved = await wired_repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4())
+    saved = await wired_repository.save_many([make_recommendation()], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4())
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver", headers=_INTERNAL_AUTH_HEADERS) as client:

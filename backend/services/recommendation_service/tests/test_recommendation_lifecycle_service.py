@@ -36,6 +36,10 @@ def anyio_backend():
     return "asyncio"
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 class _FakeSession:
     """Async-context-manager test double standing in for a real AsyncSession -- tracks commit/rollback calls."""
 
@@ -73,7 +77,7 @@ class _UnreachableSessionFactory:
 class _FailingRepository(FakeRecommendationRepository):
     """FakeRecommendationRepository whose save_many() always raises, simulating a persistence/domain failure."""
 
-    async def save_many(self, recommendations, *, incident_id, generation_id, event_id=None):
+    async def save_many(self, recommendations, *, dataset_id, dataset_version_id, incident_id, generation_id, event_id=None):
         raise RuntimeError("simulated persistence failure")
 
 
@@ -107,7 +111,7 @@ def _make_request(make_incident, make_business_impact_summary, make_intelligence
             **{k: v for k, v in overrides.items() if k not in ("incident_id", "severity")}
         ),
     )
-    return RecommendationExecutionRequest(event_id=event_id, intelligence_context=context)
+    return RecommendationExecutionRequest(event_id=event_id, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, intelligence_context=context)
 
 
 @pytest.mark.anyio
@@ -199,7 +203,7 @@ async def test_missing_event_id_is_rejected_before_any_session_is_opened(make_in
         event_publisher=_RecordingEventPublisher(),
     )
     context = make_intelligence_context(incident=make_incident(), business_impact=make_business_impact_summary())
-    request = RecommendationExecutionRequest(event_id=None, intelligence_context=context)
+    request = RecommendationExecutionRequest(event_id=None, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, intelligence_context=context)
 
     result = await service.execute(request)
 
@@ -224,7 +228,7 @@ async def test_zero_recommendation_execution_is_still_completed_and_published(
         business_impact=make_business_impact_summary(overall_severity="medium"),
         root_cause=make_root_cause(confidence_score=90),
     )
-    request = RecommendationExecutionRequest(event_id=uuid.uuid4(), intelligence_context=context)
+    request = RecommendationExecutionRequest(event_id=uuid.uuid4(), dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, intelligence_context=context)
 
     result = await service.execute(request)
 

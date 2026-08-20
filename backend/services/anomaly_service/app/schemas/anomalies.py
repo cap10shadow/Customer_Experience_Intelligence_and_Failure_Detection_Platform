@@ -12,6 +12,8 @@ class ActiveAnomalyResponse(BaseModel):
     change, severity, the rule that fired, and a human-readable explanation."""
 
     id: uuid.UUID
+    dataset_id: uuid.UUID
+    last_analysis_version_id: uuid.UUID
     fingerprint: str
     type: AnomalyType
     severity: AnomalySeverity

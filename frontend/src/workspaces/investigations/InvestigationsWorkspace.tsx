@@ -1,5 +1,8 @@
 import { useParams } from 'react-router-dom'
 
+import { describeApiError } from '@/app/api/errors'
+import { useOptionalDatasetContext } from '@/app/context/DatasetContext'
+import { useOptionalAuth } from '@/auth/context/AuthContext'
 import { ErrorBoundary, PartialFailureNotice } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
@@ -10,8 +13,9 @@ import { InvestigationContent, InvestigationLayout } from './components/layout'
 import { Observation } from './components/Observation'
 import { RecommendedNextStep } from './components/RecommendedNextStep'
 import { RootCauseAnalysis } from './components/RootCauseAnalysis'
-import { InvestigationContextProvider } from './context'
+import { InvestigationContextProvider, useInvestigationContext } from './context'
 import { useInvestigationData } from './hooks/useInvestigationData'
+import { useRootCauseActions } from './hooks/useRootCauseActions'
 
 /**
  * Investigation Workspace -- NOT a new domain entity or a list of
@@ -57,12 +61,42 @@ export function InvestigationsWorkspace() {
  * already-failed state.
  */
 function InvestigationsWorkspaceContent() {
+  const { incidentId } = useInvestigationContext()
   const { data, isLoading, error, refetch } = useInvestigationData()
+  const { pendingAction, error: actionError, confirm, reject, refresh } = useRootCauseActions(incidentId)
+  // The Gateway requires `operator` for the root-cause confirm/reject/
+  // refresh routes -- same convention as Recommendation's Decision
+  // section (`useOptionalAuth` since this workspace also renders
+  // correctly with no session information in component-level tests).
+  const auth = useOptionalAuth()
+  // AD-12 follow-up: this Investigation's own `datasetId` (real,
+  // Gateway-sourced -- see api/viewModel.ts) is never assumed to match
+  // whichever dataset happens to be selected right now (a direct link or
+  // an older bookmark can point at an Investigation from a different
+  // dataset than the one currently active). Shown plainly rather than
+  // silently relying on the active dataset selection.
+  const datasetContext = useOptionalDatasetContext()
+  const datasetLabel = data
+    ? `${
+        data.datasetId === datasetContext?.selectedDatasetId
+          ? (datasetContext.selectedDatasetName ?? data.datasetId)
+          : `${data.datasetId} (not your currently selected dataset)`
+      } · analysis as of version ${data.datasetVersionId.slice(0, 8)}`
+    : undefined
+
+  const handleRootCauseAction = (action: () => Promise<void>) => {
+    action()
+      .then(refetch)
+      .catch(() => {
+        // Real failure state is already captured in `actionError`; nothing further to do here.
+      })
+  }
 
   return (
     <WorkspaceContainer
       title="Investigations"
       description="The structured investigation of an operational incident -- evidence-driven analysis from observation through to a recommended next step."
+      actions={datasetLabel ? <span>Dataset: {datasetLabel}</span> : undefined}
     >
       <PartialFailureNotice warnings={data?.warnings} />
       <InvestigationLayout>
@@ -85,7 +119,16 @@ function InvestigationsWorkspaceContent() {
 
           <ErrorBoundary boundaryLabel="the Root Cause Analysis" onRetry={refetch} resetKeys={[isLoading]}>
             <InvestigationSectionErrorGate error={error}>
-              <RootCauseAnalysis explanation={data?.rootCause} isLoading={isLoading} />
+              <RootCauseAnalysis
+                explanation={data?.rootCause}
+                isLoading={isLoading}
+                canManageRootCause={auth ? auth.hasRole('operator') : true}
+                pendingAction={pendingAction}
+                actionErrorMessage={actionError ? describeApiError(actionError, { subject: 'update this root cause' }) : undefined}
+                onConfirm={data?.rootCause ? () => handleRootCauseAction(confirm) : undefined}
+                onReject={data?.rootCause ? () => handleRootCauseAction(reject) : undefined}
+                onRefresh={data?.rootCause ? () => handleRootCauseAction(refresh) : undefined}
+              />
             </InvestigationSectionErrorGate>
           </ErrorBoundary>
 

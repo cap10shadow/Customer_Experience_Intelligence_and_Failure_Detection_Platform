@@ -258,6 +258,60 @@ async def test_operator_passes_the_authorization_gate_on_the_copilot_delete_rout
     assert response.status_code != 403
 
 
+# --- Operator-level route (POST /ingestion/complaints) ---------------------------------
+
+
+@pytest.mark.anyio
+async def test_viewer_only_gets_403_on_the_operator_only_ingestion_route(viewer_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, viewer_user)
+        response = client.post("/api/v1/ingestion/complaints", json={"complaint_text": "a" * 20})
+
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_operator_passes_the_authorization_gate_on_the_ingestion_route(operator_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, operator_user)
+        response = client.post("/api/v1/ingestion/complaints", json={"complaint_text": "a" * 20})
+
+    assert response.status_code != 401
+    assert response.status_code != 403
+
+
+@pytest.mark.anyio
+async def test_viewer_passes_the_authorization_gate_on_the_ingestion_list_route(viewer_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, viewer_user)
+        response = client.get("/api/v1/ingestion/complaints")
+
+    assert response.status_code != 401
+    assert response.status_code != 403
+
+
+# --- Operator-level routes (root-cause confirm/reject/refresh) -------------------------
+
+
+@pytest.mark.anyio
+async def test_viewer_only_gets_403_on_the_operator_only_root_cause_confirm_route(viewer_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, viewer_user)
+        response = client.patch("/api/v1/investigations/does-not-matter/root-cause/confirm")
+
+    assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_operator_passes_the_authorization_gate_on_the_root_cause_confirm_route(operator_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, operator_user)
+        response = client.patch("/api/v1/investigations/does-not-matter/root-cause/confirm")
+
+    assert response.status_code != 401
+    assert response.status_code != 403
+
+
 # --- Client cannot elevate its own privileges -----------------------------------------
 
 

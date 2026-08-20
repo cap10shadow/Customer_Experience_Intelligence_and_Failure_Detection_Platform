@@ -1,4 +1,7 @@
-import { AdministrationSection } from '../foundation'
+import { AdvisoryNotice } from '@/shared/components/feedback'
+import { Stack } from '@/shared/components/layout'
+
+import { AdministrationSection, AdministrationStatusBadge } from '../foundation'
 import type { GovernancePolicy } from '../../types'
 import { GovernancePolicyCard } from './GovernancePolicyCard'
 
@@ -38,12 +41,25 @@ export function PlatformGovernance({ isLoading = false }: PlatformGovernanceProp
       title="Platform Governance"
       description="What governs how the platform operates?"
       register="record"
+      statusBadge={<AdministrationStatusBadge isLive={false} />}
     >
-      <div>
-        {POLICIES.map((policy) => (
-          <GovernancePolicyCard key={policy.id} policy={policy} isLoading={isLoading} />
-        ))}
-      </div>
+      <Stack gap={4}>
+        {/* These read as commitments the organization has actually made
+            (a 24-month retention policy, an SSO-governed security
+            posture). None is configured or enforced anywhere in the
+            platform, and retention duration is explicitly an open
+            compliance decision -- so the copy is disclosed as example
+            policy language rather than presented as binding. */}
+        <AdvisoryNotice
+          title="Illustrative content — not policy this platform enforces"
+          description="The statements below are example policy language showing how governance commitments would be presented. No retention schedule, configuration-review workflow, or single sign-on is configured or enforced by the platform today."
+        />
+        <div>
+          {POLICIES.map((policy) => (
+            <GovernancePolicyCard key={policy.id} policy={policy} isLoading={isLoading} />
+          ))}
+        </div>
+      </Stack>
     </AdministrationSection>
   )
 }

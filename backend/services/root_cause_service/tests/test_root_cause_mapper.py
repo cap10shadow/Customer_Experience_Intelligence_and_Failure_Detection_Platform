@@ -9,6 +9,8 @@ from backend.shared.constants.enums.root_cause import RootCauseStatus
 
 def test_maps_candidate_fields_verbatim():
     incident_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+    dataset_version_id = uuid.uuid4()
     candidate = RootCauseCandidate(
         cause=RootCauseEnum.PAYMENT_GATEWAY_FAILURE,
         confidence_score=85,
@@ -18,9 +20,10 @@ def test_maps_candidate_fields_verbatim():
         rule_version="1.0",
     )
 
-    root_cause = RootCauseMapper.to_orm(incident_id, candidate)
+    root_cause = RootCauseMapper.to_orm(incident_id, dataset_id, dataset_version_id, candidate)
 
     assert root_cause.incident_id == incident_id
+    assert root_cause.dataset_id == dataset_id
     assert root_cause.cause == RootCauseEnum.PAYMENT_GATEWAY_FAILURE
     assert root_cause.confidence_score == 85
     assert root_cause.confidence_level == "High"
@@ -31,6 +34,8 @@ def test_maps_candidate_fields_verbatim():
 
 def test_serializes_evidence_to_plain_dicts():
     incident_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+    dataset_version_id = uuid.uuid4()
     candidate = RootCauseCandidate(
         cause=RootCauseEnum.SERVICE_OUTAGE,
         confidence_score=60,
@@ -43,7 +48,7 @@ def test_serializes_evidence_to_plain_dicts():
         rule_version="1.0",
     )
 
-    root_cause = RootCauseMapper.to_orm(incident_id, candidate)
+    root_cause = RootCauseMapper.to_orm(incident_id, dataset_id, dataset_version_id, candidate)
 
     assert root_cause.evidence == [
         {"type": "category", "description": "Technical complaints detected", "weight": 40},
@@ -53,6 +58,8 @@ def test_serializes_evidence_to_plain_dicts():
 
 def test_maps_unknown_candidate_with_no_evidence():
     incident_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+    dataset_version_id = uuid.uuid4()
     candidate = RootCauseCandidate(
         cause=RootCauseEnum.UNKNOWN,
         confidence_score=0,
@@ -62,7 +69,7 @@ def test_maps_unknown_candidate_with_no_evidence():
         rule_version="1.0",
     )
 
-    root_cause = RootCauseMapper.to_orm(incident_id, candidate)
+    root_cause = RootCauseMapper.to_orm(incident_id, dataset_id, dataset_version_id, candidate)
 
     assert root_cause.cause == RootCauseEnum.UNKNOWN
     assert root_cause.evidence == []
@@ -74,8 +81,12 @@ def test_maps_unknown_candidate_with_no_evidence():
 
 def test_apply_updates_analysis_fields_on_existing_row():
     incident_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+    dataset_version_id = uuid.uuid4()
     original = RootCauseMapper.to_orm(
         incident_id,
+        dataset_id,
+        dataset_version_id,
         RootCauseCandidate(
             cause=RootCauseEnum.PAYMENT_GATEWAY_FAILURE,
             confidence_score=40,
@@ -108,8 +119,12 @@ def test_apply_updates_analysis_fields_on_existing_row():
 
 def test_apply_does_not_touch_identity_or_status_fields():
     incident_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+    dataset_version_id = uuid.uuid4()
     root_cause = RootCauseMapper.to_orm(
         incident_id,
+        dataset_id,
+        dataset_version_id,
         RootCauseCandidate(
             cause=RootCauseEnum.PAYMENT_GATEWAY_FAILURE,
             confidence_score=40,

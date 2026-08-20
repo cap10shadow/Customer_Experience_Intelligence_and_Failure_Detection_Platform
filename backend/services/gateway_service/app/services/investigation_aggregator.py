@@ -9,14 +9,15 @@ from backend.services.gateway_service.app.core.confidence import (
     band_to_confidence_level,
     business_impact_band_to_confidence_level,
 )
-from backend.services.gateway_service.app.core.downstream import get_json
-from backend.services.gateway_service.app.core.errors import ResourceNotFoundError
+from backend.services.gateway_service.app.core.downstream import get_json, patch_resource, post_resource
+from backend.services.gateway_service.app.core.errors import ConflictError, DownstreamServiceError, ResourceNotFoundError
 from backend.services.gateway_service.app.schemas.investigation import (
     BusinessImpactDimensionSummaryDTO,
     EvidenceItemDTO,
     InvestigationResponse,
     ObservationDTO,
     RecommendedActionDTO,
+    RootCauseActionResponse,
     RootCauseExplanationDTO,
 )
 
@@ -134,6 +135,8 @@ async def build_investigation(client: httpx.AsyncClient, incident_id: str) -> In
 
     return InvestigationResponse(
         incidentId=str(incident_id),
+        datasetId=str(incident["dataset_id"]),
+        datasetVersionId=str(incident["last_analysis_version_id"]),
         observation=_build_observation(incident),
         evidence=_build_evidence(incident, anomalies, nlp_summary),
         rootCause=_build_root_cause(root_cause),
@@ -312,6 +315,7 @@ def _build_root_cause(root_cause: Optional[dict[str, Any]]) -> Optional[RootCaus
         headline=f"Most likely cause: {cause_label}",
         reasoning=root_cause.get("explanation", ""),
         confidenceLevel=band_to_confidence_level(root_cause["confidence_level"]),
+        status=root_cause["status"],
     )
 
 
@@ -343,4 +347,81 @@ def _build_recommended_next_step(recommendation: Optional[dict[str, Any]]) -> Op
             f"(score {recommendation.get('score')})."
         ),
         recommendationId=str(recommendation["recommendation_id"]),
+    )
+
+
+async def confirm_root_cause(client: httpx.AsyncClient, incident_id: str) -> RootCauseActionResponse:
+    """
+    Confirms the RootCause linked to an Incident. root_cause_service's own
+    confirm route takes a `root_cause_id`, not an `incident_id`, so this
+    resolves the real RootCause for this Incident first (the same lookup
+    `build_investigation` already performs), then confirms it by that id --
+    the frontend only ever deals in `incidentId`, matching every other
+    Investigation route.
+    """
+    root_cause = await _fetch_root_cause_by_incident_or_404(client, incident_id)
+    response = await patch_resource(
+        client, f"{settings.ROOT_CAUSE_SERVICE_URL}/api/v1/root-causes/{root_cause['id']}/confirm"
+    )
+    return _handle_root_cause_action_response(response, incident_id)
+
+
+async def reject_root_cause(client: httpx.AsyncClient, incident_id: str) -> RootCauseActionResponse:
+    """Rejects the RootCause linked to an Incident -- see `confirm_root_cause`'s docstring for the id-resolution rationale."""
+    root_cause = await _fetch_root_cause_by_incident_or_404(client, incident_id)
+    response = await patch_resource(
+        client, f"{settings.ROOT_CAUSE_SERVICE_URL}/api/v1/root-causes/{root_cause['id']}/reject"
+    )
+    return _handle_root_cause_action_response(response, incident_id)
+
+
+async def refresh_root_cause(client: httpx.AsyncClient, incident_id: str) -> RootCauseActionResponse:
+    """Re-runs Root Cause Analysis for the RootCause linked to an Incident -- see `confirm_root_cause`'s docstring for the id-resolution rationale."""
+    root_cause = await _fetch_root_cause_by_incident_or_404(client, incident_id)
+    response = await post_resource(
+        client, f"{settings.ROOT_CAUSE_SERVICE_URL}/api/v1/root-causes/{root_cause['id']}/refresh"
+    )
+    return _handle_root_cause_action_response(response, incident_id)
+
+
+async def _fetch_root_cause_by_incident_or_404(client: httpx.AsyncClient, incident_id: str) -> dict[str, Any]:
+    root_cause = await get_json(client, f"{settings.ROOT_CAUSE_SERVICE_URL}/api/v1/incidents/{incident_id}/root-cause")
+    if root_cause is None:
+        raise ResourceNotFoundError(
+            f"No root cause analysis exists yet for incident {incident_id}.", details={"incidentId": incident_id}
+        )
+    return root_cause
+
+
+def _handle_root_cause_action_response(response: httpx.Response, incident_id: str) -> RootCauseActionResponse:
+    """
+    root_cause_service's own lifecycle rules (confirm/reject/refresh) use
+    a real 409 for an invalid transition (e.g. confirming an already-
+    rejected RootCause) -- that must reach the Gateway's own `ConflictError`
+    (409), not the generic `>=400 -> 502` mapping `patch_json`/`post_json`
+    apply to every other downstream call, which would misrepresent a real,
+    expected domain conflict as a downstream failure.
+    """
+    if response.status_code == 404:
+        raise ResourceNotFoundError(
+            f"Root cause for incident {incident_id} was not found.", details={"incidentId": incident_id}
+        )
+    if response.status_code == 409:
+        raise ConflictError(
+            "This root cause analysis has already reached a final decision and cannot be changed.",
+            details={"incidentId": incident_id},
+        )
+    if response.status_code >= 400:
+        raise DownstreamServiceError(f"Root cause service returned status {response.status_code}.")
+    return _to_root_cause_action_response(incident_id, response.json())
+
+
+def _to_root_cause_action_response(incident_id: str, root_cause: dict[str, Any]) -> RootCauseActionResponse:
+    cause_label = str(root_cause["cause"]).replace("_", " ").title()
+    return RootCauseActionResponse(
+        incidentId=str(incident_id),
+        status=root_cause["status"],
+        headline=f"Most likely cause: {cause_label}",
+        reasoning=root_cause.get("explanation", ""),
+        confidenceLevel=band_to_confidence_level(root_cause["confidence_level"]),
     )

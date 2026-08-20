@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from backend.services.anomaly_service.app.services.detectors.region_detector import RegionDetector
@@ -5,12 +7,15 @@ from backend.services.anomaly_service.app.utils.time_window import resolve_compa
 from backend.shared.constants.enums.anomaly import AnomalyType
 
 
+DATASET_ID = uuid.uuid4()
+
+
 class FakeRepository:
     def __init__(self, current_rows, previous_rows):
         self._responses = [current_rows, previous_rows]
         self._call_index = 0
 
-    async def count_complaints_by_region(self, start, end):
+    async def count_complaints_by_region(self, start, end, dataset_id):
         rows = self._responses[self._call_index]
         self._call_index += 1
         return rows
@@ -27,7 +32,7 @@ async def test_region_spike_detected():
     detector = RegionDetector(
         FakeRepository(current_rows=[("North", 40)], previous_rows=[("North", 10)])
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert len(candidates) == 1
     candidate = candidates[0]
     assert candidate.type == AnomalyType.REGIONAL_SPIKE
@@ -42,7 +47,7 @@ async def test_stable_region_is_not_flagged():
     detector = RegionDetector(
         FakeRepository(current_rows=[("South", 21)], previous_rows=[("South", 20)])
     )
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert candidates == []
 
 
@@ -50,5 +55,5 @@ async def test_stable_region_is_not_flagged():
 async def test_no_data_is_no_anomaly():
     current, previous = resolve_comparison_windows(30)
     detector = RegionDetector(FakeRepository(current_rows=[], previous_rows=[]))
-    candidates = await detector.detect(current, previous)
+    candidates = await detector.detect(current, previous, DATASET_ID)
     assert candidates == []

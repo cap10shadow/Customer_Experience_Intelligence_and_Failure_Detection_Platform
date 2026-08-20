@@ -51,7 +51,9 @@ class RootCauseRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list(self) -> Sequence[RootCause]:
+    async def list(self, dataset_id: Optional[uuid.UUID] = None) -> Sequence[RootCause]:
         stmt = select(RootCause).order_by(RootCause.created_at.desc())
+        if dataset_id is not None:
+            stmt = stmt.where(RootCause.dataset_id == dataset_id)
         result = await self.session.execute(stmt)
         return result.scalars().all()

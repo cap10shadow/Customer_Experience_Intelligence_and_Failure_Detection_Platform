@@ -1,0 +1,82 @@
+/* Plain HTML/CSS bars rather than SVG: the labels are real text that
+   wraps and inherits typography tokens for free, and the whole chart
+   reflows at any width with no viewBox arithmetic. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One row per category. Each row owns its own grid, so the narrow-width
+   rule below can rearrange a single row without disturbing the others. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 11rem) 1fr max-content;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.label {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.track {
+  height: 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-chart-track);
+}
+
+.bar {
+  height: 100%;
+  /* Guarantees a nonzero count is always visibly drawn, so a small-but-
+     real value can never look like an absent one. */
+  min-width: 3px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-chart-mark);
+}
+
+.value {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+/* Operational status tones -- used only where the category *is* a
+   status (urgency), never as decoration to distinguish arbitrary
+   series. The category name is always rendered as text beside the bar,
+   so colour is never the sole carrier of meaning. */
+.toneCritical {
+  background-color: var(--color-status-critical);
+}
+
+.toneWarning {
+  background-color: var(--color-status-warning);
+}
+
+.toneInfo {
+  background-color: var(--color-status-info);
+}
+
+.toneNeutral {
+  background-color: var(--color-status-neutral);
+}
+
+@media (width <= 40rem) {
+  /* The bar moves onto its own full-width line below the label and
+     value, rather than being squeezed to a few unreadable pixels. */
+  .row {
+    grid-template-columns: 1fr max-content;
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .track {
+    grid-column: 1 / -1;
+  }
+}

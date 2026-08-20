@@ -22,10 +22,14 @@ class RootCauseMapper:
     """
 
     @staticmethod
-    def to_orm(incident_id: uuid.UUID, candidate: RootCauseCandidate) -> RootCause:
+    def to_orm(
+        incident_id: uuid.UUID, dataset_id: uuid.UUID, dataset_version_id: uuid.UUID, candidate: RootCauseCandidate
+    ) -> RootCause:
         """Builds a brand-new RootCause row for an Incident being analyzed for the first time."""
         return RootCause(
             incident_id=incident_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
             cause=candidate.cause,
             confidence_score=candidate.confidence_score,
             confidence_level=candidate.confidence_level,

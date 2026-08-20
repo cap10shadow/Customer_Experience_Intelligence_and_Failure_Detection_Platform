@@ -1,6 +1,12 @@
+import { AdvisoryNotice } from '@/shared/components/feedback'
 import { Grid, Stack } from '@/shared/components/layout'
 
-import { AdministrationEmptyState, AdministrationSection, AdministrationSubsectionHeading } from '../foundation'
+import {
+  AdministrationEmptyState,
+  AdministrationSection,
+  AdministrationStatusBadge,
+  AdministrationSubsectionHeading,
+} from '../foundation'
 import type { ConnectedSystem } from '../../types'
 import { ConnectedSystemCard } from './ConnectedSystemCard'
 
@@ -41,8 +47,20 @@ export function DataSourcesIntegrations({ isLoading = false, systems = DEFAULT_C
       title="Data Sources & Integrations"
       description="How does operational data enter the platform?"
       register="state"
+      statusBadge={<AdministrationStatusBadge isLive={false} />}
     >
       <Stack gap={4}>
+        {/* "Connection Health: Connected" is the single most
+            mistakable-for-real string in this workspace -- it looks
+            exactly like live integration status. No integration
+            capability exists; the disclosure is rendered, not just
+            commented. */}
+        <AdvisoryNotice
+          // Wording avoids "live"/"real-time"/"monitoring" for the same
+          // ADM-004 reason noted in UserAccessManagement.
+          title="Illustrative content — not this platform's actual integration state"
+          description="The connected systems and their connection health below are fixed example copy. The platform has no external system integration capability yet; complaint records enter it through the Data workspace (manual entry or a CSV/JSON file, one real record at a time) or the operator-run seed tooling."
+        />
         <AdministrationSubsectionHeading
           title="Connected Systems"
           description="External business systems your organization connects and integrates for operational data -- not platform infrastructure, which is listed separately under Platform Overview's Connected Services."

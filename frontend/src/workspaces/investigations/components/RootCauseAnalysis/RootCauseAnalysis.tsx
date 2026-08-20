@@ -1,5 +1,9 @@
+import { Stack } from '@/shared/components/layout'
+
+import type { RootCauseActionName } from '../../hooks/useRootCauseActions'
 import { InvestigationEmptyState, InvestigationSection } from '../foundation'
 import type { RootCauseExplanation } from '../../types'
+import { RootCauseActions } from './RootCauseActions'
 import { RootCauseCard } from './RootCauseCard'
 
 const DEFAULT_ROOT_CAUSE: RootCauseExplanation = {
@@ -7,6 +11,7 @@ const DEFAULT_ROOT_CAUSE: RootCauseExplanation = {
   reasoning:
     'The timing of the checkout failures aligns closely with a recent change on the payment provider side. This is presented as the most likely explanation given the evidence above, not a certainty.',
   confidenceLevel: 'moderate',
+  status: 'identified',
 }
 
 export interface RootCauseAnalysisProps {
@@ -20,10 +25,26 @@ export interface RootCauseAnalysisProps {
    */
   explanation?: RootCauseExplanation | null
   isLoading?: boolean
+  /** Whether this session holds the `operator` role the Gateway requires for confirm/reject/refresh. */
+  canManageRootCause?: boolean
+  pendingAction?: RootCauseActionName | null
+  actionErrorMessage?: string
+  onConfirm?: () => void
+  onReject?: () => void
+  onRefresh?: () => void
 }
 
 /** "Why did this happen?" -- the investigation's first conclusion, and only after Evidence has already been presented. */
-export function RootCauseAnalysis({ explanation = DEFAULT_ROOT_CAUSE, isLoading = false }: RootCauseAnalysisProps) {
+export function RootCauseAnalysis({
+  explanation = DEFAULT_ROOT_CAUSE,
+  isLoading = false,
+  canManageRootCause = true,
+  pendingAction = null,
+  actionErrorMessage,
+  onConfirm,
+  onReject,
+  onRefresh,
+}: RootCauseAnalysisProps) {
   return (
     <InvestigationSection id="root-cause" title="Root Cause Analysis" description="Why did this happen?">
       {!isLoading && explanation === null ? (
@@ -32,7 +53,20 @@ export function RootCauseAnalysis({ explanation = DEFAULT_ROOT_CAUSE, isLoading 
           description="This investigation hasn't identified a likely root cause yet. This section updates as soon as Root Cause Analysis has run for this incident."
         />
       ) : (
-        <RootCauseCard explanation={explanation ?? DEFAULT_ROOT_CAUSE} isLoading={isLoading} />
+        <Stack gap={4}>
+          <RootCauseCard explanation={explanation ?? DEFAULT_ROOT_CAUSE} isLoading={isLoading} />
+          {!isLoading && explanation && onConfirm && onReject && onRefresh ? (
+            <RootCauseActions
+              status={explanation.status}
+              canManage={canManageRootCause}
+              pendingAction={pendingAction}
+              errorMessage={actionErrorMessage}
+              onConfirm={onConfirm}
+              onReject={onReject}
+              onRefresh={onRefresh}
+            />
+          ) : null}
+        </Stack>
       )}
     </InvestigationSection>
   )

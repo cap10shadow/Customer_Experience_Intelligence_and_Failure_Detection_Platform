@@ -34,7 +34,7 @@ It is an engineering-focused prototype, not a deployed production service: the d
 
 **Technical problem:** turning unstructured complaint text into a trustworthy, explainable signal requires a real pipeline, not a dashboard: enrichment, statistical anomaly detection, correlation into incidents, deterministic root-cause and business-impact reasoning, and recommendation generation — each stage auditable back to the evidence that produced it.
 
-**What this platform does, concretely:** a complaint is ingested → enriched with sentiment/category/urgency/keywords (NLP) → compared against a rolling baseline for volume/region/category/sentiment/urgency anomalies → correlated with related anomalies into an incident → matched against a deterministic root-cause rule set → scored for business impact across five weighted dimensions → used to generate a prioritized recommendation, which an operator can approve/reject/defer with the decision permanently attributed to their identity. A Gateway aggregates all of this into five frontend workspaces (Dashboard, Investigations, Recommendations, Analytics, Administration), and a read-only Copilot lets an operator ask natural-language questions grounded in the same real evidence.
+**What this platform does, concretely:** a complaint is ingested → enriched with sentiment/category/urgency/keywords (NLP) → compared against a rolling baseline for volume/region/category/sentiment/urgency anomalies → correlated with related anomalies into an incident → matched against a deterministic root-cause rule set → scored for business impact across five weighted dimensions → used to generate a prioritized recommendation, which an operator can approve/reject/defer with the decision permanently attributed to their identity. A Gateway aggregates all of this into five frontend workspaces (Dashboard, Investigations, Recommendations, Analytics, Administration — the sidebar lists Dashboard, Analytics, and Administration; Investigations and Recommendations are per-record detail views reached by drilling down from the Dashboard, not list pages), and a read-only Copilot lets an operator ask natural-language questions grounded in the same real evidence.
 
 **What makes it technically interesting:** every stage is a real, independently-owned backend service with its own persistence and tests (not a monolith with feature flags); the recommendation-decision attribution is provably spoof-proof (a Gateway-attested header only, never client input, verified by a dedicated test); Copilot's seven tools are structurally — not just conventionally — read-only, enforced by a client that exposes no mutating HTTP verb at all; and the project's own CI and closure work were built to surface real defects (a genuine fresh-database migration bug) rather than hide them behind a workaround.
 
@@ -44,11 +44,12 @@ It is an engineering-focused prototype, not a deployed production service: the d
 
 | Capability | What it does | Status |
 |---|---|---|
-| Complaint ingestion | Validated intake, source-hash deduplication | ✅ Implemented |
+| Complaint ingestion | Validated intake, source-hash deduplication, Gateway-exposed and reachable from the Data workspace | ✅ Implemented |
+| Dataset identity & versioning | Every complaint belongs to a real Dataset; extending a dataset creates a new version and re-analyzes its full, cumulative record set without destroying prior versions. Every dataset-aware workspace (Dashboard, Analytics, detection/investigation/recommendation pipeline) is scoped to one dataset, with no global fallback. See [docs/DECISIONS.md AD-12](docs/DECISIONS.md) | ✅ Implemented |
 | NLP enrichment | Sentiment, category, urgency, keyword extraction (deterministic classifiers) | ✅ Implemented |
 | Anomaly detection | Volume/region/category/sentiment/urgency deviation against a rolling baseline window | ✅ Implemented |
 | Incident correlation | Groups related anomalies into a single incident | ✅ Implemented |
-| Root cause analysis | Deterministic rule engine (5 rules) with a confirm/reject/refresh lifecycle | ✅ Implemented (service-level; lifecycle mutation routes are not yet Gateway-exposed) |
+| Root cause analysis | Deterministic rule engine (5 rules) with a confirm/reject/refresh lifecycle, Gateway-exposed and actionable from Investigations | ✅ Implemented |
 | Business impact scoring | Weighted 5-dimension score (financial/customer/operational/SLA/reputation) | ✅ Implemented |
 | Recommendation engine | 8-rule deterministic engine generating prioritized, evidence-cited recommendations | ✅ Implemented |
 | Recommendation decisions | Approve/reject/defer/pending, with a note | ✅ Implemented |
@@ -63,9 +64,9 @@ It is an engineering-focused prototype, not a deployed production service: the d
 | Observability | Structured logs, correlation IDs, Prometheus metrics, OpenTelemetry tracing, 2 Grafana dashboards | ✅ Implemented |
 | Backup & restore | Real `pg_dump`/`pg_restore` round-trip, isolated-container verification | ✅ Implemented |
 | CI | GitHub Actions: backend tests, frontend lint/typecheck/test/build, Compose config validation | ✅ Implemented |
-| Role-aware frontend UI | Hiding controls a user's role can't use | 🔶 Planned / not yet implemented — backend RBAC is authoritative and enforced regardless |
+| Role-aware frontend UI | Telling a user when their role can't perform an action, before they attempt it | ✅ Implemented for the two operator-gated actions (recording a recommendation decision, asking Copilot). Controls are stated-as-restricted, never hidden — backend RBAC remains the authoritative boundary |
 | Real LLM provider | An actual language model behind Copilot | 🔶 Not configured in this environment — see below |
-| Twelve-stage synthetic validation report | A saved, end-to-end validation artifact across all stages including auth | 🔶 Planned / not yet produced |
+| End-to-end synthetic validation report | A saved, end-to-end validation artifact across all stages including auth | ✅ Produced — [docs/VALIDATION_REPORT.md](docs/VALIDATION_REPORT.md) |
 
 ---
 
@@ -214,11 +215,20 @@ docker compose exec -e BOOTSTRAP_ADMIN_EMAIL=you@example.com -e BOOTSTRAP_ADMIN_
 
 Open `http://localhost:3000` and log in with the credentials from step 4. The frontend proxies `/api` to the Gateway same-origin in development (`vite.config.ts`).
 
+### Bringing in your own data
+
+Once logged in, the **Data** workspace (`/data`, first item in the sidebar) is the normal way to get complaint records into the platform — upload a CSV/JSON file or add one manually, review the parsed rows, and submit. It calls the real `POST /api/v1/ingestion/complaints` Gateway route, one record per request (there is no bulk/CSV backend endpoint; the workspace parses the file client-side and submits each row separately). Requires the `operator` role.
+
 ### Sample data (optional)
 
+For a larger dataset without going through the UI row-by-row, the operator-run seed script remains available. The `datasets/` directory is deliberately excluded from the backend image (`.dockerignore`) — production images carry no sample data. Copy the seed file into the running container first, then point the loader at it with `--file`:
+
 ```bash
-docker compose exec gateway_service python backend/tooling/seed_data/load_sample_complaints.py
+docker cp datasets/sample_complaints/operational_seed.json oi_gateway:/tmp/operational_seed.json
+docker compose exec gateway_service python backend/tooling/seed_data/load_sample_complaints.py --file /tmp/operational_seed.json
 ```
+
+`--file` is optional: run without it from a repository checkout and the loader resolves `datasets/sample_complaints/operational_seed.json` relative to the project root, as before.
 
 ---
 
@@ -280,8 +290,8 @@ No step hides a failure behind `continue-on-error` or a suppressed exit code.
 
 ## 12. Testing
 
-- **Backend:** `pytest backend -q` — 1,220+ tests across all 9 services and shared modules, 0 failures on a freshly migrated database (a subset of tests that require a directly-reachable local Postgres skip cleanly when one isn't available, a documented, pre-existing convention — CI itself always has one).
-- **Frontend:** `npm test` (Vitest) — 337 tests across 48 files, covering all five workspaces, authentication, and Copilot.
+- **Backend:** `pytest backend -q` — 1,376 tests across all 9 services and shared modules, 0 failures on a freshly migrated database (a subset of tests that require a directly-reachable local Postgres skip cleanly when one isn't available, a documented, pre-existing convention — CI itself always has one).
+- **Frontend:** `npm test` (Vitest) — 366 tests across 51 files, covering all five workspaces, authentication, session expiry, role-aware UX, the Analytics chart layer, and Copilot.
 - Run locally: `docker compose exec gateway_service pytest backend -q` (backend) and `npm test` from `frontend/` (frontend).
 
 ---
@@ -305,14 +315,22 @@ Both represent the same 17-service topology — the production-like configuratio
 Documented honestly, not discovered later:
 
 - **No real LLM provider is configured.** Copilot's fallback and orchestration behavior are real and tested; live-model reasoning has never been exercised in this environment.
-- **Root-cause confirm/reject/refresh** exists and works at the service layer but is not yet exposed through the Gateway or Copilot.
-- **Role-aware frontend UI** does not yet exist — the backend RBAC boundary is authoritative and enforced regardless, but a `viewer`-role user currently sees controls they don't have permission to use before a 403 explains why.
-- **Administration workspace**: two of six sections (Platform Overview, Intelligence Configuration) show real data; the remainder are illustrative placeholders, self-labeled as such in code.
+- **Administration workspace**: two of six sections (Platform Overview, Intelligence Configuration) show real data, marked with a "Real data" badge next to the section title. The other four are presentation-only, marked "Not yet operational," and say so on the page — each renders a visible notice naming what is illustrative and what the platform actually does (see AD-10, AD-11).
+- **Ingestion has no bulk/CSV backend endpoint.** `ingestion_service` accepts one complaint per `POST /complaints` request; there is no server-side bulk-import capability. The Data workspace (Gateway-exposed as of AD-11) parses an uploaded CSV/JSON file client-side and submits each row as a separate real request — a large file means many sequential requests, not one batch call.
+- **Analytics charts cover the trend response only.** The five charts are drawn 1:1 from `GET /api/v1/analytics/trends`. Pattern Discovery, Recommendation Effectiveness, Organizational Insights and Strategic Opportunities have no backend capability at all and remain honest future-capability placeholders — no chart is drawn for them.
 - **`evaluation_service`'s output** is computed and persisted but not yet surfaced by any Gateway route, dashboard, or Copilot tool.
-- **A twelve-stage, saved synthetic-data validation report** (covering ingestion through authentication/authorization end-to-end) has not yet been produced.
-- **`ingestion_service`** has no dedicated automated test suite yet, unlike its sibling services.
+- **Design system primitives are not yet adopted repository-wide.** `shared/components/primitives/{Button,Card,DataTable,Modal}` (AD-11) are used by new work and one flagship retrofit (`ConnectedSystemCard`); roughly 14 other hand-rolled workspace card components still predate them.
+- **Anomaly detection is cold-start sensitive.** On an empty database every dimension has a zero baseline, so low-volume activity can still be classified CRITICAL. Verified during end-to-end validation.
+- **Incident correlation is time-window based**, not entity-scoped — concurrent unrelated anomalies can be merged into a single multi-signal incident.
+- **Business impact does not consume NLP sentiment.** It scores from anomaly/trend metrics only, so a highly negative complaint population can still score `none` on the reputation dimension.
+- **No dataset version comparison and no report generation/export.** Both were requested in the Dataset/DatasetVersion brief and explicitly deferred (AD-12). A dataset's version history is browsable, but there is no diff between two versions and no exportable report artifact anywhere in the platform.
+- **Finalizing a dataset version is synchronous, with no progress streaming.** `POST /api/v1/datasets/{id}/versions/finalize` holds the request open for the whole enrichment → anomaly → incident → root-cause → business-impact pipeline; there is no task queue, so a large dataset means a long-held request (AD-12).
+- **`evaluation_service` has no `dataset_id`** — the pre-existing gap above extends to dataset scoping as well; not Gateway-exposed, so extending its persistence was out of scope for AD-12.
+- **Copilot's `analytics_trends` tool is currently always broken.** `anomaly_service`'s `/trends*` routes now require `dataset_id`; Copilot was never given one to supply, so every call fails with a real `422`, reported honestly as a tool-level failure rather than a crash or fabricated answer — but the capability is unavailable until fixed. Fixing it requires amending Copilot's frozen `WorkspaceContext` contract (AD-12), which needs explicit sign-off. Copilot's other tools (investigation, root-cause, recommendation, business-impact — all incident-id-keyed) are unaffected.
 
 These are tracked, scoped closure items, not undisclosed gaps.
+
+**Not verified by any automated pass:** no browser automation exists in this project. Rendered appearance, CSS layout, real click-through interaction, and behaviour at actual viewport sizes have only ever been checked by source inspection, the Vitest suite (jsdom), and real HTTP requests — never by a rendered browser session.
 
 ---
 
@@ -331,12 +349,13 @@ Beyond closing the items in [Known Limitations](#14-known-limitations), the long
 | [docs/ADR_ARCHITECTURE_REVIEW_BOARD.md](docs/ADR_ARCHITECTURE_REVIEW_BOARD.md) | Long-term product/architecture vision, ratified by architecture review |
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | Current implementation status and closure tracking |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Dated engineering changelog |
+| [docs/VALIDATION_REPORT.md](docs/VALIDATION_REPORT.md) | End-to-end synthetic-data validation report and final completion assessment |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design and service responsibilities |
 | [REPOSITORY_STRUCTURE.md](REPOSITORY_STRUCTURE.md) | Directory conventions and engineering standards |
 | [PRD.md](PRD.md) | Product requirements |
 | [PRODUCT_EXPERIENCE_GUIDE.md](PRODUCT_EXPERIENCE_GUIDE.md) | Product/UX principles |
 | [ROADMAP.md](ROADMAP.md) | Development roadmap |
-| [PROJECT_BRAIN.md](PROJECT_BRAIN.md) | Engineering context and history |
+| [PROJECT_BRAIN.md](PROJECT_BRAIN.md) | Original pre-implementation vision (historical); retains only its Business Domain section |
 
 ---
 

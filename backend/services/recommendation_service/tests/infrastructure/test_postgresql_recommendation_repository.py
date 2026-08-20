@@ -39,9 +39,23 @@ from backend.services.recommendation_service.app.infrastructure.persistence.repo
     PostgreSQLRecommendationRepository,
 )
 from backend.shared.config.settings import Settings
+from backend.shared.constants.seed_ids import LEGACY_DATASET_ID, LEGACY_DATASET_VERSION_ID
 
 _test_settings = Settings(POSTGRES_HOST="localhost")
 _test_engine = create_async_engine(_test_settings.database_url, poolclass=NullPool)
+
+# AD-12: `save_many` now requires `dataset_id`, a real FOREIGN KEY into
+# `datasets` (recommendations are dataset-scoped, same as
+# anomalies/incidents/root causes/business impact). A fabricated random
+# UUID would violate that FK and fail every insert, so this reuses
+# `LEGACY_DATASET_ID` -- the one Dataset row every migrated database is
+# guaranteed to have (backfilled by `a1c3d5e7f902`, see seed_ids.py's own
+# docstring) -- rather than creating a throwaway Dataset row per test run.
+# These tests only ever assert incident/generation-scoped behavior, never
+# dataset isolation itself (that's covered at the Gateway, see
+# test_analytics.py's test_two_datasets_never_cross_contaminate_analytics_trends).
+_DATASET_ID = LEGACY_DATASET_ID
+_DATASET_VERSION_ID = LEGACY_DATASET_VERSION_ID
 
 _database_available: Optional[bool] = None
 
@@ -111,7 +125,7 @@ async def test_save_many_persists_generation_and_recommendations(make_recommenda
         incident_id = f"INC-{uuid.uuid4().hex[:8]}"
         recommendations = [make_recommendation(incident_id=incident_id), make_recommendation(incident_id=incident_id)]
 
-        saved = await repository.save_many(recommendations, incident_id=incident_id, generation_id=generation_id)
+        saved = await repository.save_many(recommendations, dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id, generation_id=generation_id)
 
         assert len(saved) == 2
         assert all(record.generation_id == generation_id for record in saved)
@@ -125,7 +139,7 @@ async def test_save_many_persists_the_generation_row_even_with_zero_recommendati
         generation_id = uuid.uuid4()
         incident_id = f"INC-{uuid.uuid4().hex[:8]}"
 
-        saved = await repository.save_many([], incident_id=incident_id, generation_id=generation_id)
+        saved = await repository.save_many([], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id, generation_id=generation_id)
 
         assert saved == []
         result = await session.execute(
@@ -140,7 +154,7 @@ async def test_get_by_id_retrieves_a_saved_recommendation(make_recommendation):
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-TEST0001", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-TEST0001", generation_id=uuid.uuid4()
         )
 
         fetched = await repository.get_by_id(saved[0].recommendation_id)
@@ -165,8 +179,8 @@ async def test_list_by_incident_filters_to_one_incident(make_recommendation):
         incident_a = f"INC-{uuid.uuid4().hex[:8]}"
         incident_b = f"INC-{uuid.uuid4().hex[:8]}"
 
-        await repository.save_many([make_recommendation(incident_id=incident_a)], incident_id=incident_a, generation_id=uuid.uuid4())
-        await repository.save_many([make_recommendation(incident_id=incident_b)], incident_id=incident_b, generation_id=uuid.uuid4())
+        await repository.save_many([make_recommendation(incident_id=incident_a)], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_a, generation_id=uuid.uuid4())
+        await repository.save_many([make_recommendation(incident_id=incident_b)], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_b, generation_id=uuid.uuid4())
 
         results = await repository.list_by_incident(incident_a, limit=10, offset=0)
 
@@ -181,8 +195,8 @@ async def test_list_by_incident_without_filter_spans_incidents(make_recommendati
         incident_a = f"INC-{uuid.uuid4().hex[:8]}"
         incident_b = f"INC-{uuid.uuid4().hex[:8]}"
 
-        await repository.save_many([make_recommendation(incident_id=incident_a)], incident_id=incident_a, generation_id=uuid.uuid4())
-        await repository.save_many([make_recommendation(incident_id=incident_b)], incident_id=incident_b, generation_id=uuid.uuid4())
+        await repository.save_many([make_recommendation(incident_id=incident_a)], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_a, generation_id=uuid.uuid4())
+        await repository.save_many([make_recommendation(incident_id=incident_b)], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_b, generation_id=uuid.uuid4())
 
         results = await repository.list_by_incident(None, limit=50, offset=0)
         incident_ids = {record.recommendation.incident_id for record in results}
@@ -197,7 +211,7 @@ async def test_list_by_incident_pagination_limit_and_offset(make_recommendation)
         repository = PostgreSQLRecommendationRepository(session)
         incident_id = f"INC-{uuid.uuid4().hex[:8]}"
         recommendations = [make_recommendation(incident_id=incident_id) for _ in range(5)]
-        await repository.save_many(recommendations, incident_id=incident_id, generation_id=uuid.uuid4())
+        await repository.save_many(recommendations, dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id, generation_id=uuid.uuid4())
 
         first_page = await repository.list_by_incident(incident_id, limit=2, offset=0)
         second_page = await repository.list_by_incident(incident_id, limit=2, offset=2)
@@ -215,10 +229,10 @@ async def test_list_by_generation_returns_only_that_generations_recommendations(
         generation_a = uuid.uuid4()
         generation_b = uuid.uuid4()
 
-        await repository.save_many([make_recommendation(incident_id=incident_id)], incident_id=incident_id, generation_id=generation_a)
+        await repository.save_many([make_recommendation(incident_id=incident_id)], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id, generation_id=generation_a)
         await repository.save_many(
             [make_recommendation(incident_id=incident_id), make_recommendation(incident_id=incident_id)],
-            incident_id=incident_id,
+            dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id,
             generation_id=generation_b,
         )
 
@@ -238,7 +252,7 @@ async def test_list_by_category_filters_correctly(make_recommendation):
                 make_recommendation(incident_id=incident_id, category=RecommendationCategory.ESCALATE),
                 make_recommendation(incident_id=incident_id, category=RecommendationCategory.MONITOR),
             ],
-            incident_id=incident_id,
+            dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id,
             generation_id=uuid.uuid4(),
         )
 
@@ -258,7 +272,7 @@ async def test_list_by_priority_filters_correctly(make_recommendation):
                 make_recommendation(incident_id=incident_id, priority=RecommendationPriority.CRITICAL),
                 make_recommendation(incident_id=incident_id, priority=RecommendationPriority.LOW),
             ],
-            incident_id=incident_id,
+            dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id,
             generation_id=uuid.uuid4(),
         )
 
@@ -276,12 +290,12 @@ async def test_get_latest_by_incident_returns_only_the_most_recent_generation(ma
 
         await repository.save_many(
             [make_recommendation(incident_id=incident_id, category=RecommendationCategory.MONITOR)],
-            incident_id=incident_id,
+            dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id,
             generation_id=uuid.uuid4(),
         )
         second = await repository.save_many(
             [make_recommendation(incident_id=incident_id, category=RecommendationCategory.ESCALATE)],
-            incident_id=incident_id,
+            dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id,
             generation_id=uuid.uuid4(),
         )
 
@@ -315,7 +329,7 @@ async def test_jsonb_fields_round_trip_through_real_postgres(make_recommendation
         )
         recommendation = make_recommendation(supporting_evidence=evidence, rationale="C" * 80)
 
-        saved = await repository.save_many([recommendation], incident_id=recommendation.incident_id, generation_id=uuid.uuid4())
+        saved = await repository.save_many([recommendation], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=recommendation.incident_id, generation_id=uuid.uuid4())
         fetched = await repository.get_by_id(saved[0].recommendation_id)
 
         assert fetched is not None
@@ -354,7 +368,7 @@ async def test_save_many_with_event_id_persists_it_and_is_retrievable_by_get_gen
         generation_id = uuid.uuid4()
 
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-TEST0001", generation_id=generation_id, event_id=event_id
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-TEST0001", generation_id=generation_id, event_id=event_id
         )
 
         assert len(saved) == 1
@@ -384,11 +398,11 @@ async def test_save_many_with_a_duplicate_event_id_raises_duplicate_generation_e
         repository = PostgreSQLRecommendationRepository(session)
         event_id = uuid.uuid4()
 
-        await repository.save_many([make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4(), event_id=event_id)
+        await repository.save_many([make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4(), event_id=event_id)
 
         with pytest.raises(DuplicateGenerationEventError):
             await repository.save_many(
-                [make_recommendation()], incident_id="INC-A", generation_id=uuid.uuid4(), event_id=event_id
+                [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-A", generation_id=uuid.uuid4(), event_id=event_id
             )
 
 
@@ -423,7 +437,7 @@ async def test_concurrent_save_many_with_the_same_event_id_are_mutually_exclusiv
                 try:
                     await repository.save_many(
                         [make_recommendation(incident_id=incident_id)],
-                        incident_id=incident_id,
+                        dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id=incident_id,
                         generation_id=uuid.uuid4(),
                         event_id=event_id,
                     )
@@ -464,7 +478,7 @@ async def test_newly_saved_recommendation_has_null_decision_fields(make_recommen
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-DECISION", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-DECISION", generation_id=uuid.uuid4()
         )
 
         fetched = await repository.get_by_id(saved[0].recommendation_id)
@@ -480,7 +494,7 @@ async def test_update_decision_persists_decision_note_and_decided_at(make_recomm
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-DECISION", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-DECISION", generation_id=uuid.uuid4()
         )
         decided_at = datetime.now(timezone.utc)
 
@@ -516,7 +530,7 @@ async def test_update_decision_overwrites_deterministically_on_repeated_calls(ma
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-DECISION", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-DECISION", generation_id=uuid.uuid4()
         )
 
         await repository.update_decision(
@@ -537,7 +551,7 @@ async def test_update_decision_never_alters_recommendation_id_or_generation_id(m
         repository = PostgreSQLRecommendationRepository(session)
         generation_id = uuid.uuid4()
         saved = await repository.save_many(
-            [make_recommendation(incident_id="INC-IDENTITY")], incident_id="INC-IDENTITY", generation_id=generation_id
+            [make_recommendation(incident_id="INC-IDENTITY")], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-IDENTITY", generation_id=generation_id
         )
 
         updated = await repository.update_decision(
@@ -583,7 +597,7 @@ async def test_update_decision_persists_decided_by_from_actor_id(make_recommenda
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-ATTRIBUTION", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-ATTRIBUTION", generation_id=uuid.uuid4()
         )
         actor_id = await _insert_test_user(session)
 
@@ -608,7 +622,7 @@ async def test_update_decision_without_actor_id_persists_null_decided_by(make_re
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-ATTRIBUTION", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-ATTRIBUTION", generation_id=uuid.uuid4()
         )
 
         updated = await repository.update_decision(
@@ -627,7 +641,7 @@ async def test_update_decision_creates_exactly_one_history_row_per_call(make_rec
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-HISTORY", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-HISTORY", generation_id=uuid.uuid4()
         )
         recommendation_id = saved[0].recommendation_id
         actor_id = await _insert_test_user(session)
@@ -663,7 +677,7 @@ async def test_repeated_decision_calls_each_append_a_separate_history_row(make_r
     async with _repository_session() as session:
         repository = PostgreSQLRecommendationRepository(session)
         saved = await repository.save_many(
-            [make_recommendation()], incident_id="INC-HISTORY", generation_id=uuid.uuid4()
+            [make_recommendation()], dataset_id=_DATASET_ID, dataset_version_id=_DATASET_VERSION_ID, incident_id="INC-HISTORY", generation_id=uuid.uuid4()
         )
         recommendation_id = saved[0].recommendation_id
 

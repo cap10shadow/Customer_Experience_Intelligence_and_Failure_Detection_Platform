@@ -58,6 +58,23 @@ class BusinessImpactAssessmentEntity(Base):
 
     assessment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
+    # Dataset scoping (docs/DECISIONS.md AD-12) -- a plain, cross-service
+    # UUID column (see DATA-002), never an ORM ForeignKey: the Business
+    # Impact Service does not import the Ingestion Service's `Dataset`
+    # model. Set once at creation from the caller-supplied `dataset_id`
+    # (this service has no independent way to know which dataset an
+    # Incident belongs to) and never changed afterward -- assessments are
+    # immutable snapshots.
+    dataset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
+    # True version-addressable intelligence (AD-12 follow-up): which
+    # DatasetVersion's analysis run produced this assessment row. Set once
+    # at creation, never updated -- assessments already accumulate a new
+    # row per analysis run rather than overwriting the previous one, so
+    # this makes "the assessment(s) produced for Version N" a real,
+    # directly queryable fact instead of only inferable from `created_at`.
+    dataset_version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
     incident_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     root_cause_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 

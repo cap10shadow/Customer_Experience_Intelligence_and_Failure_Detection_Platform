@@ -29,12 +29,15 @@ def _assessment(**overrides) -> BusinessImpactAssessment:
 
 def test_to_orm_copies_every_field_verbatim():
     incident_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+    dataset_version_id = uuid.uuid4()
     root_cause_id = uuid.uuid4()
     assessment = _assessment()
 
-    entity = BusinessImpactOutputMapper.to_orm(incident_id, root_cause_id, assessment)
+    entity = BusinessImpactOutputMapper.to_orm(incident_id, dataset_id, dataset_version_id, root_cause_id, assessment)
 
     assert entity.incident_id == incident_id
+    assert entity.dataset_id == dataset_id
     assert entity.root_cause_id == root_cause_id
     assert entity.financial == ImpactLevel.HIGH
     assert entity.customer == ImpactLevel.MEDIUM
@@ -55,10 +58,12 @@ def test_to_orm_uses_the_supplied_identifiers_not_the_assessment_string_id():
     # always populated from the explicit UUID parameters, never parsed back
     # out of the assessment.
     incident_id = uuid.uuid4()
+    dataset_id = uuid.uuid4()
+    dataset_version_id = uuid.uuid4()
     root_cause_id = uuid.uuid4()
     assessment = _assessment(incident_id="not-a-uuid-at-all")
 
-    entity = BusinessImpactOutputMapper.to_orm(incident_id, root_cause_id, assessment)
+    entity = BusinessImpactOutputMapper.to_orm(incident_id, dataset_id, dataset_version_id, root_cause_id, assessment)
 
     assert entity.incident_id == incident_id
     assert entity.root_cause_id == root_cause_id

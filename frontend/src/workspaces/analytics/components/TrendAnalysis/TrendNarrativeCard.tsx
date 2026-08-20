@@ -1,5 +1,4 @@
 import { Panel, Stack } from '@/shared/components/layout'
-import { Icon } from '@/shared/icons'
 
 import { AnalyticsLoadingState } from '../foundation'
 import type { TrendNarrative } from '../../types'
@@ -11,11 +10,15 @@ export interface TrendNarrativeCardProps {
 }
 
 /**
- * Trend → Narrative → Supporting Evidence -- never Chart → Interpretation.
- * The trend is stated in words first; the reserved chart area at the
- * bottom is deliberately small and de-emphasized, the same "future
- * chart" extension point Dashboard's `EvidenceSection` established in
- * Phase 10 Step 2, never the section's primary content.
+ * Trend → Narrative → Supporting Evidence -- never Chart →
+ * Interpretation. The trend is stated in words first.
+ *
+ * The small dashed "reserved chart area" this card used to render was
+ * removed once real charts existed: it was a decorative `trendUp` icon
+ * in a placeholder box, which read as a thumbnail of a chart that had
+ * never been drawn from anything. The real charts now live one level up,
+ * in `TrendVisualization`, where they are drawn from actual returned
+ * series.
  */
 export function TrendNarrativeCard({ trend, isLoading = false }: TrendNarrativeCardProps) {
   if (isLoading) {
@@ -32,9 +35,6 @@ export function TrendNarrativeCard({ trend, isLoading = false }: TrendNarrativeC
         <p className={styles.trend}>{trend.trend}</p>
         <p className={styles.narrative}>{trend.narrative}</p>
         <div className={styles.evidence}>
-          <div className={styles.chartArea} aria-hidden="true">
-            <Icon name="trendUp" size={20} />
-          </div>
           <p className={styles.evidenceText}>{trend.evidence}</p>
         </div>
       </Stack>

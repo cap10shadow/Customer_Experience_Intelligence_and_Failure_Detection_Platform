@@ -1,6 +1,11 @@
 import { Grid, Stack } from '@/shared/components/layout'
 
-import { AdministrationEmptyState, AdministrationSection, AdministrationSubsectionHeading } from '../foundation'
+import {
+  AdministrationEmptyState,
+  AdministrationSection,
+  AdministrationStatusBadge,
+  AdministrationSubsectionHeading,
+} from '../foundation'
 import type { ConnectedService, PlatformOverviewFact, ServiceHealth } from '../../types'
 import { ConnectedServiceCard } from './ConnectedServiceCard'
 import { FactCard } from './FactCard'
@@ -62,6 +67,7 @@ export function PlatformOverview({ platformStatusSummary, services, isLoading = 
       title="Platform Overview"
       description="The current operational state of the platform."
       register="state"
+      statusBadge={<AdministrationStatusBadge isLive />}
     >
       <Stack gap={6}>
         <Grid minColumnWidth={200}>

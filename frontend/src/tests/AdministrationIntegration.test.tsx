@@ -83,7 +83,7 @@ describe('Administration Platform Overview real Gateway integration (Step 7.X A-
     await waitFor(() => expect(fetch).toHaveBeenCalled())
 
     const requestedUrls = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
-    const overviewCall = requestedUrls.find((url) => url.includes('/administration/overview'))
+    const overviewCall = requestedUrls.find((url) => url.includes('/v1/administration/overview'))
     expect(overviewCall).toBeDefined()
     requestedUrls.forEach((url) => {
       expect(url).not.toMatch(/:800[1-8]/)

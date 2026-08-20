@@ -11,6 +11,7 @@
 import { env } from '@/app/configuration/env'
 
 import { ApiError, NO_RESPONSE_STATUS } from './errors'
+import { notifyUnauthorized } from './unauthorized'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 
@@ -142,6 +143,16 @@ export async function apiRequest<TResponse>(path: string, options: ApiRequestOpt
 
   if (!response.ok) {
     const envelope = isGatewayErrorEnvelope(payload) ? payload.error : null
+
+    // One centralized session signal for every caller (see
+    // ./unauthorized.ts): a 401 anywhere means this browser no longer has
+    // a valid Gateway session, and exactly one place -- AuthContext --
+    // decides what the application does about it. The error is still
+    // thrown normally afterwards, so no caller's own failure handling
+    // changes and no error is ever swallowed here.
+    if (response.status === 401) {
+      notifyUnauthorized()
+    }
 
     throw new ApiError({
       code: envelope?.code ?? 'UNKNOWN_ERROR',

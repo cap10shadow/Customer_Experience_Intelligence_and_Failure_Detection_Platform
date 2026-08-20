@@ -39,6 +39,17 @@ class RecommendationResponse(BaseModel):
 
     recommendationId: str
     incidentId: str
+    # AD-12 follow-up: recommendation_service's own RecommendationDetailResponse
+    # already carries a real `dataset_id` -- surfaced verbatim, same rationale
+    # as InvestigationResponse.datasetId (schemas/investigation.py).
+    datasetId: str
+    # AD-12 follow-up: which DatasetVersion's analysis run produced this
+    # Recommendation -- set once at creation (recommendation_service's own
+    # RecommendationDetailResponse.dataset_version_id), never mutated.
+    # Recommendations already accumulate a new generation per analysis run
+    # rather than overwriting the previous one, so this is a real,
+    # independently-retrievable fact, not a "last touched by" pointer.
+    datasetVersionId: str
     generationId: str
     category: str
     priority: str

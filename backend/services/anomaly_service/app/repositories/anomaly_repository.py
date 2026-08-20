@@ -30,9 +30,11 @@ class AnomalyRepository:
     # Active anomalies
     # ------------------------------------------------------------------
 
-    async def get_active_by_fingerprint(self, fingerprint: str) -> Optional[ActiveAnomaly]:
-        """Retrieves an anomaly (ACTIVE or RESOLVED) by its deterministic fingerprint."""
-        stmt = select(ActiveAnomaly).where(ActiveAnomaly.fingerprint == fingerprint)
+    async def get_active_by_fingerprint(self, fingerprint: str, dataset_id: uuid.UUID) -> Optional[ActiveAnomaly]:
+        """Retrieves an anomaly (ACTIVE or RESOLVED) by its deterministic fingerprint, scoped to one dataset -- a fingerprint is only unique within a dataset."""
+        stmt = select(ActiveAnomaly).where(
+            ActiveAnomaly.fingerprint == fingerprint, ActiveAnomaly.dataset_id == dataset_id
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -51,10 +53,10 @@ class AnomalyRepository:
         await self.session.flush()
         return anomaly
 
-    async def list_active(self, status: AnomalyStatus = AnomalyStatus.ACTIVE) -> Sequence[ActiveAnomaly]:
+    async def list_active(self, dataset_id: uuid.UUID, status: AnomalyStatus = AnomalyStatus.ACTIVE) -> Sequence[ActiveAnomaly]:
         stmt = (
             select(ActiveAnomaly)
-            .where(ActiveAnomaly.status == status)
+            .where(ActiveAnomaly.dataset_id == dataset_id, ActiveAnomaly.status == status)
             .order_by(ActiveAnomaly.severity.desc(), ActiveAnomaly.last_seen_at.desc())
         )
         result = await self.session.execute(stmt)
@@ -69,21 +71,33 @@ class AnomalyRepository:
         await self.session.flush()
         return event
 
-    async def get_latest_run_timestamp(self) -> Optional[datetime]:
+    async def get_latest_run_timestamp(self, dataset_id: uuid.UUID) -> Optional[datetime]:
         """
-        Returns the timestamp of the most recent detection run, derived as
-        the latest of `active_anomalies.last_seen_at` (anomalies detected or
-        reconfirmed) and `anomaly_history.event_timestamp` (covers a run
-        that only resolved anomalies). None if no run has ever occurred.
+        Returns the timestamp of the most recent detection run for one
+        dataset, derived as the latest of `active_anomalies.last_seen_at`
+        (anomalies detected or reconfirmed) and `anomaly_history.
+        event_timestamp` (covers a run that only resolved anomalies).
+        None if no run has ever occurred for this dataset.
         """
-        last_seen = await self.session.execute(select(func.max(ActiveAnomaly.last_seen_at)))
-        last_event = await self.session.execute(select(func.max(AnomalyHistory.event_timestamp)))
+        last_seen = await self.session.execute(
+            select(func.max(ActiveAnomaly.last_seen_at)).where(ActiveAnomaly.dataset_id == dataset_id)
+        )
+        last_event = await self.session.execute(
+            select(func.max(AnomalyHistory.event_timestamp))
+            .select_from(AnomalyHistory)
+            .join(ActiveAnomaly, AnomalyHistory.active_anomaly_id == ActiveAnomaly.id)
+            .where(ActiveAnomaly.dataset_id == dataset_id)
+        )
 
         candidates = [t for t in (last_seen.scalar_one_or_none(), last_event.scalar_one_or_none()) if t is not None]
         return max(candidates) if candidates else None
 
-    async def list_history_at(self, timestamp: datetime) -> Sequence[AnomalyHistory]:
-        """Returns every history event recorded at exactly the given run timestamp."""
-        stmt = select(AnomalyHistory).where(AnomalyHistory.event_timestamp == timestamp)
+    async def list_history_at(self, timestamp: datetime, dataset_id: uuid.UUID) -> Sequence[AnomalyHistory]:
+        """Returns every history event recorded at exactly the given run timestamp, scoped to one dataset."""
+        stmt = (
+            select(AnomalyHistory)
+            .join(ActiveAnomaly, AnomalyHistory.active_anomaly_id == ActiveAnomaly.id)
+            .where(AnomalyHistory.event_timestamp == timestamp, ActiveAnomaly.dataset_id == dataset_id)
+        )
         result = await self.session.execute(stmt)
         return result.scalars().all()

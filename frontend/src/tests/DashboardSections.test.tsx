@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
+import { DATASET_STORAGE_KEY, DatasetProvider } from '@/app/context/DatasetContext'
 import { DashboardContextProvider } from '@/workspaces/dashboard/context'
 import { DashboardWorkspace } from '@/workspaces/dashboard'
 import { OperationalBrief } from '@/workspaces/dashboard/components/OperationalBrief'
@@ -19,11 +20,21 @@ function withProviders(children: ReactNode) {
 }
 
 describe('Operational Brief landmark structure', () => {
+  beforeEach(() => {
+    window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+  })
+
+  afterEach(() => {
+    window.localStorage.removeItem(DATASET_STORAGE_KEY)
+  })
+
   it('exposes exactly the four top-level Dashboard section landmarks, not one per subsection', () => {
     render(
-      <MemoryRouter>
-        <DashboardWorkspace />
-      </MemoryRouter>,
+      <DatasetProvider>
+        <MemoryRouter>
+          <DashboardWorkspace />
+        </MemoryRouter>
+      </DatasetProvider>,
     )
 
     const regions = screen.getAllByRole('region')

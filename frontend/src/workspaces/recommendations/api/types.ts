@@ -23,6 +23,9 @@ export type RecommendationDecisionApiValue = 'pending' | 'approved' | 'rejected'
 export interface RecommendationApiResponse {
   recommendationId: string
   incidentId: string
+  datasetId: string
+  /** Which DatasetVersion's analysis run produced this recommendation -- set once at creation, never mutated. */
+  datasetVersionId: string
   generationId: string
   category: string
   priority: string

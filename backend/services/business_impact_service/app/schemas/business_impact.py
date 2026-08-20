@@ -10,14 +10,23 @@ from backend.shared.constants.enums.business_impact_assessment import BusinessIm
 
 
 class CreateBusinessImpactRequest(BaseModel):
-    """Request body for POST /business-impact: which Incident to analyze."""
+    """
+    Request body for POST /business-impact: which Incident to analyze, and
+    which Dataset that Incident belongs to. `dataset_id` must be supplied
+    by the caller (the Gateway's orchestrator) -- the Business Impact
+    Service has no independent way to look it up.
+    """
     incident_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
 
 
 class BusinessImpactAssessmentResponse(BaseModel):
     """Full explainable snapshot of a persisted BusinessImpactAssessment."""
 
     assessment_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
     incident_id: uuid.UUID
     root_cause_id: uuid.UUID
     financial: ImpactLevel

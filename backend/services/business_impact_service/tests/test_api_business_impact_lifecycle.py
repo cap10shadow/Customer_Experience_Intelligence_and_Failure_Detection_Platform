@@ -1,4 +1,4 @@
-"""
+﻿"""
 Phase 7 Step 3 -- API Integration Tests.
 
 Unlike `test_api_business_impact.py` (Phase 7 Step 2), which validates the
@@ -27,6 +27,8 @@ from backend.services.business_impact_service.app.dependencies.services import (
 )
 from backend.services.business_impact_service.app.main import app
 from backend.services.business_impact_service.tests.fakes import (
+    DATASET_ID,
+    DATASET_VERSION_ID,
     EXPECTED_AFFECTED_CUSTOMERS,
     EXPECTED_BUSINESS_PRIORITY,
     EXPECTED_CONFIDENCE,
@@ -85,7 +87,7 @@ async def test_post_business_impact_returns_a_fully_computed_assessment(wired_sc
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id)})
+        response = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
 
     assert response.status_code == 201
     body = response.json()
@@ -114,7 +116,7 @@ async def test_get_business_impact_by_assessment_id_round_trips(wired_scenario):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        created = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id)})
+        created = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assessment_id = created.json()["assessment_id"]
 
         fetched = await client.get(f"/api/v1/business-impact/{assessment_id}")
@@ -145,7 +147,7 @@ async def test_get_business_impact_by_assessment_id_422_for_malformed_uuid(wired
 async def test_post_business_impact_404_for_unknown_incident_id(wired_scenario):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/business-impact", json={"incident_id": str(uuid.uuid4())})
+        response = await client.post("/api/v1/business-impact", json={"incident_id": str(uuid.uuid4()), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
 
     assert response.status_code == 404
 
@@ -173,7 +175,7 @@ async def test_post_business_impact_404_when_incident_has_no_root_cause_yet():
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id)})
+            response = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assert response.status_code == 404
     finally:
         app.dependency_overrides.clear()
@@ -190,9 +192,9 @@ async def test_list_business_impact_retrieves_by_incident_id(wired_scenario):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id)})
+        await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
 
-        response = await client.get("/api/v1/business-impact", params={"incident_id": str(incident_id)})
+        response = await client.get("/api/v1/business-impact", params={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
 
     assert response.status_code == 200
     results = response.json()
@@ -206,7 +208,7 @@ async def test_list_business_impact_filters_by_severity_and_priority(wired_scena
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id)})
+        await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
 
         matching = await client.get(
             "/api/v1/business-impact",
@@ -234,7 +236,7 @@ async def test_no_update_endpoint_exists_for_assessments(wired_scenario):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        created = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id)})
+        created = await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assessment_id = created.json()["assessment_id"]
 
         response = await client.patch(f"/api/v1/business-impact/{assessment_id}")

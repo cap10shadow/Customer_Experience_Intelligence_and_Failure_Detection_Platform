@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 from backend.services.anomaly_service.app.repositories.trend_repository import TrendRepository
@@ -11,6 +12,6 @@ class VolumeAggregator:
     def __init__(self, repository: TrendRepository) -> None:
         self.repository = repository
 
-    async def aggregate(self, window: TrendWindow) -> List[VolumeTrendPoint]:
-        rows = await self.repository.count_complaints_by_day(window.start, window.end)
+    async def aggregate(self, window: TrendWindow, dataset_id: uuid.UUID) -> List[VolumeTrendPoint]:
+        rows = await self.repository.count_complaints_by_day(window.start, window.end, dataset_id)
         return [VolumeTrendPoint(date=day, count=count) for day, count in rows]

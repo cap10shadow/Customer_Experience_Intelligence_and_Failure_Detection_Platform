@@ -27,12 +27,16 @@ class BusinessImpactOutputMapper:
     @staticmethod
     def to_orm(
         incident_id: uuid.UUID,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
         root_cause_id: uuid.UUID,
         assessment: BusinessImpactAssessment,
     ) -> BusinessImpactAssessmentEntity:
         """Builds a brand-new BusinessImpactAssessmentEntity row for a freshly-computed assessment."""
         return BusinessImpactAssessmentEntity(
             incident_id=incident_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
             root_cause_id=root_cause_id,
             financial=assessment.financial_impact,
             customer=assessment.customer_impact,

@@ -13,6 +13,8 @@ class IncidentResponse(BaseModel):
     summary, and aggregate severity — all derived from its linked anomalies."""
 
     id: uuid.UUID
+    dataset_id: uuid.UUID
+    last_analysis_version_id: uuid.UUID
     incident_key: str
     title: str
     severity: AnomalySeverity

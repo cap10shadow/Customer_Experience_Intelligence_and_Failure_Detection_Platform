@@ -1,4 +1,7 @@
-import { AdministrationEmptyState, AdministrationSection } from '../foundation'
+import { AdvisoryNotice } from '@/shared/components/feedback'
+import { Stack } from '@/shared/components/layout'
+
+import { AdministrationEmptyState, AdministrationSection, AdministrationStatusBadge } from '../foundation'
 import type { AuditEntry } from '../../types'
 import { AuditEntryRow } from './AuditEntryRow'
 import styles from './AuditChangeHistory.module.css'
@@ -53,6 +56,7 @@ export function AuditChangeHistory({ isLoading = false, entries = DEFAULT_ENTRIE
       title="Audit & Change History"
       description="What has changed, and who changed it?"
       register="record"
+      statusBadge={<AdministrationStatusBadge isLive={false} />}
     >
       {!hasEntries && !isLoading ? (
         <AdministrationEmptyState
@@ -60,11 +64,24 @@ export function AuditChangeHistory({ isLoading = false, entries = DEFAULT_ENTRIE
           description="Every configuration change, user management action, integration change, and policy update will be permanently recorded here as it happens."
         />
       ) : (
-        <ol className={styles.ledger} aria-label="Administrative change history, most recent first">
-          {(isLoading ? DEFAULT_ENTRIES : entries).map((entry) => (
-            <AuditEntryRow key={entry.id} entry={entry} isLoading={isLoading} />
-          ))}
-        </ol>
+        <Stack gap={4}>
+          {/* The most severe honesty risk in the workspace: a ledger of
+              named people and precise timestamps reads as a real audit
+              record. It is fixed example copy -- no audit capability
+              exists, and none of these actors is a real account. The
+              recommendation-decision history the platform *does* record
+              is stored server-side and is not surfaced here. */}
+          <AdvisoryNotice
+            icon="warning"
+            title="Illustrative content — not a real audit record"
+            description="The entries below are fixed example copy demonstrating how administrative traceability would be presented. No administrative audit trail is recorded by the platform today, and the actors and timestamps shown do not refer to real accounts or real events."
+          />
+          <ol className={styles.ledger} aria-label="Administrative change history, most recent first">
+            {(isLoading ? DEFAULT_ENTRIES : entries).map((entry) => (
+              <AuditEntryRow key={entry.id} entry={entry} isLoading={isLoading} />
+            ))}
+          </ol>
+        </Stack>
       )}
     </AdministrationSection>
   )

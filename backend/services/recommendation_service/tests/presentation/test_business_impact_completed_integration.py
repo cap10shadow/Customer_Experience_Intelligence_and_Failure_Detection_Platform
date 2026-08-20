@@ -80,7 +80,7 @@ class _FailingEventPublisher(RecommendationEventPublisher):
 
 
 class _FailingRepository(FakeRecommendationRepository):
-    async def save_many(self, recommendations, *, incident_id, generation_id, event_id=None):
+    async def save_many(self, recommendations, *, dataset_id, dataset_version_id, incident_id, generation_id, event_id=None):
         raise RuntimeError("simulated persistence failure")
 
 
@@ -113,6 +113,8 @@ def wired_consumer():
 def _valid_payload(**overrides) -> dict:
     payload = {
         "event_id": str(uuid.uuid4()),
+        "dataset_id": str(uuid.uuid4()),
+        "dataset_version_id": str(uuid.uuid4()),
         "incident": {
             "incident_id": "INC-LIFECYCLE-0001",
             "severity": "critical",

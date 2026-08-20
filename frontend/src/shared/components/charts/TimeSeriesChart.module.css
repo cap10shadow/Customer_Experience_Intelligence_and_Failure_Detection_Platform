@@ -1,0 +1,54 @@
+/* Scales to the container's width while keeping a fixed aspect ratio via
+   the SVG viewBox -- no measurement, no resize observer, no layout
+   thrash. A minimum width keeps labels legible on a narrow viewport; the
+   ChartFrame's `.plot` scrolls horizontally rather than letting the page
+   do it. */
+.svg {
+  display: block;
+  width: 100%;
+  min-width: 320px;
+  height: auto;
+}
+
+.grid {
+  stroke: var(--color-chart-grid);
+  stroke-width: 1;
+}
+
+.baseline {
+  stroke: var(--color-chart-axis);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.area {
+  fill: var(--color-chart-mark-fill);
+}
+
+.line {
+  fill: none;
+  stroke: var(--color-chart-mark);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.point {
+  fill: var(--color-chart-mark);
+  /* A 2px ring in the surface colour so a marker sitting on the line
+     still reads as a separate mark. */
+  stroke: var(--color-surface-raised);
+  stroke-width: 2;
+}
+
+/* Invisible, generously sized hover target per point -- the visible
+   marker is 4px, which is far too small to aim at. */
+.hitArea {
+  fill: transparent;
+}
+
+.axisLabel {
+  fill: var(--color-chart-axis);
+  font-size: 11px;
+  font-family: inherit;
+}

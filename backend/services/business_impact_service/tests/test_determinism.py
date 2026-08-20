@@ -32,6 +32,8 @@ from backend.services.business_impact_service.app.services.business_impact_appli
 )
 from backend.services.business_impact_service.app.services.impact_engine import BusinessImpactEngine, default_rules
 from backend.services.business_impact_service.tests.fakes import (
+    DATASET_ID,
+    DATASET_VERSION_ID,
     FakeBusinessImpactRepository,
     FakeIncidentReadRepository,
     FakeRootCauseReadRepository,
@@ -143,7 +145,7 @@ async def test_full_lifecycle_is_deterministic_across_repeated_application_servi
         engine=BusinessImpactEngine(rules=default_rules()),
     )
 
-    results = [await service.create_assessment(incident_id) for _ in range(REPEAT_COUNT)]
+    results = [await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID) for _ in range(REPEAT_COUNT)]
 
     assessment_ids = {entity.assessment_id for entity in results}
     assert len(assessment_ids) == REPEAT_COUNT  # every run persisted as its own distinct row
@@ -173,7 +175,10 @@ async def test_full_lifecycle_is_deterministic_over_http():
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://testserver") as client:
             responses = [
-                await client.post("/api/v1/business-impact", json={"incident_id": str(incident_id)})
+                await client.post(
+                    "/api/v1/business-impact",
+                    json={"incident_id": str(incident_id), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)},
+                )
                 for _ in range(REPEAT_COUNT)
             ]
     finally:

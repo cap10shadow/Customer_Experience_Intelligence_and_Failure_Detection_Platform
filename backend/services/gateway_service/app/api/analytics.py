@@ -17,17 +17,22 @@ _PERIOD_TO_DAYS = {"last-30-days": 30, "last-quarter": 90, "last-12-months": 365
 
 @router.get("/analytics/trends", response_model=AnalyticsResponse)
 async def get_analytics_trends(
+    datasetId: str = Query(..., description="The Dataset these trends are scoped to."),
     period: str = Query(default="last-30-days"),
     client: httpx.AsyncClient = Depends(get_http_client),
 ) -> AnalyticsResponse:
     """
-    Real trend data only (Part 5's scope). Named `/analytics/trends`, not
-    the bare `/analytics` the earlier architecture sketch used, because
-    that is the only genuine Analytics capability the backend has today
-    (Batch 1 SS24's "no fake API surface" rule) -- Pattern Discovery,
-    Organizational Insights, Strategic Opportunities, and Recommendation
-    Effectiveness have no backend capability whatsoever (Part 5's audit)
-    and so have no corresponding route here.
+    Real trend data only (Part 5's scope), scoped to one Dataset
+    (docs/DECISIONS.md AD-12) -- required, not optional: there is no
+    "all datasets combined" trend view, since that would silently mix
+    unrelated analytical subjects into one chart. Named
+    `/analytics/trends`, not the bare `/analytics` the earlier
+    architecture sketch used, because that is the only genuine Analytics
+    capability the backend has today (Batch 1 SS24's "no fake API
+    surface" rule) -- Pattern Discovery, Organizational Insights,
+    Strategic Opportunities, and Recommendation Effectiveness have no
+    backend capability whatsoever (Part 5's audit) and so have no
+    corresponding route here.
 
     NO-FAKE-FILTER RULE (same as Dashboard's `/dashboard`): `period` must
     be one of AnalyticsContext's own three values; anything else is
@@ -39,4 +44,4 @@ async def get_analytics_trends(
             details={"period": period},
         )
 
-    return await build_analytics(client, _PERIOD_TO_DAYS[period])
+    return await build_analytics(client, _PERIOD_TO_DAYS[period], datasetId)

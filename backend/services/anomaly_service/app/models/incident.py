@@ -33,6 +33,13 @@ class Incident(Base, PrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "incidents"
 
+    # Dataset scoping (docs/DECISIONS.md AD-12) -- see ActiveAnomaly's
+    # identical fields for the full rationale. `dataset_id` isolation
+    # here is what actually prevents Dataset A's incidents from ever
+    # appearing while Dataset B is selected on Dashboard/Investigations.
+    dataset_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+    last_analysis_version_id: Mapped[uuid.UUID] = mapped_column(nullable=False, index=True)
+
     incident_key: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     severity: Mapped[AnomalySeverity] = mapped_column(Enum(AnomalySeverity), nullable=False, index=True)

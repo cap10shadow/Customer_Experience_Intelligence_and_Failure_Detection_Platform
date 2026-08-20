@@ -14,6 +14,10 @@ router = APIRouter(prefix="/incidents", tags=["incidents"])
 
 @router.post("/run", response_model=IncidentRunResult)
 async def run_incident_correlation(
+    dataset_id: uuid.UUID = Query(..., description="The Dataset this correlation run is scoped to."),
+    dataset_version_id: uuid.UUID = Query(
+        ..., description="The DatasetVersion this run's results are attributed to (provenance)."
+    ),
     window_minutes: int = Query(
         DEFAULT_TIME_WINDOW_MINUTES,
         ge=1,
@@ -22,16 +26,17 @@ async def run_incident_correlation(
     ),
     engine: CorrelationEngine = Depends(get_correlation_engine),
 ):
-    """Runs the deterministic correlation engine and returns what changed."""
-    return await engine.run(window_minutes)
+    """Runs the deterministic correlation engine over one dataset's active anomalies and returns what changed."""
+    return await engine.run(dataset_id, dataset_version_id, window_minutes)
 
 
 @router.get("", response_model=List[IncidentResponse])
 async def list_active_incidents(
+    dataset_id: uuid.UUID = Query(..., description="The Dataset to list open incidents for."),
     engine: CorrelationEngine = Depends(get_correlation_engine),
 ):
-    """Returns all currently open incidents."""
-    return await engine.get_active()
+    """Returns all currently open incidents for this dataset."""
+    return await engine.get_active(dataset_id)
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)

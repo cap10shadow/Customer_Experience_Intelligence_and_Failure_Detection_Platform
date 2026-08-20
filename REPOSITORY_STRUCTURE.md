@@ -1,471 +1,196 @@
-# Repository & Engineering Structure
+# Repository Structure
 
 # Customer Experience Intelligence & Failure Detection Platform
 
 ---
 
-# 1. Repository Philosophy
+# 1. Purpose Of This Document
 
-The project follows a monorepo architecture designed for:
-- modular backend development
-- scalable service organization
-- shared engineering standards
-- clean AI-assisted development workflows
-- maintainable long-term evolution
+This document answers one question:
 
-The repository prioritizes:
-- clarity over complexity
-- modularity over premature distribution
-- shared contracts and models
-- predictable structure
-- production-oriented organization
+> "Where do things live, and what does each major area of the repository contain?"
 
-The architecture intentionally avoids:
-- unnecessary infrastructure fragmentation
-- excessive service sprawl
-- overengineered deployment structures
-- deeply nested repository complexity
+It is not the architecture reference. For architecture, product, and status information, see:
+
+- **[README.md](README.md)** — primary project overview and onboarding entry point
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — stable, high-level architecture overview
+- **[docs/architecture/](docs/architecture/)** — detailed, phase-by-phase architecture records
+- **[docs/DECISIONS.md](docs/DECISIONS.md)** — formal architecture decision records (ADRs)
+- **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)** — current project status and known gaps
+- **[ROADMAP.md](ROADMAP.md)** — forward-looking direction
+- **[docs/design/](docs/design/)** — early, pre-implementation design specifications; each document is explicitly labeled historical/superseded where the implementation diverged from the original spec (see `docs/design/README.md`)
 
 ---
 
-# 2. High-Level Repository Structure
+# 2. Root-Level Structure
 
+```
 project-root/
 │
-├── backend/
-│   ├── services/
-│   ├── shared/
-│   │   ├── contracts/
-│   │   ├── schemas/
-│   │   ├── logging/
-│   │   ├── config/
-│   │   └── utils/
-│   │
-│   ├── tooling/
-│   ├── migrations/
-│   └── scripts/
+├── backend/                    Backend services, shared code, migrations, tooling
+├── frontend/                   React/TypeScript single-page application
+├── docs/                       Engineering, architecture, and process documentation
+├── infrastructure/             Docker, monitoring, and deployment configuration
+├── datasets/                   Sample data and validation tooling
+├── .github/                    CI workflow definitions
 │
-├── frontend/
+├── docker-compose.yml          Local development orchestration
+├── docker-compose.prod.yml     Hardened production orchestration
+├── alembic.ini                 Root Alembic configuration (backend migrations)
+├── .env.example                Template for local environment configuration
+├── .gitignore / .dockerignore  Ignore rules for version control / image builds
 │
-├── infrastructure/
-│
-├── datasets/
-├── notebooks/
-│
-├── docs/
-│   ├── diagrams/
-│   ├── api/
-│   ├── architecture/
-│   ├── workflows/
-│   └── deployment/
-│
-├── docker-compose.yml
-├── .env
-├── README.md
-│
-├── PROJECT_BRAIN.md
-├── PRD.md
-├── ARCHITECTURE.md
-├── ROADMAP.md
-└── REPOSITORY_STRUCTURE.md
+├── README.md                   Project overview and onboarding
+├── ARCHITECTURE.md             Stable architecture overview
+├── PRD.md                      Product requirements
+├── PROJECT_BRAIN.md            Original pre-implementation vision (historical)
+├── PRODUCT_EXPERIENCE_GUIDE.md Product/UX behavior specification
+├── ROADMAP.md                  Forward-looking roadmap
+└── REPOSITORY_STRUCTURE.md     This document
+```
 
 ---
 
-# 3. Backend Service Structure
+# 3. backend/
 
-All backend services will live inside:
-
-backend/services/
-
-Each service should remain:
-
-independently runnable
-logically isolated
-operationally focused
-
-Services should share:
-
-common models
-utilities
-configuration standards
-logging conventions
-
----
-
-# 4. Initial Service Layout
-
+```
 backend/
-│
-├── services/
-│   ├── gateway_service/
-│   ├── ingestion_service/
-│   ├── nlp_service/
-│   ├── anomaly_service/
-│   ├── root_cause_service/
-│   ├── business_impact_service/
-│   ├── recommendation_service/
-│   └── copilot_service/
+├── services/        The nine backend services (see below)
+├── shared/          Code shared across services
+├── migrations/       Alembic migrations for the platform database
+├── tooling/         Developer and operational tooling (not part of the runtime API surface)
+└── requirements-test.txt
+```
+
+## 3.1 backend/services/
+
+Each service is an independently runnable FastAPI application with its own `app/`, `tests/`, `Dockerfile`, and `requirements.txt`:
+
+- `anomaly_service/`
+- `business_impact_service/`
+- `copilot_service/`
+- `evaluation_service/`
+- `gateway_service/`
+- `ingestion_service/`
+- `nlp_service/`
+- `recommendation_service/`
+- `root_cause_service/`
+
+Internal organization of `app/` varies by service (some use a flatter `api/core/models/services/schemas` layout, others use a more explicit hexagonal `application/domain/infrastructure/presentation` layout) — see [ARCHITECTURE.md](ARCHITECTURE.md) and `docs/architecture/` for details on each service's design.
+
+## 3.2 backend/shared/
+
+Code intended for reuse across services: `config/`, `constants/`, `contracts/`, `database/`, `logging/`, `observability/`, `schemas/`, `security/`, `utils/`, plus its own `tests/`.
+
+## 3.3 backend/migrations/
+
+Alembic migration environment (`env.py`, `script.py.mako`) and the `versions/` directory containing the platform's sequential database migrations. Historical migrations are not modified after merge.
+
+## 3.4 backend/tooling/
+
+Developer/operational tooling, kept separate from service runtime code:
+
+- `backup_restore/` — database backup and restore tooling
+- `diagnostics/` — persistence and system diagnostics scripts
+- `seed_data/` — seed data utilities
+- `benchmarking/`, `dataset_generators/`, `local_dev/` — reserved for future tooling; currently placeholders
 
 ---
 
-# 5. Service Internal Structure
-Each backend service should follow a consistent internal structure.
+# 4. frontend/
 
-Example:
-service_name/
-│
-├── app/
-│   ├── api/
-│   ├── core/
-│   ├── models/
-│   ├── services/
-│   ├── repositories/
-│   ├── schemas/
-│   ├── utils/
-│   ├── dependencies/
-│   └── main.py
-│
-├── tests/
-├── .env.example
-├── Dockerfile
-├── requirements.txt
-└── README.md
-
----
-
-# 6. Frontend Structure
-
-Frontend components should gradually evolve toward feature-oriented organization as platform complexity increases.
-
-Operational intelligence features should remain logically grouped to preserve maintainability and analytical clarity.
-
-The frontend should remain:
-
-dashboard-focused
-analytics-oriented
-operationally clean
-modular
-
-The UI should prioritize:
-
-intelligence visualization
-operational insights
-explainability
-business-facing clarity
-
-The frontend is NOT intended to be:
-
-animation-heavy
-frontend-experiment focused
-visually overengineered
-
----
-
-# 7. Frontend Layout
-
+```
 frontend/
-│
 ├── src/
-│   ├── api/
-│   ├── components/
-│   ├── pages/
-│   ├── layouts/
-│   ├── hooks/
-│   ├── store/
-│   ├── utils/
-│   ├── charts/
-│   ├── types/
+│   ├── app/           Routing, providers, layouts, theme, configuration
+│   ├── auth/          Authentication
+│   ├── copilot/       Copilot feature module
+│   ├── shared/        Shared components, hooks, types, utilities, icons, constants
+│   ├── workspaces/    Feature workspaces: administration, analytics, dashboard,
+│   │                  ingestion, investigations, recommendations
+│   ├── tests/         Frontend test suite
 │   └── main.tsx
 │
 ├── public/
-├── package.json
-└── README.md
+├── package.json / package-lock.json
+├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
+├── vite.config.ts
+├── eslint.config.js
+├── Dockerfile / nginx.conf
+└── README.md          Frontend-specific setup notes
+```
+
+Each entry under `workspaces/` follows a consistent internal shape: `api/`, `components/`, `context/`, `hooks/`.
 
 ---
 
-# 8. Shared Module Strategy
+# 5. docs/
 
-The shared layer should avoid accumulating business-specific intelligence logic.
-
-Operational workflows and intelligence reasoning should remain inside their respective services to preserve clean service boundaries.
-
-Shared contracts should evolve independently from service implementations to preserve stable inter-service communication boundaries.
-
-Shared contracts should define:
-- complaint intelligence schemas
-- anomaly payload structures
-- root-cause response formats
-- recommendation contracts
-- risk-scoring payloads
-
-Structured contracts should remain versioned and typed to maintain predictable service interactions.
-
-Shared logic should be centralized inside:
-
-backend/shared/
-
-This directory may contain:
-
-shared schemas
-shared types
-shared utilities
-shared constants
-shared configuration
-common data contracts
-
-Example:
-
-backend/
+```
+docs/
+├── ADR_ARCHITECTURE_REVIEW_BOARD.md   Formal architecture review board record (authoritative on conflicts)
+├── DECISIONS.md                       Architecture decision records (ADRs)
+├── CHANGELOG.md                       Chronological engineering changelog
+├── ENGINEERING_WORKFLOW.md            Team workflow standard
+├── PROJECT_STATUS.md                  Live project status and known-gap tracker
+├── VALIDATION_REPORT.md               End-to-end synthetic-data validation record and completion assessment
 │
-├── shared/
-│   ├── schemas/
-│   ├── constants/
-│   ├── logging/
-│   ├── config/
-│   ├── contracts/
-│   └── utils/
+├── architecture/                      Phase-by-phase architecture records (see below)
+└── design/                            Early design specifications (see below)
+```
 
-The shared layer should remain lightweight and infrastructure-agnostic.
+## 5.1 docs/architecture/
 
+Contains one directory per architecture phase (`phase-10/`, `phase-11/`, `phase-12/`, `phase-13/`), documenting the platform's architecture as it evolved. `docs/architecture/phase-10/history/` holds superseded drafts, explicitly marked non-authoritative with a pointer to the current record.
 
-The shared layer should primarily contain:
-- typed contracts
-- validation schemas
-- cross-service utilities
-- shared configuration standards
+## 5.2 docs/design/
 
-The shared layer should NOT become:
-- a hidden monolith
-- a dumping ground for business logic
-- a replacement for proper service ownership
+Early, pre-implementation design specifications (data model, entity modeling, dataset strategy, etc.). Where the shipped implementation diverged from a given spec, that document is explicitly annotated as historical — see `docs/design/README.md` for the current-vs-historical breakdown of each file.
 
 ---
 
-# 9. Infrastructure Layer
+# 6. infrastructure/
 
-Infrastructure concerns should remain separate from backend operational tooling to preserve clean platform boundaries.
-
+```
 infrastructure/
-
-This directory may contain:
-
-Docker configuration
-monitoring setup
-Prometheus configs
-Grafana configs
-deployment configs
-future Kubernetes manifests
-
-Example:
-
-infrastructure/
-│
 ├── docker/
 ├── monitoring/
 ├── deployment/
 └── observability/
+```
+
+Docker, monitoring (e.g. Prometheus/Grafana), deployment, and observability configuration, kept separate from application code.
 
 ---
 
-# 10. Backend Tooling Philosophy
+# 7. datasets/
 
-The backend tooling layer exists to support:
-
-- local development workflows
-- dataset generation
-- diagnostics
-- observability support
-- benchmarking
-- operational simulation
-- AI-assisted engineering workflows
-
-The tooling layer should remain:
-- operationally focused
-- isolated from production business logic
-- developer-oriented
-- automation-friendly
-
-Example:
-
-backend/tooling/
-│
-├── seed_data/
-├── dataset_generators/
-├── local_dev/
-├── observability/
-├── diagnostics/
-└── benchmarking/
+```
+datasets/
+├── sample_complaints/     Hand-written sample complaint data used for local development/seeding
+└── validation/            Synthetic-data validation harness (run_validation.py) used for
+                            scenario-based platform validation
+```
 
 ---
 
-# 11. Dataset & Analytics Layer
+# 8. .github/
 
-The platform includes a dedicated analytics workspace.
-
-Dedicated analytical workspaces:
-
-- datasets/
-- notebooks/
-Purpose:
-
-exploratory analysis
-feature experimentation
-operational simulation
-dataset validation
-anomaly experimentation
-intelligence prototyping
-
-The notebook layer should support:
-
-rapid experimentation
-analytical validation
-explainability research
-
-Production intelligence logic should eventually migrate into backend services.
+```
+.github/
+└── workflows/
+    └── ci.yml     Continuous integration workflow
+```
 
 ---
 
-#12. Documentation Strategy
+# 9. Root Configuration Files
 
-All engineering and product documentation should remain centralized.
-
-docs/
-
-
-Potential documentation areas:
-
-docs/
-├── diagrams/
-├── api/
-├── architecture/
-├── workflows/
-└── deployment/
-
-Documentation should emphasize:
-- explainable architecture
-- operational clarity
-- intelligence pipeline visibility
-- onboarding simplicity
-- AI-assisted development context
-
-The repository should prioritize:
-
-readable engineering documentation
-explainable architecture decisions
-onboarding clarity
-
----
-
-# 13. Testing Philosophy
-
-Testing should initially remain service-local to preserve implementation simplicity.
-
-Cross-service integration testing may later evolve into dedicated integration test suites as platform complexity increases.
-
-The platform should prioritize:
-
-service-level testing
-intelligence pipeline validation
-API contract testing
-anomaly detection validation
-recommendation validation
-
-The testing strategy should evolve incrementally alongside system complexity.
-
-The MVP does NOT require enterprise-scale testing infrastructure.
-
----
-
-# 14. Engineering Standards
-
-All services should follow:
-
-consistent naming conventions
-modular architecture
-typed request/response schemas
-structured logging
-environment-based configuration
-clean dependency boundaries
-
-The project prioritizes:
-
-readability
-maintainability
-explainability
-operational clarity
-
----
-
-# 15. Docker & Local Development Philosophy
-
-As platform complexity evolves, selective asynchronous processing may be introduced for:
-- large-scale NLP processing
-- batch anomaly analysis
-- recommendation generation
-- AI summarization workflows
-
-The MVP should initially favor synchronous orchestration to preserve implementation simplicity and development velocity.
-
-Docker Compose will initially orchestrate:
-
-backend services
-PostgreSQL
-frontend
-observability tools
-
-The local development environment should prioritize:
-
-fast startup
-reproducibility
-low onboarding friction
-predictable configuration
-
-The project intentionally avoids:
-
-premature cloud-native complexity
-infrastructure-heavy local setups
-unnecessary orchestration tooling
-
----
-
-# 16. AI-Assisted Development Workflow
-
-AI-generated implementations should remain:
-- modular
-- reviewable
-- testable
-- explainable
-- consistent with documented architecture
-
-Generated code should be validated against:
-- service boundaries
-- operational workflows
-- intelligence explainability
-- repository conventions
-- product requirements
-
-The repository is intentionally structured to support:
-
-Claude Code workflows
-Antigravity-assisted implementation
-AI-assisted debugging
-AI-assisted documentation
-iterative architecture refinement
-
-The repository structure should optimize:
-
-context clarity
-modular prompting
-implementation isolation
-predictable engineering patterns
-
-AI tools should accelerate implementation, but:
-
-architecture decisions
-business logic
-intelligence design
-operational workflows
-
-must remain intentionally designed by humans.
-
-AI-assisted implementation should optimize for incremental, reviewable progress rather than large-scale autonomous code generation.
+| File | Purpose |
+|---|---|
+| `docker-compose.yml` | Local development orchestration for all services |
+| `docker-compose.prod.yml` | Hardened production orchestration |
+| `alembic.ini` | Root Alembic configuration for backend migrations |
+| `.env.example` | Template for required environment variables (no real secrets) |
+| `.gitignore` | Version control ignore rules |
+| `.dockerignore` | Docker build-context ignore rules |

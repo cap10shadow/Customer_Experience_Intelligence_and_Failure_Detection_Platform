@@ -1,4 +1,4 @@
-"""
+﻿"""
 Phase 7 Step 3 -- Lifecycle & Validation.
 
 Validates the complete Business Impact lifecycle end-to-end:
@@ -36,6 +36,8 @@ from backend.services.business_impact_service.app.services.exceptions import (
 )
 from backend.services.business_impact_service.app.services.impact_engine import BusinessImpactEngine, default_rules
 from backend.services.business_impact_service.tests.fakes import (
+    DATASET_ID,
+    DATASET_VERSION_ID,
     EXPECTED_AFFECTED_CUSTOMERS,
     EXPECTED_BUSINESS_PRIORITY,
     EXPECTED_CONFIDENCE,
@@ -77,7 +79,7 @@ async def test_lifecycle_produces_a_complete_assessment_from_a_synthetic_inciden
     """Incident -> Root Cause Summary -> Engine -> BusinessImpactAssessment -> Persistence -> Repository."""
     service, incident_id, _persisted_incident, persisted_root_cause = _service_with_scenario()
 
-    entity = await service.create_assessment(incident_id)
+    entity = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     # Persistence / Repository boundary: the entity round-trips through the
     # (Fake) repository's own get(), exactly as the real API layer would use it.
@@ -119,7 +121,7 @@ async def test_lifecycle_produces_a_complete_assessment_from_a_synthetic_inciden
 async def test_lifecycle_dto_serialization_preserves_every_field():
     """BusinessImpactAssessment -> Persistence -> Repository -> REST response DTO."""
     service, incident_id, _persisted_incident, persisted_root_cause = _service_with_scenario()
-    entity = await service.create_assessment(incident_id)
+    entity = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
 
     dto = BusinessImpactAssessmentResponse.model_validate(entity, from_attributes=True)
 
@@ -146,7 +148,7 @@ async def test_lifecycle_dto_serialization_preserves_every_field():
 async def test_lifecycle_json_serialization_uses_lowercase_enum_values_and_iso_timestamps():
     """DTO -> JSON: enum serialization and timestamp serialization, verified over the wire format."""
     service, incident_id, _persisted_incident, _persisted_root_cause = _service_with_scenario()
-    entity = await service.create_assessment(incident_id)
+    entity = await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)
     dto = BusinessImpactAssessmentResponse.model_validate(entity, from_attributes=True)
 
     payload = dto.model_dump(mode="json")
@@ -174,7 +176,7 @@ async def test_lifecycle_raises_incident_not_found_for_unknown_incident():
     )
 
     with pytest.raises(IncidentNotFoundError):
-        await service.create_assessment(uuid.uuid4())
+        await service.create_assessment(uuid.uuid4(), DATASET_ID, DATASET_VERSION_ID)
 
 
 @pytest.mark.anyio
@@ -190,4 +192,4 @@ async def test_lifecycle_raises_root_cause_not_found_when_incident_has_no_root_c
     )
 
     with pytest.raises(RootCauseNotFoundError):
-        await service.create_assessment(incident_id)
+        await service.create_assessment(incident_id, DATASET_ID, DATASET_VERSION_ID)

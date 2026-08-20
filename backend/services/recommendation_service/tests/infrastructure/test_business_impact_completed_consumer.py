@@ -42,6 +42,8 @@ class _FakeLifecycleService:
 def _valid_raw_payload(**overrides) -> dict:
     payload = {
         "event_id": str(uuid.uuid4()),
+        "dataset_id": str(uuid.uuid4()),
+        "dataset_version_id": str(uuid.uuid4()),
         "incident": {
             "incident_id": "INC-EVENT-0001",
             "severity": "critical",

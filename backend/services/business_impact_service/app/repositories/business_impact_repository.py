@@ -49,8 +49,10 @@ class BusinessImpactRepository:
         severity: Optional[ImpactLevel] = None,
         priority: Optional[BusinessPriority] = None,
         incident_id: Optional[uuid.UUID] = None,
+        dataset_id: Optional[uuid.UUID] = None,
+        dataset_version_id: Optional[uuid.UUID] = None,
     ) -> Sequence[BusinessImpactAssessmentEntity]:
-        """Returns persisted assessments, optionally filtered by severity, priority, and/or incident."""
+        """Returns persisted assessments, optionally filtered by severity, priority, incident, dataset, and/or dataset version."""
         stmt = select(BusinessImpactAssessmentEntity)
         if severity is not None:
             stmt = stmt.where(BusinessImpactAssessmentEntity.overall_severity == severity)
@@ -58,6 +60,10 @@ class BusinessImpactRepository:
             stmt = stmt.where(BusinessImpactAssessmentEntity.business_priority == priority)
         if incident_id is not None:
             stmt = stmt.where(BusinessImpactAssessmentEntity.incident_id == incident_id)
+        if dataset_id is not None:
+            stmt = stmt.where(BusinessImpactAssessmentEntity.dataset_id == dataset_id)
+        if dataset_version_id is not None:
+            stmt = stmt.where(BusinessImpactAssessmentEntity.dataset_version_id == dataset_version_id)
         stmt = stmt.order_by(BusinessImpactAssessmentEntity.created_at.desc())
         result = await self.session.execute(stmt)
         return result.scalars().all()

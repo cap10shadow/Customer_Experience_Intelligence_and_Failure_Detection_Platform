@@ -1,5 +1,14 @@
-import { ErrorBoundary } from '@/shared/components/feedback'
+import { Link } from 'react-router-dom'
+
+import { ApiError } from '@/app/api/errors'
+import { useDatasetContext } from '@/app/context/DatasetContext'
+import { ROUTE_PATHS } from '@/app/routing/routePaths'
+import { Grid } from '@/shared/components/layout'
+import { EmptyState, ErrorBoundary } from '@/shared/components/feedback'
+import { Button, buttonClassName } from '@/shared/components/primitives'
 import { WorkspaceContainer } from '@/shared/components/page'
+import { DatasetVersionLabel } from '@/shared/components/utility'
+import { useDataset } from '@/workspaces/ingestion/hooks/useDataset'
 
 import { AnalyticsContent, AnalyticsLayout } from './components/layout'
 import { AnalyticsSectionErrorGate } from './components/foundation'
@@ -31,6 +40,13 @@ import { useAnalyticsData } from './hooks/useAnalyticsData'
  * rather than restating. Each section is individually error-isolated,
  * exactly like every prior Phase 10 workspace.
  *
+ * Trend Analysis additionally renders the real charts
+ * (`TrendVisualization`) beneath its narratives, drawn 1:1 from the same
+ * `GET /api/v1/analytics/trends` response the narratives are written
+ * from -- the whole response is now used, where previously five
+ * populated numeric series were reduced to a handful of sentences and
+ * the rest discarded.
+ *
  * Trend Analysis and, as of Step 7.X A-08, Executive Overview are both
  * backed by the same genuine backend capability (anomaly_service's real
  * `/trends` summary, via the Gateway's `GET /api/v1/analytics/trends`) --
@@ -57,10 +73,52 @@ export function AnalyticsWorkspace() {
  * tree, not above it -- mirrors InvestigationsWorkspace/RecommendationsWorkspace.
  */
 function AnalyticsWorkspaceContent() {
+  const { selectedDatasetId, selectedDatasetName, setSelectedDataset } = useDatasetContext()
   const { data, isLoading, error, refetch } = useAnalyticsData()
+  // Reuses the Data workspace's own `useDataset` hook for the header's real
+  // version/status badge -- same rationale as DashboardWorkspace.
+  const { data: datasetDetail, error: datasetError } = useDataset(selectedDatasetId)
+
+  if (!selectedDatasetId) {
+    return (
+      <WorkspaceContainer title="Analytics" description="What has the organization learned over time?">
+        <EmptyState
+          title="No dataset selected"
+          description="Analytics shows trend history for one dataset at a time -- select an existing dataset or create a new one to see its Analytics."
+          action={
+            <Link className={buttonClassName('primary')} to={ROUTE_PATHS.ingestion}>
+              Go to Data
+            </Link>
+          }
+        />
+      </WorkspaceContainer>
+    )
+  }
+
+  // The selected dataset was archived (or otherwise no longer exists) --
+  // see DashboardWorkspace's identical guard for the full rationale.
+  if (datasetError instanceof ApiError && datasetError.status === 404) {
+    return (
+      <WorkspaceContainer title="Analytics" description="What has the organization learned over time?">
+        <EmptyState
+          title="This dataset is no longer available"
+          description="It may have been archived or removed. Select a different dataset to continue."
+          action={
+            <Button variant="primary" onClick={() => setSelectedDataset(null)}>
+              Change dataset
+            </Button>
+          }
+        />
+      </WorkspaceContainer>
+    )
+  }
 
   return (
-    <WorkspaceContainer title="Analytics" description="What has the organization learned over time?">
+    <WorkspaceContainer
+      title="Analytics"
+      description="What has the organization learned over time?"
+      actions={<DatasetVersionLabel name={selectedDatasetName ?? selectedDatasetId} detail={datasetDetail} />}
+    >
       <AnalyticsLayout>
         <AnalyticsContent>
           <ErrorBoundary boundaryLabel="the Executive Overview" onRetry={refetch} resetKeys={[isLoading]}>
@@ -71,25 +129,27 @@ function AnalyticsWorkspaceContent() {
 
           <ErrorBoundary boundaryLabel="the Trend Analysis" onRetry={refetch} resetKeys={[isLoading]}>
             <AnalyticsSectionErrorGate error={error}>
-              <TrendAnalysis trends={data?.trends} isLoading={isLoading} />
+              <TrendAnalysis trends={data?.trends} series={data?.series} isLoading={isLoading} />
             </AnalyticsSectionErrorGate>
           </ErrorBoundary>
 
-          <ErrorBoundary boundaryLabel="the Pattern Discovery">
-            <PatternDiscovery />
-          </ErrorBoundary>
+          <Grid minColumnWidth={340} gap={6}>
+            <ErrorBoundary boundaryLabel="the Pattern Discovery">
+              <PatternDiscovery />
+            </ErrorBoundary>
 
-          <ErrorBoundary boundaryLabel="the Recommendation Effectiveness">
-            <RecommendationEffectiveness isLoading={isLoading} />
-          </ErrorBoundary>
+            <ErrorBoundary boundaryLabel="the Recommendation Effectiveness">
+              <RecommendationEffectiveness isLoading={isLoading} />
+            </ErrorBoundary>
 
-          <ErrorBoundary boundaryLabel="the Organizational Insights">
-            <OrganizationalInsights />
-          </ErrorBoundary>
+            <ErrorBoundary boundaryLabel="the Organizational Insights">
+              <OrganizationalInsights />
+            </ErrorBoundary>
 
-          <ErrorBoundary boundaryLabel="the Strategic Opportunities">
-            <StrategicOpportunities />
-          </ErrorBoundary>
+            <ErrorBoundary boundaryLabel="the Strategic Opportunities">
+              <StrategicOpportunities />
+            </ErrorBoundary>
+          </Grid>
         </AnalyticsContent>
       </AnalyticsLayout>
     </WorkspaceContainer>

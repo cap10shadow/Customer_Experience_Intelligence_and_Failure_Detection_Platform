@@ -10,7 +10,33 @@ import type {
 
 export interface AnalyticsViewModel {
   trends: TrendNarrative[]
+  /**
+   * The Gateway's real trend arrays, carried through unchanged for the
+   * chart layer (`TrendVisualization`).
+   *
+   * Before this existed, `toAnalyticsViewModel` reduced five populated
+   * numeric series -- up to a full year of daily volume, every category,
+   * every region, every sentiment observation -- to at most three
+   * sentences each, and discarded the rest. The platform was fetching
+   * real trend data on every Analytics load and then throwing almost all
+   * of it away.
+   *
+   * Deliberately the raw API points, not a re-shaped copy: no sorting,
+   * no bucketing, no aggregation, no derived percentage or delta. If a
+   * number is drawn, `anomaly_service` computed it -- the same
+   * "transform, never invent" boundary the narrative builders below
+   * already observe.
+   */
+  series: AnalyticsSeries
   warnings: string[]
+}
+
+export interface AnalyticsSeries {
+  volume: VolumeTrendPointApi[]
+  category: CategoryTrendPointApi[]
+  region: RegionTrendPointApi[]
+  sentiment: SentimentTrendPointApi[]
+  urgency: UrgencyTrendPointApi[]
 }
 
 /**
@@ -39,7 +65,17 @@ export function toAnalyticsViewModel(response: AnalyticsApiResponse): AnalyticsV
     buildUrgencyNarrative(response.urgencyTrend, response.period),
   ].filter((trend): trend is TrendNarrative => trend !== null)
 
-  return { trends, warnings: response.warnings }
+  return {
+    trends,
+    series: {
+      volume: response.volumeTrend,
+      category: response.categoryTrend,
+      region: response.regionTrend,
+      sentiment: response.sentimentTrend,
+      urgency: response.urgencyTrend,
+    },
+    warnings: response.warnings,
+  }
 }
 
 function buildVolumeNarrative(points: VolumeTrendPointApi[], period: string): TrendNarrative | null {

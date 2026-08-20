@@ -1,0 +1,12 @@
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.total {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-right: var(--space-2);
+}

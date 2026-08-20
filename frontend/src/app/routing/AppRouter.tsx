@@ -10,8 +10,12 @@ import { AppShell } from '@/app/layouts/AppShell'
 import { LoginPage } from '@/auth/components/LoginPage'
 import { RequireAuth } from '@/auth/components/RequireAuth'
 
+import { RouteErrorView } from './RouteErrorView'
 import { ROUTE_PATHS, ROUTE_TEMPLATES } from './routePaths'
 
+const IngestionWorkspace = lazy(() =>
+  import('@/workspaces/ingestion').then((module) => ({ default: module.IngestionWorkspace })),
+)
 const DashboardWorkspace = lazy(() =>
   import('@/workspaces/dashboard').then((module) => ({ default: module.DashboardWorkspace })),
 )
@@ -45,12 +49,22 @@ export const router = createBrowserRouter([
         <AppShell />
       </RequireAuth>
     ),
+    // Step RC3: without this, react-router renders its raw "Unexpected
+    // Application Error!" developer screen for anything the route table
+    // can't resolve. `RouteErrorView` states the outcome in product
+    // terms and offers the one recovery path back to the Dashboard.
+    errorElement: <RouteErrorView />,
     children: [
       { index: true, element: <DashboardWorkspace /> },
+      { path: ROUTE_PATHS.ingestion, element: <IngestionWorkspace /> },
       { path: ROUTE_TEMPLATES.investigation, element: <InvestigationsWorkspace /> },
       { path: ROUTE_TEMPLATES.recommendation, element: <RecommendationsWorkspace /> },
       { path: ROUTE_PATHS.analytics, element: <AnalyticsWorkspace /> },
       { path: ROUTE_PATHS.administration, element: <AdministrationWorkspace /> },
+      // Catch-all: renders inside AppShell so an unreachable URL keeps
+      // the sidebar/top bar rather than dropping the user onto a bare
+      // page with no way back.
+      { path: '*', element: <RouteErrorView variant="not-found" /> },
     ],
   },
 ])

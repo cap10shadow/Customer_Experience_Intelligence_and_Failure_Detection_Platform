@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 from backend.services.anomaly_service.app.repositories.trend_repository import TrendRepository
@@ -17,6 +18,6 @@ class CategoryAggregator:
     def __init__(self, repository: TrendRepository) -> None:
         self.repository = repository
 
-    async def aggregate(self, window: TrendWindow) -> List[CategoryTrendPoint]:
-        rows = await self.repository.count_enrichments_by_category(window.start, window.end)
+    async def aggregate(self, window: TrendWindow, dataset_id: uuid.UUID) -> List[CategoryTrendPoint]:
+        rows = await self.repository.count_enrichments_by_category(window.start, window.end, dataset_id)
         return [CategoryTrendPoint(category=category.value, count=count) for category, count in rows]

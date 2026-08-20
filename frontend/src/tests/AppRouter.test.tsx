@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { RouterProvider } from 'react-router-dom'
 
+import { DATASET_STORAGE_KEY } from '@/app/context/DatasetContext'
 import { AppProviders } from '@/app/providers/AppProviders'
 import { router } from '@/app/routing/AppRouter'
 
@@ -11,6 +12,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 describe('AppRouter (real lazy-loaded route tree)', () => {
   beforeEach(() => {
+    window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
     // Phase 13 Batch 2 (AD-6): AppRouter now renders every workspace
     // route behind RequireAuth, which bootstraps a session via GET
     // /auth/me before anything else mounts. Stubbing it to resolve
@@ -40,6 +42,10 @@ describe('AppRouter (real lazy-loaded route tree)', () => {
         )
       }),
     )
+  })
+
+  afterEach(() => {
+    window.localStorage.removeItem(DATASET_STORAGE_KEY)
   })
 
   it('code-splits each workspace and resolves the Dashboard via Suspense on initial load', async () => {

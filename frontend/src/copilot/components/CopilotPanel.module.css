@@ -57,6 +57,14 @@
   outline-offset: 2px;
 }
 
+/* Sits between the header and the transcript, inset to the panel's own
+   horizontal rhythm. Calm by design -- a role restriction is a fact
+   about this session, not a failure, so it must not borrow
+   `.errorBanner`'s critical styling. */
+.roleNotice {
+  padding: var(--space-3) var(--space-4) 0;
+}
+
 .errorBanner {
   display: flex;
   align-items: center;

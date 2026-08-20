@@ -93,6 +93,8 @@ class RecommendationRepository(ABC):
         self,
         recommendations: Sequence[Recommendation],
         *,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
         incident_id: str,
         generation_id: uuid.UUID,
         event_id: Optional[uuid.UUID] = None,
@@ -103,6 +105,11 @@ class RecommendationRepository(ABC):
         returning each with its assigned identity. Raises
         `DuplicateGenerationEventError` if `event_id` is supplied and
         already belongs to a previously persisted `RecommendationGeneration`.
+
+        `dataset_id` (docs/DECISIONS.md AD-12) is a required, separate
+        parameter for the same reason `incident_id` already is: it must be
+        stamped onto the `RecommendationGeneration` row even when
+        `recommendations` is empty.
         """
         raise NotImplementedError
 
@@ -118,12 +125,22 @@ class RecommendationRepository(ABC):
 
     @abstractmethod
     async def list_by_incident(
-        self, incident_id: Optional[str] = None, *, limit: int, offset: int
+        self,
+        incident_id: Optional[str] = None,
+        *,
+        limit: int,
+        offset: int,
+        dataset_version_id: Optional[uuid.UUID] = None,
     ) -> List[RecommendationRecord]:
         """
         Lists Recommendations, most recent first, optionally filtered to
         one incident. `incident_id=None` lists across all incidents (backs
         the general `GET /recommendations` collection endpoint).
+        `dataset_version_id` (AD-12 follow-up) additionally scopes to the
+        recommendation(s) produced by one specific DatasetVersion's
+        analysis run -- what makes "the recommendation(s) for Version N"
+        independently retrievable now that a later version's re-analysis
+        has produced its own generation.
         """
         raise NotImplementedError
 

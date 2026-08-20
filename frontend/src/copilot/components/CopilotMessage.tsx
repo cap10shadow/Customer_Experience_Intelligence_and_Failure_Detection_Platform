@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 
+import { AdvisoryNotice } from '@/shared/components/feedback'
 import { Badge } from '@/shared/components/utility'
 import { buildInvestigationPath, buildRecommendationPath } from '@/app/routing/routePaths'
 import { classNames } from '@/shared/utilities/classNames'
@@ -7,6 +8,21 @@ import { classNames } from '@/shared/utilities/classNames'
 import type { CopilotAssistantTranscriptMessage, CopilotTranscriptMessage } from '../hooks/useCopilotConversation'
 import type { CopilotRelatedEntity, CopilotVisualizationHint } from '../api/types'
 import styles from './CopilotMessage.module.css'
+
+/**
+ * Copilot's backend falls back to a real, honest `NullLLMProvider` when no
+ * `LLM_PROVIDER` is configured (backend/services/copilot_service/app/
+ * services/orchestrator/llm_provider.py) -- it returns this exact
+ * limitation sentence rather than fabricating an answer. Rendered here as a
+ * distinct system notice, not as ordinary assistant prose, so it reads as
+ * "the platform is telling you something about its own configuration," not
+ * as an AI-generated response.
+ */
+const NO_LLM_LIMITATION_MARKER = 'No LLM provider is configured'
+
+function isNoLlmMessage(message: CopilotAssistantTranscriptMessage): boolean {
+  return message.limitations.some((limitation) => limitation.includes(NO_LLM_LIMITATION_MARKER))
+}
 
 const VISUALIZATION_LABEL: Record<CopilotVisualizationHint, string> = {
   trend: 'Related to a trend',
@@ -61,6 +77,17 @@ function EvidenceCard({
 
 function AssistantMessage({ message }: { message: CopilotAssistantTranscriptMessage }) {
   const visualizationLabel = message.visualizationHint ? VISUALIZATION_LABEL[message.visualizationHint] : null
+
+  if (isNoLlmMessage(message)) {
+    return (
+      <div className={classNames(styles.bubble, styles.systemNotice)}>
+        <AdvisoryNotice
+          title="Copilot is not configured in this environment"
+          description="Dataset context is available, but no language model is currently connected, so Copilot cannot interpret or answer this question. An operator can configure a language model provider to enable it."
+        />
+      </div>
+    )
+  }
 
   return (
     <div className={classNames(styles.bubble, styles.assistantBubble)}>

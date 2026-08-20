@@ -1,0 +1,31 @@
+.complaintText {
+  display: block;
+  max-width: 48ch;
+}
+
+.issueList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-1);
+}
+
+.issue {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-status-critical);
+}
+
+.removeButton {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background: none;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.removeButton:hover {
+  color: var(--color-status-critical);
+  border-color: var(--color-status-critical);
+}

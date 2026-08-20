@@ -62,40 +62,53 @@ _PRIORITY_TO_IMPORTANCE = {
 @dataclass
 class DashboardQuery:
     time_range: str
+    dataset_id: str
 
 
 async def build_dashboard(client: httpx.AsyncClient, query: DashboardQuery) -> DashboardResponse:
     """
-    Aggregates the Dashboard read model from real backend capabilities.
-    Incidents are essential -- Operational Brief, Critical Situations, and
-    Investigation Entry Points all derive from them, so a failure fetching
-    them fails the whole request (a GatewayError propagates out of this
-    function uncaught, per Batch 3 SS21/Batch 4C SS15's endpoint-specific
-    partial-failure rule). Trend, recommendation, root-cause, and
-    business-impact data are non-essential enrichments: a failure in any
-    of them degrades that specific piece of the response and is recorded
-    in `warnings`, never fabricated.
+    Aggregates the Dashboard read model from real backend capabilities,
+    scoped to one Dataset (docs/DECISIONS.md AD-12) -- `query.dataset_id`
+    is required, never optional: there is no "all datasets" dashboard
+    view. Incidents are essential -- Operational Brief, Critical
+    Situations, and Investigation Entry Points all derive from them, so a
+    failure fetching them fails the whole request (a GatewayError
+    propagates out of this function uncaught, per Batch 3 SS21/Batch 4C
+    SS15's endpoint-specific partial-failure rule). Trend, recommendation,
+    root-cause, and business-impact data are non-essential enrichments: a
+    failure in any of them degrades that specific piece of the response
+    and is recorded in `warnings`, never fabricated.
+
+    Recommendations are fetched globally (recommendation_service's own
+    list endpoint has no dataset filter) and then filtered in-process to
+    only the ones whose `incident_id` belongs to this dataset's own
+    already-fetched incidents -- never trusting an unscoped fetch to be
+    dataset-correct on its own, and never depending on a downstream
+    filter capability that may not exist.
     """
     warnings: list[str] = []
     days = _TIME_RANGE_TO_DAYS[query.time_range]
+    dataset_id = query.dataset_id
 
     # Independent downstream calls issued concurrently, not sequentially.
-    incidents_task = asyncio.create_task(_fetch_active_incidents(client))
-    trend_task = asyncio.create_task(_fetch_volume_trend(client, days))
+    incidents_task = asyncio.create_task(_fetch_active_incidents(client, dataset_id))
+    trend_task = asyncio.create_task(_fetch_volume_trend(client, days, dataset_id))
     recommendations_task = asyncio.create_task(_fetch_recent_recommendations(client))
-    category_trend_task = asyncio.create_task(_fetch_category_trend(client, days))
-    region_trend_task = asyncio.create_task(_fetch_region_trend(client, days))
-    sentiment_trend_task = asyncio.create_task(_fetch_sentiment_trend(client, days))
-    urgency_trend_task = asyncio.create_task(_fetch_urgency_trend(client, days))
+    category_trend_task = asyncio.create_task(_fetch_category_trend(client, days, dataset_id))
+    region_trend_task = asyncio.create_task(_fetch_region_trend(client, days, dataset_id))
+    sentiment_trend_task = asyncio.create_task(_fetch_sentiment_trend(client, days, dataset_id))
+    urgency_trend_task = asyncio.create_task(_fetch_urgency_trend(client, days, dataset_id))
 
     incidents = await incidents_task
+    dataset_incident_ids = {str(incident["id"]) for incident in incidents}
 
     volume_trend = await await_optional(
         trend_task, warnings, "Complaint volume trend is temporarily unavailable."
     )
-    recommendations = await await_optional(
+    all_recommendations = await await_optional(
         recommendations_task, warnings, "Recommendation data is temporarily unavailable.", default=[]
     )
+    recommendations = [r for r in all_recommendations if str(r.get("incident_id")) in dataset_incident_ids]
     category_trend = await await_optional(
         category_trend_task, warnings, "Complaint category trend is temporarily unavailable."
     )
@@ -130,41 +143,48 @@ async def build_dashboard(client: httpx.AsyncClient, query: DashboardQuery) -> D
     )
 
 
-async def _fetch_active_incidents(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+async def _fetch_active_incidents(client: httpx.AsyncClient, dataset_id: str) -> list[dict[str, Any]]:
     url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/incidents"
-    incidents = await get_json(client, url)
+    incidents = await get_json(client, url, params={"dataset_id": dataset_id})
     return incidents or []
 
 
-async def _fetch_volume_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+async def _fetch_volume_trend(client: httpx.AsyncClient, days: int, dataset_id: str) -> Optional[dict[str, Any]]:
     url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/daily"
-    return await get_json(client, url, params={"days": days})
+    return await get_json(client, url, params={"days": days, "dataset_id": dataset_id})
 
 
 async def _fetch_recent_recommendations(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """
+    Unscoped by design (recommendation_service's list endpoint has no
+    dataset filter) -- `build_dashboard` filters the result to this
+    dataset's own incidents before use. Fetches more than
+    `_MAX_DECISION_OPPORTUNITIES` so that filtering down to one dataset
+    still leaves enough real candidates to fill the Decision Summary.
+    """
     url = f"{settings.RECOMMENDATION_SERVICE_URL}/api/v1/recommendations"
-    recommendations = await get_json(client, url, params={"limit": _MAX_DECISION_OPPORTUNITIES})
+    recommendations = await get_json(client, url, params={"limit": _MAX_DECISION_OPPORTUNITIES * 10})
     return recommendations or []
 
 
-async def _fetch_category_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+async def _fetch_category_trend(client: httpx.AsyncClient, days: int, dataset_id: str) -> Optional[dict[str, Any]]:
     url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/categories"
-    return await get_json(client, url, params={"days": days})
+    return await get_json(client, url, params={"days": days, "dataset_id": dataset_id})
 
 
-async def _fetch_region_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+async def _fetch_region_trend(client: httpx.AsyncClient, days: int, dataset_id: str) -> Optional[dict[str, Any]]:
     url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/regions"
-    return await get_json(client, url, params={"days": days})
+    return await get_json(client, url, params={"days": days, "dataset_id": dataset_id})
 
 
-async def _fetch_sentiment_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+async def _fetch_sentiment_trend(client: httpx.AsyncClient, days: int, dataset_id: str) -> Optional[dict[str, Any]]:
     url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/sentiment"
-    return await get_json(client, url, params={"days": days})
+    return await get_json(client, url, params={"days": days, "dataset_id": dataset_id})
 
 
-async def _fetch_urgency_trend(client: httpx.AsyncClient, days: int) -> Optional[dict[str, Any]]:
+async def _fetch_urgency_trend(client: httpx.AsyncClient, days: int, dataset_id: str) -> Optional[dict[str, Any]]:
     url = f"{settings.ANOMALY_SERVICE_URL}/api/v1/trends/urgency"
-    return await get_json(client, url, params={"days": days})
+    return await get_json(client, url, params={"days": days, "dataset_id": dataset_id})
 
 
 def _max_severity(severities: list[str]) -> str:

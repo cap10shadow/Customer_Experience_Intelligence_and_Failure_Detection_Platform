@@ -19,7 +19,7 @@ const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.'
  * yet (§30 of the frozen architecture).
  */
 export function LoginPage() {
-  const { status, login } = useAuth()
+  const { status, sessionExpired, login } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -60,6 +60,16 @@ export function LoginPage() {
           <span className={styles.title}>Sign in</span>
           <span className={styles.subtitle}>Enter your credentials to access the platform.</span>
         </div>
+
+        {/* Shown only when a real session ended mid-use (AuthContext's
+            `sessionExpired`), never for a first visit or a deliberate
+            sign-out -- so a user who was working and got sent back here
+            knows why, instead of assuming the application broke. */}
+        {sessionExpired ? (
+          <p className={styles.notice} role="status">
+            Your session ended, so you were signed out. Sign in again to continue where you left off.
+          </p>
+        ) : null}
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
           <div className={styles.field}>

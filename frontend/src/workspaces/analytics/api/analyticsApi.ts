@@ -4,6 +4,8 @@ import type { AnalysisPeriod } from '../types'
 import type { AnalyticsApiResponse } from './types'
 
 export interface AnalyticsApiQuery {
+  /** Required (docs/DECISIONS.md AD-12) -- there is no "all datasets" trend view. */
+  datasetId: string
   period: AnalysisPeriod
 }
 
@@ -18,8 +20,8 @@ export interface GetAnalyticsOptions {
  * references anomaly_service's own URL; only the centralized apiClient.
  */
 export function getAnalytics(query: AnalyticsApiQuery, options: GetAnalyticsOptions = {}): Promise<AnalyticsApiResponse> {
-  return apiClient.get<AnalyticsApiResponse>('/analytics/trends', {
-    query: { period: query.period },
+  return apiClient.get<AnalyticsApiResponse>('/v1/analytics/trends', {
+    query: { datasetId: query.datasetId, period: query.period },
     signal: options.signal,
   })
 }

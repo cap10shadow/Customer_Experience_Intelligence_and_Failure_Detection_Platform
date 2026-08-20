@@ -27,9 +27,17 @@ class RecommendationModelMapper:
     """
 
     @staticmethod
-    def to_orm(recommendation: Recommendation, *, generation_id: uuid.UUID) -> RecommendationModel:
+    def to_orm(
+        recommendation: Recommendation,
+        *,
+        generation_id: uuid.UUID,
+        dataset_id: uuid.UUID,
+        dataset_version_id: uuid.UUID,
+    ) -> RecommendationModel:
         return RecommendationModel(
             incident_id=recommendation.incident_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
             generation_id=generation_id,
             category=recommendation.category,
             priority=recommendation.priority,
@@ -60,6 +68,8 @@ class RecommendationModelMapper:
             recommendation_id=model.recommendation_id,
             recommendation=recommendation,
             generation_id=model.generation_id,
+            dataset_id=model.dataset_id,
+            dataset_version_id=model.dataset_version_id,
             created_at=model.created_at,
             decision=model.decision,
             decision_note=model.decision_note,

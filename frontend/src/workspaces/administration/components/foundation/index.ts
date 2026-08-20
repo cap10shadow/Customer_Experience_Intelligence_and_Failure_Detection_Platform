@@ -1,4 +1,5 @@
 export { AdministrationSection, type AdministrationSectionProps } from './AdministrationSection'
+export { AdministrationStatusBadge, type AdministrationStatusBadgeProps } from './AdministrationStatusBadge'
 export { AdministrationEmptyState, type AdministrationEmptyStateProps } from './AdministrationEmptyState'
 export { AdministrationLoadingState, type AdministrationLoadingStateProps } from './AdministrationLoadingState'
 export {

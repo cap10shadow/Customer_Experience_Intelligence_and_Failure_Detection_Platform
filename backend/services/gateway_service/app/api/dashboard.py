@@ -15,6 +15,7 @@ _ALLOWED_TIME_RANGES = ("current", "24h", "7d", "30d")
 
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(
+    datasetId: str = Query(..., description="The Dataset this dashboard is scoped to."),
     timeRange: str = Query(default="current"),
     region: Optional[str] = Query(default=None),
     businessUnit: Optional[str] = Query(default=None),
@@ -62,5 +63,5 @@ async def get_dashboard(
             details={"unsupportedFilters": sorted(unsupported_filters), "scope": "Step 7.X"},
         )
 
-    query = DashboardQuery(time_range=timeRange)
+    query = DashboardQuery(time_range=timeRange, dataset_id=datasetId)
     return await build_dashboard(client, query)

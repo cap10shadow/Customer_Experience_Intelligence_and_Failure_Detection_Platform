@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { ApiError } from '@/app/api/errors'
+import { useDatasetContext } from '@/app/context/DatasetContext'
 
 import { useDashboardContext } from '../context'
 import { getDashboard, toDashboardViewModel, type DashboardViewModel } from '../api'
@@ -24,15 +25,27 @@ const INITIAL_STATE: DashboardFetchState = { data: null, isLoading: true, error:
  * businessUnit/productScope/userScope) and re-fetches whenever any of
  * them change, so the day a filter bar actually calls setRegion/etc.
  * this already reacts correctly -- no rework needed here.
+ *
+ * Also reads the global `selectedDatasetId` (docs/DECISIONS.md AD-12):
+ * the Gateway's `/dashboard` route requires a `datasetId` and has no
+ * "all datasets" fallback, so this hook fetches nothing at all -- never
+ * a global/unscoped request -- while no dataset is selected.
  */
 export function useDashboardData(): UseDashboardDataResult {
   const { timeRange, region, businessUnit, productScope, userScope } = useDashboardContext()
+  const { selectedDatasetId } = useDatasetContext()
 
   const [state, setState] = useState<DashboardFetchState>(INITIAL_STATE)
   const [retryToken, setRetryToken] = useState(0)
   const refetch = useCallback(() => setRetryToken((token) => token + 1), [])
 
   useEffect(() => {
+    if (!selectedDatasetId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors useDataset's identical "nothing to fetch" branch.
+      setState({ data: null, isLoading: false, error: null })
+      return
+    }
+
     const controller = new AbortController()
 
     // Resets to "loading" for this effect run -- only exercised once
@@ -45,7 +58,10 @@ export function useDashboardData(): UseDashboardDataResult {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState((previous) => ({ ...previous, isLoading: true, error: null }))
 
-    getDashboard({ timeRange, region, businessUnit, productScope, userScope }, { signal: controller.signal })
+    getDashboard(
+      { datasetId: selectedDatasetId, timeRange, region, businessUnit, productScope, userScope },
+      { signal: controller.signal },
+    )
       .then((response) => {
         setState({ data: toDashboardViewModel(response), isLoading: false, error: null })
       })
@@ -64,7 +80,7 @@ export function useDashboardData(): UseDashboardDataResult {
       })
 
     return () => controller.abort()
-  }, [timeRange, region, businessUnit, productScope, userScope, retryToken])
+  }, [selectedDatasetId, timeRange, region, businessUnit, productScope, userScope, retryToken])
 
   return { ...state, refetch }
 }

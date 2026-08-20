@@ -18,10 +18,20 @@ export interface EvidenceItem {
   source: EvidenceSource
 }
 
+/** Mirrors root_cause_service's own RootCauseStatus enum, surfaced through the Gateway (RootCauseExplanationDTO.status). */
+export type RootCauseLifecycleStatus = 'identified' | 'confirmed' | 'rejected'
+
+export const ROOT_CAUSE_STATUS_LABEL: Record<RootCauseLifecycleStatus, string> = {
+  identified: 'Awaiting review',
+  confirmed: 'Confirmed',
+  rejected: 'Rejected',
+}
+
 export interface RootCauseExplanation {
   headline: string
   reasoning: string
   confidenceLevel: ConfidenceLevel
+  status: RootCauseLifecycleStatus
 }
 
 /**

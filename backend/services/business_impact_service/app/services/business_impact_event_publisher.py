@@ -30,10 +30,14 @@ class BusinessImpactCompletedEvent:
     `incident_id` identifies the incident/business investigation the event
     concerns. These are deliberately kept semantically distinct (Part 6
     requirement): `incident_id` is never substituted for `event_id`.
+    `dataset_id` is carried through unchanged from the assessment that was
+    just persisted (docs/DECISIONS.md AD-12), so downstream consumers can
+    scope whatever they create to the same Dataset without an extra lookup.
     """
 
     event_id: uuid.UUID
     incident_id: uuid.UUID
+    dataset_id: uuid.UUID
     incident_severity: AnomalySeverity
     assessment: BusinessImpactAssessmentEntity
     root_cause: PersistedRootCause
@@ -60,6 +64,8 @@ def build_recommendation_payload(event: BusinessImpactCompletedEvent) -> Dict[st
     assessment = event.assessment
     return {
         "event_id": str(event.event_id),
+        "dataset_id": str(event.dataset_id),
+        "dataset_version_id": str(assessment.dataset_version_id),
         "incident": {
             "incident_id": str(event.incident_id),
             "severity": event.incident_severity.value,
@@ -84,7 +90,13 @@ def build_recommendation_payload(event: BusinessImpactCompletedEvent) -> Dict[st
 
 
 def build_evaluation_payload(event: BusinessImpactCompletedEvent) -> Dict[str, Any]:
-    """Shapes the event for evaluation_service's existing, frozen flat `BusinessImpactCompletedPayload`."""
+    """
+    Shapes the event for evaluation_service's existing, frozen flat
+    `BusinessImpactCompletedPayload`. Deliberately does not include
+    `dataset_id` (docs/DECISIONS.md AD-12): evaluation_service is not
+    gateway-exposed or user-facing today, so extending its own persistence
+    with dataset scoping is left as a follow-up rather than done here.
+    """
     assessment = event.assessment
     root_cause = event.root_cause
     return {

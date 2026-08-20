@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 from backend.services.anomaly_service.app.repositories.trend_repository import TrendRepository
@@ -20,9 +21,9 @@ class RegionDetector:
     def __init__(self, repository: TrendRepository) -> None:
         self.repository = repository
 
-    async def detect(self, current: TrendWindow, previous: TrendWindow) -> List[AnomalyCandidate]:
-        current_rows = await self.repository.count_complaints_by_region(current.start, current.end)
-        previous_rows = await self.repository.count_complaints_by_region(previous.start, previous.end)
+    async def detect(self, current: TrendWindow, previous: TrendWindow, dataset_id: uuid.UUID) -> List[AnomalyCandidate]:
+        current_rows = await self.repository.count_complaints_by_region(current.start, current.end, dataset_id)
+        previous_rows = await self.repository.count_complaints_by_region(previous.start, previous.end, dataset_id)
 
         current_counts = dict(current_rows)
         baseline_counts = dict(previous_rows)

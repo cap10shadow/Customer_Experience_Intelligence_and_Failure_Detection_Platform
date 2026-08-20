@@ -66,6 +66,20 @@
 
   /* Overlay scrim behind modals/dialogs (future use) */
   --color-scrim: rgb(15 17 21 / 48%);
+
+  /* Chart surfaces.
+     Deliberately NOT a categorical/rainbow series palette. Every chart
+     the platform draws is a magnitude or a single measure over time, so
+     one hue carries the data and the axis labels carry identity -- a
+     multi-hue palette here would encode nothing real. Charts that show a
+     genuine operational *state* (urgency) reuse the existing
+     `--color-status-*` tokens above, which are reserved for exactly that
+     and are always paired with a visible text label, never color alone. */
+  --color-chart-mark: #3457d5;
+  --color-chart-mark-fill: rgb(52 87 213 / 14%);
+  --color-chart-grid: #e2e4e9;
+  --color-chart-axis: #6f7480;
+  --color-chart-track: #eef0f3;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -103,6 +117,14 @@
 
     --color-focus-ring: #7c95f0;
     --color-scrim: rgb(0 0 0 / 60%);
+
+    /* Chosen against the dark chart surface (`--color-surface-raised`),
+       not an automatic inversion of the light values. */
+    --color-chart-mark: #7c95f0;
+    --color-chart-mark-fill: rgb(124 149 240 / 18%);
+    --color-chart-grid: #2b2d34;
+    --color-chart-axis: #93979f;
+    --color-chart-track: #23252b;
   }
 }
 
@@ -143,6 +165,12 @@
 
   --color-focus-ring: #7c95f0;
   --color-scrim: rgb(0 0 0 / 60%);
+
+  --color-chart-mark: #7c95f0;
+  --color-chart-mark-fill: rgb(124 149 240 / 18%);
+  --color-chart-grid: #2b2d34;
+  --color-chart-axis: #93979f;
+  --color-chart-track: #23252b;
 }
 
 :root[data-theme='light'] {

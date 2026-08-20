@@ -52,7 +52,76 @@ describe('Section-level loading (real component hierarchy)', () => {
   it('Trend Analysis suppresses trend narratives while loading', () => {
     render(withProviders(<TrendAnalysis isLoading />))
     expect(screen.queryByText('Complaint volume has remained broadly stable across the period')).not.toBeInTheDocument()
-    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(2)
+    // Two narrative cards plus the supporting-charts panel, which now
+    // shares the section's one loading state rather than popping in
+    // after the narratives have already resolved.
+    expect(document.querySelectorAll('[aria-busy="true"]').length).toBe(3)
+  })
+
+  it('Trend Analysis draws no chart at all when the section has no real returned series', () => {
+    // The illustrative default narratives carry no data behind them. A
+    // chart must only ever be drawn from values the backend actually
+    // returned, so this state renders none -- never an empty axis, which
+    // would read as a measured zero.
+    render(withProviders(<TrendAnalysis />))
+    expect(screen.queryByText('Supporting charts')).not.toBeInTheDocument()
+    expect(document.querySelector('svg[role="img"]')).toBeNull()
+  })
+
+  it('Trend Analysis draws every returned series, and only from the values the Gateway returned', () => {
+    render(
+      withProviders(
+        <TrendAnalysis
+          trends={[{ id: 'complaint-volume-trend', trend: 'A', narrative: 'B', evidence: 'C' }]}
+          series={{
+            volume: [
+              { date: '2026-08-15', count: 30 },
+              { date: '2026-08-16', count: 4 },
+            ],
+            category: [{ category: 'delivery_issue', count: 49 }],
+            region: [{ region: 'US-West', count: 35 }],
+            sentiment: [{ date: '2026-08-16', averageScore: -1, labelCounts: { negative: 5 } }],
+            urgency: [{ urgency: 'critical', count: 44 }],
+          }}
+        />,
+      ),
+    )
+
+    expect(screen.getByText('Supporting charts')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Complaint volume per day' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Average sentiment score per day' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Complaint count by category' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Complaint count by region' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Complaint count by urgency' })).toBeInTheDocument()
+
+    // Every charted value is also readable as text (beside its bar and
+    // again in the chart's data table), so the geometry is never the
+    // only record of a number the platform asserts.
+    expect(screen.getAllByText('49').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('35').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('44').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('View as data')).toHaveLength(5)
+  })
+
+  it('Trend Analysis omits a chart for a series the Gateway returned empty, rather than drawing an empty axis', () => {
+    render(
+      withProviders(
+        <TrendAnalysis
+          trends={[{ id: 'complaint-volume-trend', trend: 'A', narrative: 'B', evidence: 'C' }]}
+          series={{
+            volume: [{ date: '2026-08-16', count: 4 }],
+            category: [],
+            region: [],
+            sentiment: [],
+            urgency: [],
+          }}
+        />,
+      ),
+    )
+
+    expect(screen.getByRole('img', { name: 'Complaint volume per day' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Average sentiment score per day' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Complaint count by category' })).not.toBeInTheDocument()
   })
 
   it('Pattern Discovery suppresses the future-capability copy while loading, inside the same panel container both states share (Step 7.X G-02)', () => {

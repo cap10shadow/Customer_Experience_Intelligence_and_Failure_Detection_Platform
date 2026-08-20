@@ -35,15 +35,29 @@ async def run(client: httpx.AsyncClient, tool_input: AnalyticsToolInput) -> Anal
     /regions, /sentiment, /urgency], all `?days=` (1-365, matching the
     real `Query` bound exactly). There is no analytics_service -- these
     all belong to anomaly_service.
+
+    AD-12: every one of these routes now requires `dataset_id` (trend data
+    is dataset-scoped, same as anomalies/incidents). `tool_input.dataset_id`
+    is never fabricated here -- it only arrives if the LLM copied it from
+    the `filters.datasetId` hint `prompts.py` surfaces from the active
+    dataset (workspace_context), the same "context text -> LLM-supplied
+    argument" path `incident_id`/`recommendation_id` already use for the
+    other tools. With no dataset selected, this tool reports that honestly
+    instead of issuing a request guaranteed to 422.
     """
     path = _DIMENSION_PATHS.get(tool_input.dimension)
     if path is None:
         return AnalyticsToolResult(found=False, error=f"Unsupported dimension: {tool_input.dimension}.")
 
+    if not tool_input.dataset_id:
+        return AnalyticsToolResult(found=False, error="No dataset is selected; analytics trends require an active dataset.")
+
     days = max(1, min(tool_input.days, 365))
 
     try:
-        payload = await get_json(client, f"{_BASE_URL}{path}", params={"days": days})
+        payload = await get_json(
+            client, f"{_BASE_URL}{path}", params={"days": days, "dataset_id": tool_input.dataset_id}
+        )
     except ToolError as exc:
         return AnalyticsToolResult(found=False, error=exc.message)
 
@@ -87,7 +101,11 @@ async def run(client: httpx.AsyncClient, tool_input: AnalyticsToolInput) -> Anal
 register_tool(
     ToolDefinition(
         name=TOOL_NAME,
-        description="Answer volume/category/region/sentiment/urgency complaint-trend questions over a bounded trailing time window.",
+        description=(
+            "Answer volume/category/region/sentiment/urgency complaint-trend questions over a bounded "
+            "trailing time window. Requires dataset_id -- copy it verbatim from the conversation context's "
+            "filters.datasetId when present; if there is none, do not call this tool, treat it as unavailable."
+        ),
         input_model=AnalyticsToolInput,
         output_model=AnalyticsToolResult,
         executor=run,

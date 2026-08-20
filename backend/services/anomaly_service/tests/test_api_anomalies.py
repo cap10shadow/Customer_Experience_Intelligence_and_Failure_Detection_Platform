@@ -13,11 +13,15 @@ from backend.services.anomaly_service.app.schemas.anomalies import (
 from backend.shared.constants.enums.anomaly import AnomalySeverity, AnomalyStatus, AnomalyType
 
 SAMPLE_ID = uuid.uuid4()
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
 
 
 def _sample_anomaly(anomaly_id=SAMPLE_ID):
     return ActiveAnomalyResponse(
         id=anomaly_id,
+        dataset_id=DATASET_ID,
+        last_analysis_version_id=DATASET_VERSION_ID,
         fingerprint="complaint_spike:global:ALL",
         type=AnomalyType.COMPLAINT_SPIKE,
         severity=AnomalySeverity.HIGH,
@@ -35,7 +39,7 @@ def _sample_anomaly(anomaly_id=SAMPLE_ID):
 
 
 class MockAnomalyEngine:
-    async def run(self, days):
+    async def run(self, days, dataset_id, dataset_version_id):
         anomaly = _sample_anomaly()
         return AnomalyRunResult(
             run_at="2026-07-19T00:00:00Z",
@@ -45,10 +49,10 @@ class MockAnomalyEngine:
             resolved=[],
         )
 
-    async def get_active(self):
+    async def get_active(self, dataset_id):
         return [_sample_anomaly()]
 
-    async def get_latest(self):
+    async def get_latest(self, dataset_id):
         anomaly = _sample_anomaly()
         return AnomalyRunResult(
             run_at="2026-07-19T00:00:00Z",
@@ -77,7 +81,9 @@ def anyio_backend():
 async def test_post_run_returns_200_with_results(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/anomalies/run?days=7")
+        response = await client.post(
+            f"/api/v1/anomalies/run?days=7&dataset_id={DATASET_ID}&dataset_version_id={DATASET_VERSION_ID}"
+        )
         assert response.status_code == 200
         body = response.json()
         assert body["period"] == "Last 7 Days"
@@ -88,7 +94,7 @@ async def test_post_run_returns_200_with_results(override_dependencies):
 async def test_get_anomalies_returns_active_list(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/api/v1/anomalies")
+        response = await client.get(f"/api/v1/anomalies?dataset_id={DATASET_ID}")
         assert response.status_code == 200
         body = response.json()
         assert len(body) == 1
@@ -99,7 +105,7 @@ async def test_get_anomalies_returns_active_list(override_dependencies):
 async def test_get_latest_returns_run_result(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/api/v1/anomalies/latest")
+        response = await client.get(f"/api/v1/anomalies/latest?dataset_id={DATASET_ID}")
         assert response.status_code == 200
         body = response.json()
         assert len(body["detected"]) == 1
@@ -128,5 +134,5 @@ async def test_latest_route_is_not_shadowed_by_id_route(override_dependencies):
     endpoint, not be parsed as a UUID path parameter."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/api/v1/anomalies/latest")
+        response = await client.get(f"/api/v1/anomalies/latest?dataset_id={DATASET_ID}")
         assert response.status_code == 200

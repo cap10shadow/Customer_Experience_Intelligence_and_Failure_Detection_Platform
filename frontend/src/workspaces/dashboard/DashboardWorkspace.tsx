@@ -1,6 +1,14 @@
-import { Divider, Stack } from '@/shared/components/layout'
-import { ErrorBoundary, PartialFailureNotice } from '@/shared/components/feedback'
+import { Link } from 'react-router-dom'
+
+import { ApiError } from '@/app/api/errors'
+import { useDatasetContext } from '@/app/context/DatasetContext'
+import { ROUTE_PATHS } from '@/app/routing/routePaths'
+import { Divider, Grid, Stack } from '@/shared/components/layout'
+import { EmptyState, ErrorBoundary, PartialFailureNotice } from '@/shared/components/feedback'
+import { Button, buttonClassName } from '@/shared/components/primitives'
 import { WorkspaceContainer } from '@/shared/components/page'
+import { DatasetVersionLabel } from '@/shared/components/utility'
+import { useDataset } from '@/workspaces/ingestion/hooks/useDataset'
 
 import { DashboardContextProvider } from './context'
 import { DecisionSummary } from './components/DecisionSummary'
@@ -46,12 +54,68 @@ export function DashboardWorkspace() {
  * same already-failed state.
  */
 function DashboardWorkspaceContent() {
+  const { selectedDatasetId, selectedDatasetName, setSelectedDataset } = useDatasetContext()
   const { data, isLoading, error, refetch } = useDashboardData()
+  // Real version/status for the header badge -- reuses the Data workspace's
+  // own `useDataset` hook (GET /v1/datasets/{id}) rather than duplicating
+  // fetching logic. This is a deliberate, separate call from
+  // useDashboardData's aggregated fetch: showing "which finalized version
+  // is this intelligence current as of" requires proof from the backend,
+  // not just the dataset's name (which DatasetContext already carries
+  // without a fetch).
+  const { data: datasetDetail, error: datasetError } = useDataset(selectedDatasetId)
+
+  if (!selectedDatasetId) {
+    return (
+      <WorkspaceContainer
+        title="Operational Intelligence Dashboard"
+        description="Immediate operational awareness -- what changed, why it matters, and where to go next."
+      >
+        <EmptyState
+          title="No dataset selected"
+          description="The Dashboard shows intelligence for one dataset at a time -- select an existing dataset or create a new one to see its Dashboard."
+          action={
+            <Link className={buttonClassName('primary')} to={ROUTE_PATHS.ingestion}>
+              Go to Data
+            </Link>
+          }
+        />
+      </WorkspaceContainer>
+    )
+  }
+
+  // The selected dataset was archived (or otherwise no longer exists) --
+  // detected via this same `useDataset` fetch's own 404 (ingestion_service
+  // already excludes archived datasets from GET by default), independent
+  // of whether the Dashboard's own aggregated data happens to still look
+  // plausible (anomaly_service/etc. have no concept of Dataset lifecycle,
+  // so `useDashboardData` alone could otherwise return an
+  // empty-but-plausible response for an archived dataset). Never let a
+  // stale DatasetContext keep showing an archived dataset as if active.
+  if (datasetError instanceof ApiError && datasetError.status === 404) {
+    return (
+      <WorkspaceContainer
+        title="Operational Intelligence Dashboard"
+        description="Immediate operational awareness -- what changed, why it matters, and where to go next."
+      >
+        <EmptyState
+          title="This dataset is no longer available"
+          description="It may have been archived or removed. Select a different dataset to continue."
+          action={
+            <Button variant="primary" onClick={() => setSelectedDataset(null)}>
+              Change dataset
+            </Button>
+          }
+        />
+      </WorkspaceContainer>
+    )
+  }
 
   return (
     <WorkspaceContainer
       title="Operational Intelligence Dashboard"
       description="Immediate operational awareness -- what changed, why it matters, and where to go next."
+      actions={<DatasetVersionLabel name={selectedDatasetName ?? selectedDatasetId} detail={datasetDetail} />}
     >
       <Stack gap={10}>
         <PartialFailureNotice warnings={data?.warnings} />
@@ -71,19 +135,19 @@ function DashboardWorkspaceContent() {
 
         <Divider />
 
-        <ErrorBoundary boundaryLabel="the Decision Summary" onRetry={refetch} resetKeys={[isLoading]}>
-          <DashboardSectionErrorGate error={error}>
-            <DecisionSummary opportunities={data?.decisionOpportunities} isLoading={isLoading} />
-          </DashboardSectionErrorGate>
-        </ErrorBoundary>
+        <Grid minColumnWidth={440} gap={8}>
+          <ErrorBoundary boundaryLabel="the Decision Summary" onRetry={refetch} resetKeys={[isLoading]}>
+            <DashboardSectionErrorGate error={error}>
+              <DecisionSummary opportunities={data?.decisionOpportunities} isLoading={isLoading} />
+            </DashboardSectionErrorGate>
+          </ErrorBoundary>
 
-        <Divider />
-
-        <ErrorBoundary boundaryLabel="the Investigation Entry Points" onRetry={refetch} resetKeys={[isLoading]}>
-          <DashboardSectionErrorGate error={error}>
-            <InvestigationEntryPoints stories={data?.operationalStories} isLoading={isLoading} />
-          </DashboardSectionErrorGate>
-        </ErrorBoundary>
+          <ErrorBoundary boundaryLabel="the Investigation Entry Points" onRetry={refetch} resetKeys={[isLoading]}>
+            <DashboardSectionErrorGate error={error}>
+              <InvestigationEntryPoints stories={data?.operationalStories} isLoading={isLoading} />
+            </DashboardSectionErrorGate>
+          </ErrorBoundary>
+        </Grid>
 
         <Divider />
 

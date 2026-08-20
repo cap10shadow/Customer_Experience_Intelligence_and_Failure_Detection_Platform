@@ -16,7 +16,7 @@ export function getRecommendation(
   recommendationId: string,
   options: GetRecommendationOptions = {},
 ): Promise<RecommendationApiResponse> {
-  return apiClient.get<RecommendationApiResponse>(`/recommendations/${encodeURIComponent(recommendationId)}`, {
+  return apiClient.get<RecommendationApiResponse>(`/v1/recommendations/${encodeURIComponent(recommendationId)}`, {
     signal: options.signal,
   })
 }
@@ -38,7 +38,7 @@ export function patchRecommendationDecision(
   options: PatchRecommendationDecisionOptions = {},
 ): Promise<RecommendationApiResponse> {
   return apiClient.patch<RecommendationApiResponse>(
-    `/recommendations/${encodeURIComponent(recommendationId)}/decision`,
+    `/v1/recommendations/${encodeURIComponent(recommendationId)}/decision`,
     { decision, note },
     { signal: options.signal },
   )

@@ -38,6 +38,11 @@ class RecommendationRecord:
       identifier value a caller needs to group/query by, the same way
       `EvaluationRecord.event_id` carries a bare event identifier without
       requiring an "Event" Domain Aggregate.
+    - `dataset_id` (docs/DECISIONS.md AD-12) follows the exact same
+      pattern as `generation_id`: a bare, cross-service identifier carried
+      through from the triggering `BusinessImpactCompleted` event, added
+      here on the persistence envelope without modifying a single field of
+      the frozen Step 1 `Recommendation` aggregate.
     - Immutable and append-only, matching `Recommendation` itself: there is
       no operation anywhere in this service that mutates a persisted
       Recommendation record.
@@ -62,6 +67,8 @@ class RecommendationRecord:
     recommendation_id: uuid.UUID
     recommendation: Recommendation
     generation_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
     created_at: datetime
     decision: Optional[RecommendationDecision] = None
     decision_note: Optional[str] = None

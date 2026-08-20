@@ -227,6 +227,7 @@ class AnalyticsToolInput(BaseModel):
 
     dimension: TrendDimension = "summary"
     days: int = 30
+    dataset_id: Optional[str] = None
 
 
 class VolumeTrendPoint(BaseModel):

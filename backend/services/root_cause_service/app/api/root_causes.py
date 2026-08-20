@@ -1,5 +1,5 @@
 import uuid
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -34,7 +34,7 @@ async def create_root_cause(
     an upsert — recalculation belongs to Phase 6 Step 3.
     """
     try:
-        root_cause = await service.create_root_cause(request.incident_id)
+        root_cause = await service.create_root_cause(request.incident_id, request.dataset_id, request.dataset_version_id)
     except IncidentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RootCauseAlreadyExistsError as exc:
@@ -56,10 +56,11 @@ async def get_root_cause(
 
 @router.get("", response_model=List[RootCauseResponse])
 async def list_root_causes(
+    dataset_id: Optional[uuid.UUID] = None,
     service: RootCauseApplicationService = Depends(get_root_cause_application_service),
 ):
-    """Returns all persisted RootCause records. Filtering is deferred to a later step."""
-    return await service.list_root_causes()
+    """Returns persisted RootCause records, optionally filtered to a single Dataset."""
+    return await service.list_root_causes(dataset_id=dataset_id)
 
 
 @router.patch("/{root_cause_id}/confirm", response_model=RootCauseResponse)

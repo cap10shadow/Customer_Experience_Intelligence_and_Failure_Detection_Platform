@@ -7,4 +7,4 @@ export type {
   UrgencyTrendPointApi,
   VolumeTrendPointApi,
 } from './types'
-export { toAnalyticsViewModel, type AnalyticsViewModel } from './viewModel'
+export { toAnalyticsViewModel, type AnalyticsSeries, type AnalyticsViewModel } from './viewModel'

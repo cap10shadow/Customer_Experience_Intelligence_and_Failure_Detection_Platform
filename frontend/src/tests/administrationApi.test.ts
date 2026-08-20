@@ -17,12 +17,12 @@ describe('administrationApi.getIntelligenceConfiguration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('requests GET /administration/intelligence-configuration', async () => {
+  it('requests GET /v1/administration/intelligence-configuration', async () => {
     await getIntelligenceConfiguration()
 
     const [requestedUrl, init] = vi.mocked(fetch).mock.calls[0]
     const url = new URL(String(requestedUrl))
-    expect(url.pathname).toContain('/administration/intelligence-configuration')
+    expect(url.pathname).toContain('/v1/administration/intelligence-configuration')
     expect(init?.method === 'GET' || init?.method === undefined).toBe(true)
   })
 })

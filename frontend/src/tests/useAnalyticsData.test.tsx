@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 
+import { DATASET_STORAGE_KEY, DatasetProvider } from '@/app/context/DatasetContext'
 import { AnalyticsContextProvider } from '@/workspaces/analytics/context'
 import { useAnalyticsData } from '@/workspaces/analytics/hooks/useAnalyticsData'
 import { ApiError } from '@/app/api/errors'
@@ -11,7 +12,11 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <AnalyticsContextProvider>{children}</AnalyticsContextProvider>
+  return (
+    <DatasetProvider>
+      <AnalyticsContextProvider>{children}</AnalyticsContextProvider>
+    </DatasetProvider>
+  )
 }
 
 const SAMPLE_RESPONSE = {
@@ -25,8 +30,13 @@ const SAMPLE_RESPONSE = {
 }
 
 describe('useAnalyticsData', () => {
+  beforeEach(() => {
+    window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
+    window.localStorage.removeItem(DATASET_STORAGE_KEY)
   })
 
   it('starts in a loading state with no data or error', () => {

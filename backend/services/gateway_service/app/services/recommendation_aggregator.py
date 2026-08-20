@@ -73,6 +73,8 @@ def _to_response(recommendation: Dict[str, Any]) -> RecommendationResponse:
     return RecommendationResponse(
         recommendationId=str(recommendation["recommendation_id"]),
         incidentId=str(recommendation["incident_id"]),
+        datasetId=str(recommendation["dataset_id"]),
+        datasetVersionId=str(recommendation["dataset_version_id"]),
         generationId=str(recommendation["generation_id"]),
         category=str(recommendation["category"]),
         priority=str(recommendation["priority"]),

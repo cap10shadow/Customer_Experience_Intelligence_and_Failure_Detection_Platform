@@ -8,8 +8,12 @@ import type { InvestigationApiResponse } from '@/workspaces/investigations/api'
 
 const INCIDENT_ID = 'incident-42'
 
+const DATASET_ID = 'dataset-1'
+
 const SAMPLE_INVESTIGATION_RESPONSE: InvestigationApiResponse = {
   incidentId: INCIDENT_ID,
+  datasetId: DATASET_ID,
+  datasetVersionId: 'version-1',
   observation: {
     headline: 'Checkout failures rising',
     description: 'Payment failures are trending above baseline.',
@@ -23,6 +27,7 @@ const SAMPLE_INVESTIGATION_RESPONSE: InvestigationApiResponse = {
     headline: 'Most likely cause: Payment Gateway Failure',
     reasoning: 'The timing aligns with a recent payment gateway change.',
     confidenceLevel: 'high',
+    status: 'identified',
   },
   businessImpact: [
     { dimension: 'financial', headline: 'Significant impact detected', detail: 'Financial impact assessed as high.' },
@@ -77,6 +82,14 @@ describe('Investigation real routing + Gateway integration', () => {
     expect(screen.getByText('Escalate to payments team')).toBeInTheDocument()
   })
 
+  it('shows the investigation\'s real datasetId when no dataset context is available (never silently omitted)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_INVESTIGATION_RESPONSE)))
+
+    renderAtIncident(INCIDENT_ID)
+
+    expect(await screen.findByText(new RegExp(`Dataset:.*${DATASET_ID}`))).toBeInTheDocument()
+  })
+
   it('requests the routed incidentId, never a raw backend service host', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(SAMPLE_INVESTIGATION_RESPONSE)))
 
@@ -86,7 +99,7 @@ describe('Investigation real routing + Gateway integration', () => {
 
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
     const url = String(requestedUrl)
-    expect(url).toContain(`/investigations/${INCIDENT_ID}`)
+    expect(url).toContain(`/v1/investigations/${INCIDENT_ID}`)
     expect(url).not.toMatch(/:800[1-8]/)
   })
 
@@ -97,7 +110,7 @@ describe('Investigation real routing + Gateway integration', () => {
 
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     const [requestedUrl] = vi.mocked(fetch).mock.calls[0]
-    expect(String(requestedUrl)).toContain('/investigations/another-incident-id')
+    expect(String(requestedUrl)).toContain('/v1/investigations/another-incident-id')
   })
 
   it('renders honest empty states when root cause, business impact, and recommendation are all legitimately absent', async () => {

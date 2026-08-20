@@ -10,6 +10,8 @@ from backend.services.gateway_service.app.api.analytics import router as analyti
 from backend.services.gateway_service.app.api.auth import router as auth_router
 from backend.services.gateway_service.app.api.copilot import router as copilot_router
 from backend.services.gateway_service.app.api.dashboard import router as dashboard_router
+from backend.services.gateway_service.app.api.datasets import router as datasets_router
+from backend.services.gateway_service.app.api.ingestion import router as ingestion_router
 from backend.services.gateway_service.app.api.investigations import router as investigations_router
 from backend.services.gateway_service.app.api.recommendations import router as recommendations_router
 from backend.services.gateway_service.app.core.authorization import require_role
@@ -111,6 +113,8 @@ app.include_router(auth_router, prefix="/api/v1")
 _require_viewer = [Depends(require_role("viewer"))]
 _require_operator = [Depends(require_role("operator"))]
 app.include_router(dashboard_router, prefix="/api/v1", dependencies=_require_viewer)
+app.include_router(datasets_router, prefix="/api/v1", dependencies=_require_viewer)
+app.include_router(ingestion_router, prefix="/api/v1", dependencies=_require_viewer)
 app.include_router(investigations_router, prefix="/api/v1", dependencies=_require_viewer)
 app.include_router(recommendations_router, prefix="/api/v1", dependencies=_require_viewer)
 app.include_router(analytics_router, prefix="/api/v1", dependencies=_require_viewer)

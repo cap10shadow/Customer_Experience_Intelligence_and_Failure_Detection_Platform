@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
+import { DATASET_STORAGE_KEY, DatasetProvider } from '@/app/context/DatasetContext'
 import { AnalyticsWorkspace } from '@/workspaces/analytics'
 import type { AnalyticsApiResponse } from '@/workspaces/analytics/api'
 
@@ -25,11 +26,21 @@ function jsonResponse(body: unknown, status = 200) {
 
 function mountWorkspace() {
   return render(
-    <MemoryRouter>
-      <AnalyticsWorkspace />
-    </MemoryRouter>,
+    <DatasetProvider>
+      <MemoryRouter>
+        <AnalyticsWorkspace />
+      </MemoryRouter>
+    </DatasetProvider>,
   )
 }
+
+beforeEach(() => {
+  window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+})
+
+afterEach(() => {
+  window.localStorage.removeItem(DATASET_STORAGE_KEY)
+})
 
 /**
  * AnalyticsWorkspace owns a real loading state, driven by an actual

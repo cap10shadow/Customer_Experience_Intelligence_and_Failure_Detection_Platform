@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 
+import { DATASET_STORAGE_KEY, DatasetProvider } from '@/app/context/DatasetContext'
 import { DashboardContextProvider } from '@/workspaces/dashboard/context'
 import { useDashboardData } from '@/workspaces/dashboard/hooks/useDashboardData'
 import { ApiError } from '@/app/api/errors'
@@ -11,12 +12,21 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <DashboardContextProvider>{children}</DashboardContextProvider>
+  return (
+    <DatasetProvider>
+      <DashboardContextProvider>{children}</DashboardContextProvider>
+    </DatasetProvider>
+  )
 }
 
 describe('useDashboardData', () => {
+  beforeEach(() => {
+    window.localStorage.setItem(DATASET_STORAGE_KEY, 'dataset-1')
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
+    window.localStorage.removeItem(DATASET_STORAGE_KEY)
   })
 
   it('starts in a loading state with no data or error', () => {

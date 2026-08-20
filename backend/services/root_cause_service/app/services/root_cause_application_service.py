@@ -50,7 +50,9 @@ class RootCauseApplicationService:
         self.root_cause_repository = root_cause_repository
         self.engine = engine
 
-    async def create_root_cause(self, incident_id: uuid.UUID) -> RootCause:
+    async def create_root_cause(
+        self, incident_id: uuid.UUID, dataset_id: uuid.UUID, dataset_version_id: uuid.UUID
+    ) -> RootCause:
         persisted_incident = await self.incident_read_repository.get_by_id(incident_id)
         if persisted_incident is None:
             raise IncidentNotFoundError(incident_id)
@@ -61,7 +63,7 @@ class RootCauseApplicationService:
 
         domain_incident = IncidentMapper.to_domain(persisted_incident)
         candidate = self.engine.analyze(domain_incident)
-        root_cause = RootCauseMapper.to_orm(incident_id, candidate)
+        root_cause = RootCauseMapper.to_orm(incident_id, dataset_id, dataset_version_id, candidate)
         return await self.root_cause_repository.save(root_cause)
 
     async def get_root_cause(self, root_cause_id: uuid.UUID) -> Optional[RootCause]:
@@ -70,8 +72,8 @@ class RootCauseApplicationService:
     async def get_root_cause_by_incident(self, incident_id: uuid.UUID) -> Optional[RootCause]:
         return await self.root_cause_repository.get_by_incident(incident_id)
 
-    async def list_root_causes(self) -> Sequence[RootCause]:
-        return await self.root_cause_repository.list()
+    async def list_root_causes(self, dataset_id: Optional[uuid.UUID] = None) -> Sequence[RootCause]:
+        return await self.root_cause_repository.list(dataset_id=dataset_id)
 
     async def confirm_root_cause(self, root_cause_id: uuid.UUID) -> RootCause:
         """Confirms a RootCause. Idempotent if already CONFIRMED; 409 if REJECTED."""

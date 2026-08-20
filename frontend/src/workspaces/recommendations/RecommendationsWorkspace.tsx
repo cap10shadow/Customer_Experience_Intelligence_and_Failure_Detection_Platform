@@ -1,5 +1,8 @@
 import { useParams } from 'react-router-dom'
 
+import { describeApiError } from '@/app/api/errors'
+import { useOptionalDatasetContext } from '@/app/context/DatasetContext'
+import { useOptionalAuth } from '@/auth/context/AuthContext'
 import { ErrorBoundary } from '@/shared/components/feedback'
 import { WorkspaceContainer } from '@/shared/components/page'
 
@@ -45,6 +48,28 @@ export function RecommendationsWorkspace() {
   const { recommendationId } = useParams<{ recommendationId: string }>()
   const { data, isLoading, error, refetch } = useRecommendationData(recommendationId ?? null)
   const { isSubmitting, error: decisionError, submit } = useRecommendationDecision(recommendationId ?? null)
+  // The Gateway requires `operator` for PATCH .../decision. Read here,
+  // at the workspace, and passed down as a prop -- the sections
+  // themselves stay presentational. `useOptionalAuth` rather than
+  // `useAuth` because this workspace renders correctly with no session
+  // information at all (component-level tests mount it directly); in
+  // that case no role restriction is claimed, and the Gateway remains
+  // the authorization boundary either way.
+  const auth = useOptionalAuth()
+  // AD-12 follow-up: this Recommendation's own `datasetId` (real,
+  // Gateway-sourced -- see api/viewModel.ts) is never assumed to match
+  // whichever dataset happens to be selected right now (a direct link or
+  // an older bookmark can point at a Recommendation from a different
+  // dataset than the one currently active). Shown plainly rather than
+  // silently relying on the active dataset selection.
+  const datasetContext = useOptionalDatasetContext()
+  const datasetLabel = data
+    ? `${
+        data.datasetId === datasetContext?.selectedDatasetId
+          ? (datasetContext.selectedDatasetName ?? data.datasetId)
+          : `${data.datasetId} (not your currently selected dataset)`
+      } · generated for version ${data.datasetVersionId.slice(0, 8)}`
+    : undefined
 
   const handleSubmitDecision = (decision: RecommendationDecisionApiValue, note: string | undefined) => {
     submit(decision, note)
@@ -59,6 +84,7 @@ export function RecommendationsWorkspace() {
       <WorkspaceContainer
         title="Recommendations"
         description="An explainable, governed operational decision -- the platform recommends, you decide."
+        actions={datasetLabel ? <span>Dataset: {datasetLabel}</span> : undefined}
       >
         <RecommendationLayout decision={data?.decision}>
           <RecommendationContent>
@@ -91,7 +117,12 @@ export function RecommendationsWorkspace() {
                 decision={data?.decision}
                 isLoading={isLoading}
                 isSubmitting={isSubmitting}
-                submitErrorMessage={decisionError?.message}
+                canRecordDecision={auth ? auth.hasRole('operator') : true}
+                // Shared status wording (app/api/errors.ts) rather than
+                // the raw envelope message -- a 403 here previously read
+                // as a bare authorization string that never mentioned
+                // the user's role as the reason.
+                submitErrorMessage={decisionError ? describeApiError(decisionError, { subject: 'record this decision' }) : undefined}
                 onSubmitDecision={recommendationId ? handleSubmitDecision : undefined}
               />
             </ErrorBoundary>

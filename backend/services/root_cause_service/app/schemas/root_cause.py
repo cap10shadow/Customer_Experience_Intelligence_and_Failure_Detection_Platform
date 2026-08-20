@@ -10,8 +10,15 @@ from backend.shared.constants.enums.root_cause import RootCauseStatus
 
 
 class CreateRootCauseRequest(BaseModel):
-    """Request body for POST /root-causes: which Incident to analyze."""
+    """
+    Request body for POST /root-causes: which Incident to analyze, and
+    which Dataset that Incident belongs to. `dataset_id` must be supplied
+    by the caller (the Gateway's orchestrator) -- the Root Cause Service
+    has no independent way to look it up.
+    """
     incident_id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
 
 
 class EvidenceResponse(BaseModel):
@@ -25,6 +32,8 @@ class RootCauseResponse(BaseModel):
     """Full explainable snapshot of a persisted RootCause."""
 
     id: uuid.UUID
+    dataset_id: uuid.UUID
+    dataset_version_id: uuid.UUID
     incident_id: uuid.UUID
     cause: RootCauseEnum
     confidence_score: int

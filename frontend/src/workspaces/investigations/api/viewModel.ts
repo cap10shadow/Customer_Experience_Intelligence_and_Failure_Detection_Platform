@@ -9,6 +9,8 @@ import type { InvestigationApiObservation, InvestigationApiResponse } from './ty
 
 /** The Investigation workspace's own view model -- what InvestigationsWorkspace hands down to its five sections. */
 export interface InvestigationViewModel {
+  datasetId: string
+  datasetVersionId: string
   observation: InvestigationApiObservation
   evidence: EvidenceItem[]
   rootCause: RootCauseExplanation | null
@@ -25,6 +27,8 @@ export interface InvestigationViewModel {
  */
 export function toInvestigationViewModel(response: InvestigationApiResponse): InvestigationViewModel {
   return {
+    datasetId: response.datasetId,
+    datasetVersionId: response.datasetVersionId,
     observation: response.observation,
     evidence: response.evidence,
     rootCause: response.rootCause,

@@ -7,6 +7,136 @@ The format follows a simplified version of the Keep a Changelog convention.
 
 ---
 
+# 2026-08-17 (Dataset/DatasetVersion domain model — multi-dataset isolation and versioning)
+
+## Dataset identity, versioning, extend/re-analyze lifecycle, dataset-scoped Dashboard/Analytics, dataset-scoped detection/investigation/recommendation pipeline
+
+Before this change the platform had no concept of a dataset: every complaint, real or seeded, lived in one global table, and every downstream query scanned it unconditionally. This closes that gap end-to-end — schema, six backend services, the Gateway orchestrator, and the Data workspace. Full decision record: `docs/DECISIONS.md` (AD-12).
+
+### Added
+
+- **`Dataset`/`DatasetVersion` tables** (`ingestion_service`) — a dataset is a persistent analytical workspace; a version is a finalized snapshot marker (record counts, pipeline status), never a data partition. `Complaint` gains `dataset_id` and `dataset_version_id` real FKs. Every pre-existing row is backfilled into one deterministic "Legacy / Demo Data" dataset (`backend/shared/constants/seed_ids.py`) — `dataset_id` is `NOT NULL` everywhere from the start, no nullable escape hatch.
+- **`dataset_id` scoping across `anomaly_service`, `root_cause_service`, `business_impact_service`, `recommendation_service`** — every detector, aggregator, repository, and API route now requires a `dataset_id`. `ActiveAnomaly.fingerprint` uniqueness changes from global to `(fingerprint, dataset_id)`, so two unrelated datasets can share a fingerprint without colliding.
+- **`gateway_service/app/services/dataset_analysis_orchestrator.py`** — the real pipeline behind `POST /api/v1/datasets/{id}/versions/finalize`: closes the draft version, then synchronously runs enrichment → anomaly detection → incident correlation → per-incident root-cause and business-impact analysis, before returning the version's terminal status. No task queue was added; this is a disclosed, deliberate scale limitation.
+- **Gateway dataset API surface** — `POST/GET /datasets`, `GET /datasets/{id}[/versions[/{versionId}]]`, `POST /datasets/{id}/versions/finalize`, `POST/GET /datasets/{id}/complaints`. `GET /dashboard` and `GET /analytics/trends` now require `datasetId` — there is no "all datasets" fallback; a request with no scope is rejected, not silently served globally.
+- **Data workspace rebuilt** (`frontend/src/workspaces/ingestion`) around dataset identity: a dataset list/create view when nothing is selected, and a dataset detail view (version banner, Upload → Preview → Confirm → Ingest, an explicit "Finalize & Analyze" action, real version history) when one is. `DatasetProvider` (`frontend/src/app/context/DatasetContext.tsx`) holds the app-wide `selectedDatasetId`/`selectedDatasetName` in `localStorage`, mounted in `AppProviders` — every dataset-aware workspace reads from it, and none falls back to a global query.
+- **Dashboard and Analytics are dataset-scoped** — both hooks fetch nothing while no dataset is selected and both workspaces render an explicit "No dataset selected" empty state with a link to Data, rather than an empty chart or a silently-global request. Both show a context banner naming the active dataset.
+- **Enum-casing normalizer** (`frontend/src/shared/constants/enums.ts`, used by `parseComplaintRows.ts`) — a hand-synced TS mirror of the backend's five real closed enums (`SourceChannel`, `CustomerSegment`, `CustomerType`, `OperationalArea`, `ServiceType`). Uploaded rows are normalized (casing, spaces/hyphens → underscores) and validated client-side against the real allow-list before submission, so a casing mismatch is caught as a per-row preview error instead of surfacing as a 422 after the request is sent.
+
+### Fixed
+
+- **Two divergent Alembic migration heads.** The dataset migration chain's first revision (`a1c3d5e7f902`) was authored against a stale `down_revision` (`f05ea2afc3ee`), which had already grown a sibling chain (gateway identity tables, Copilot ownership, recommendation decision attribution) by the time it was written. Left as committed, `alembic upgrade head` would have failed outright with "Multiple head revisions are present" against any real database. Rebased onto the actual head (`e35a123597e1`); confirmed with `alembic heads` (now one) and a full `alembic upgrade head` from an empty database.
+- **A real `CREATE TYPE ... AS ENUM` double-creation and an unbound `sa.func.now()` bind parameter**, both in the same migration, found only by actually running it against a live, empty PostgreSQL database (never caught by the static migration-graph check or by any test, since the backend test suite runs against SQLite-free in-memory fixtures, not this migration). Fixed by letting `CREATE TABLE`'s own enum column create the type once (removing the redundant explicit `.create()` call) and by omitting `inserted_at` from two `bulk_insert` calls so the column's own `server_default=now()` applies, instead of binding an unevaluated SQL-expression object as a literal asyncpg parameter.
+
+### Verified
+
+- Backend: `PYTHONPATH=. python -m pytest backend -q` — **1232 passed, 21 failed, 161 skipped**. The 21 failures are the pre-existing baseline (`test_auth_api.py`, `test_event_isolation.py`, `test_main.py`, `test_rbac_api.py` — all require a locally-reachable PostgreSQL this sandbox doesn't have); identical file/test list before and after this change.
+- Frontend: `npx tsc -b --noEmit`, `npm run lint`, `npm run build` all clean; `npx vitest run` — **366 passed / 366, 51 files, 0 failed**.
+- Migrations: `alembic upgrade head` from an empty, isolated PostgreSQL container (via `docker compose`) — full chain applies cleanly, single head, real schema verified by direct query (`datasets`/`dataset_versions` tables, `complaints.dataset_id`/`dataset_version_id` FKs, legacy backfill row present). `alembic downgrade` back through all five new revisions and `upgrade head` again both succeed cleanly.
+- End-to-end (real running services, not mocked): created two unrelated datasets, ingested and finalized both, confirmed zero cross-dataset contamination in Analytics/Dashboard, extended the first dataset with 6 more records, confirmed a new version (cumulative 18, new 6) was created while version 1 (12 records) remained independently queryable, confirmed the Dashboard/Investigations/Analytics routes reflect the post-extension cumulative re-analysis, and confirmed real conflict/validation states (`409` duplicate, `404` unknown dataset, `422` missing required `datasetId`, `400` invalid enum casing).
+
+### Known regression, not fixed in this pass
+
+- **Copilot's `analytics_trends` tool is now always broken.** `anomaly_service`'s `/trends*` routes started requiring `dataset_id` as part of this feature; `copilot_service/app/services/analytics_tool.py` was never updated to supply one, so every call now returns a real `422` that the tool correctly converts into an honest `found: false` error (no crash, no fabricated data) — but the capability itself is gone. Fixing it means adding a dataset field to `WorkspaceContext`, which Phase 12's architecture document states is a frozen, `extra="forbid"` five-field contract — a genuinely architectural change requiring explicit sign-off, not something to change unilaterally under this pass. Copilot's other tools (investigation, root-cause, recommendation, business-impact) remain functional — they resolve by `incident_id`, and those routes were deliberately left dataset-independent (see AD-12 decision 12).
+
+### Decided, not built
+
+- **No dataset version comparison** — diffing two versions' record sets or derived intelligence against each other. Explicitly requested in the originating brief and explicitly deferred, confirmed with the user before implementation.
+- **No report generation/export** — no backend capability exists for this anywhere in the platform; none was added.
+- **No live version/status badge in Dashboard's or Analytics' dataset-context banner** — only the dataset name (captured at selection time) is shown there, to avoid a second network request per workspace on every load; live pipeline/version status remains the Data workspace's responsibility alone.
+- **`evaluation_service` still has no `dataset_id`** on its own persistence or event payload — it is not Gateway-exposed and extending it was out of scope for this pass, same as the pre-existing, already-disclosed gap.
+
+> Not verified: no browser automation was available for this pass. The eight end-to-end user-journey scenarios in the originating brief (new dataset → isolated analysis → extend → new version → historical access, contamination check) were exercised via direct Gateway HTTP calls where the sandbox allowed it; see the session's final report for the exact pass/fail/not-verified breakdown per scenario.
+
+---
+
+# 2026-08-17 (Product experience reconstruction — ingestion, root-cause actions, Administration labeling)
+
+## Data / Ingestion workspace, root-cause lifecycle actions, Administration capability badge, shared design-system primitives
+
+A full reconciliation of documented product intent against actual backend capability and actual frontend exposure (three independent explorations: docs, frontend, backend). Most apparent gaps (Analytics' placeholders, Copilot's no-LLM state, four of Administration's six sections) were confirmed as already honest, deliberate decisions (AD-9, AD-10), not defects, and were left untouched. Four verified, real gaps were closed. Full decision record: `docs/DECISIONS.md` (AD-11).
+
+### Added
+
+- **Gateway ingestion exposure.** `gateway_service/app/api/ingestion.py` + `services/ingestion_proxy.py` proxy `ingestion_service`'s real `POST/GET /complaints` (previously implemented, never Gateway-mounted) as `POST /api/v1/ingestion/complaints` (`operator`) and `GET /api/v1/ingestion/complaints[/{id}]` (`viewer`). New `gateway_service/tests/test_ingestion.py`.
+- **Data workspace** (`frontend/src/workspaces/ingestion`, route `/data`, first item in primary navigation) — the platform's entry point into the operational intelligence lifecycle. Upload a CSV/JSON file or add a complaint manually; rows are parsed and validated client-side, previewed, confirmed, then submitted one real request at a time with a real per-row success/duplicate/failed outcome; a "Recently ingested" section reads back what has actually persisted (`GET /api/v1/ingestion/complaints`).
+- **Root-cause lifecycle actions, Gateway-exposed.** `root_cause_service`'s real `confirm`/`reject`/`refresh` routes are now proxied (`PATCH/POST /api/v1/investigations/{incidentId}/root-cause/{confirm,reject,refresh}`, resolving the incident's RootCause id server-side), including translating the service's real 409 (invalid lifecycle transition) into the Gateway's own `ConflictError` rather than a generic 502 (new `patch_resource` helper in `core/downstream.py`). `RootCauseExplanationDTO` now carries the real `status` field it previously dropped. Investigations' Root Cause Analysis section renders real, `operator`-gated Confirm/Reject/Re-run controls and a status Badge.
+- **`ingestion_service`'s first automated test suite** (`tests/test_api_complaints.py`) — previously empty, unlike every sibling service.
+- **`AdministrationStatusBadge`** — a "Real data" / "Not yet operational" indicator next to each of Administration's six section titles, making the real/illustrative split each section's own `AdvisoryNotice` already discloses in prose scannable at a glance. Wording deliberately avoids "live"/"real-time"/"monitoring" (ADM-004).
+- **Shared design-system primitives** (`frontend/src/shared/components/primitives`): `Button`, `Card` (built on the existing `Panel`), `DataTable`, and `Modal` (the platform's first true blocking dialog, giving `--color-scrim` its first real consumer). Used by all new work in this pass and one flagship retrofit (`ConnectedSystemCard`). The remaining ~14 hand-rolled workspace cards are an explicitly recorded, not-yet-migrated gap — not silently done, not silently ignored.
+
+### Verified
+
+- Backend: `python -m pytest backend -q` — **1221 passed, 21 failed, 161 skipped**. Every failure is in `test_auth_api.py`, `test_event_isolation.py`, `test_main.py`, and `test_rbac_api.py` — all use a real `TestClient(app)` lifespan requiring a locally-reachable PostgreSQL, unavailable in this environment; none touches ingestion, investigations, or root-cause code. Every new/changed test (`test_ingestion.py`, the extended `test_investigations.py` and `test_rbac_api.py` role-gating cases, `ingestion_service/tests/test_api_complaints.py`) passes standalone without a database.
+- Frontend: `npm run typecheck`, `npm run lint`, `npm run build` all clean; `npm test` — **366 passed / 366, 51 files, 0 failed** (two pre-existing tests updated for real, intended changes: the primary-navigation id list now includes `ingestion`; Administration's "never says live" assertion still holds against the new badge's actual wording).
+- Gateway route table inspected directly (`app.routes`): all three new root-cause action routes and all three new ingestion routes present at their intended paths.
+
+### Decided, not built
+
+- **No bulk/CSV backend ingestion endpoint** — the Data workspace parses a file client-side and submits each row as a separate real request against the existing single-record endpoint; a genuine server-side bulk-import capability was not added.
+- **No repository-wide Button/Card migration** — new primitives are additive; ~14 existing hand-rolled cards are left as-is (cosmetic churn, real regression risk, no functional gain).
+- **No changes to Analytics, Copilot's LLM configuration, or Administration's four illustrative sections' underlying data** — all already honestly presented; out of scope for this pass by design.
+
+> Not verified: no browser automation was available for this pass. Rendered appearance, CSS layout, real click-through interaction (including the new Data workspace's upload/preview/confirm flow and the Modal's focus-trap behavior), and behaviour at actual viewport sizes remain for a manual walkthrough.
+
+---
+
+# 2026-08-16 (Final frontend / product-experience pass)
+
+## Session expiry handling, Analytics visualization, illustrative-content disclosure, role-aware UX
+
+A final audit of every frontend surface against the capability actually behind it. Full decision record for the two product decisions: `docs/DECISIONS.md` (AD-10).
+
+### Added
+
+- **Analytics charts, drawn from the real trend response.** `GET /api/v1/analytics/trends` returns five populated numeric series; the view model previously reduced them to a handful of sentences and discarded the rest. It now carries the arrays through unchanged, and `TrendVisualization` renders five charts, each mapped 1:1 to one array: complaint volume per day, average sentiment score per day, and complaints by category, region, and urgency. Nothing is smoothed, forecast, ranked, or re-bucketed; a series the backend returned empty draws no chart rather than an empty axis.
+- **Two chart primitives, no new dependency** — `TimeSeriesChart` (single-series line/area) and `CategoryBarChart` (horizontal bars), plus `ChartFrame`, built from inline SVG and the existing CSS tokens. Every chart ships an equivalent data table ("View as data"), a `role="img"` accessible name, and a per-mark hover value, so a charted number is never encoded only as geometry. New `--color-chart-*` tokens are defined for light and both dark paths.
+- **`AdvisoryNotice`** — one shared feedback component for stating a fact *about* content that is rendering correctly, distinct from `ErrorBoundary` (failed), `EmptyState` (nothing to show), `FutureCapabilityPlaceholder` (not computed yet), and `PartialFailureNotice` (partially degraded response).
+- **`describeApiError`** — one shared status→sentence mapping for `0`/`401`/`403`/`404`/`400`/`422`/`5xx`, replacing the partial per-surface copies. A `403` now names the user's role as the reason; a `5xx` envelope is never surfaced raw.
+- **`AuthContext.hasRole` and `useOptionalAuth`** — a role check mirroring the Gateway's own hierarchy (`admin` satisfies `operator` satisfies `viewer`), and a provider-tolerant context read for components that render fine without session information.
+
+### Fixed
+
+- **A session that expired mid-use left the user stranded.** `AuthContext` learned about authentication exactly once, at bootstrap. The session cookie has a finite `Max-Age` (1800s in development), so an expiry produced a `401` on every subsequent workspace fetch, which each workspace surfaced as a generic "Something went wrong loading …" — the user was never told their session had ended, was never returned to `/login`, and could only recover by reloading. One root cause with five identical symptoms, fixed once: the API client now emits a single centralized 401 signal (`app/api/unauthorized.ts`), `AuthContext` consumes it and transitions to signed-out, `RequireAuth` redirects, and the login page explains why. A deliberate sign-out is not labelled an expiry, and a rejected password never is.
+- **Four Administration sections presented fabricated content as real.** User & Access Management, Data Sources & Integrations, Platform Governance, and Audit & Change History are presentation-only — a documented limitation, but one stated *only in source comments*. A user saw specific user counts, a list of external systems marked "Connected", a 24-month retention policy, and an audit ledger naming individual people at precise timestamps, with nothing indicating none of it was real. Two entries also described capabilities the platform does not have: both claimed single sign-on, where the platform authenticates with email and password. Each section now renders a visible disclosure naming what is illustrative and what the platform actually does. The two sections with real backend data (Platform Overview, Intelligence Configuration) are unchanged.
+- **The two operator-gated actions were discoverable only by failing.** A `viewer` saw a fully-enabled decision form and Copilot composer, and learned the restriction only after composing a request and receiving a `403`. Both now state the role requirement up front. Neither control is hidden: the Gateway remains the authorization boundary, and hiding a control would misrepresent why it is unavailable.
+- **A placeholder chart affordance that had never drawn anything.** `TrendNarrativeCard` rendered a small dashed box containing a static `trendUp` icon, captioned in code as a "reserved chart area". Removed, now that real charts exist.
+
+### Verified
+
+- Full frontend suite: **366 passed / 366, 51 files, 0 failed** (`--maxWorkers=2`), up from 339/49 — 27 new assertions covering session expiry, the role hierarchy, the role-restriction notices, the shared error wording, the Administration disclosures, and the chart layer. `npm run lint`, `npm run typecheck`, `npm run build` all clean.
+- Through the frontend's own origin and proxy (`http://localhost:3000/api/...`) against the running dev stack with real session cookies: all ten frontend-called endpoints `200`; `viewer` reads `200` and both operator-gated writes `403`; `admin` writes `200`; anonymous `401`; an invalid `period` `400`; an unknown incident `404`. Copilot's honest "no LLM configured" disclosure re-confirmed unchanged.
+- Every new module confirmed compiling and served by the containerized Vite dev server.
+
+### Decided, not built
+
+- **Data ingestion has no frontend workflow.** `ingestion_service`'s `POST /complaints` is real but is not Gateway-exposed and is not host-published, so a browser cannot reach it; adding a Gateway route would be new backend capability, not a frontend fix (see AD-10, consistent with AD-9's reasoning). Data continues to enter through the operator-run seed tooling and direct in-network API calls, and Administration now says so on the page.
+
+> Not verified: no browser automation was available for this pass. Rendered appearance, CSS layout, real click-through interaction, and behaviour at actual viewport sizes remain for a manual walkthrough.
+
+---
+
+# 2026-08-16 (Post-closure correction pass — RC1–RC4)
+
+## Frontend API path contract, navigation, router error surface, seed tooling
+
+Four defects found by the first genuine end-to-end walkthrough of the running application. All four are user-facing; none were reachable by the existing test suite, because every frontend test asserted the same wrong path the source code used, and the F05/F06 backend validation exercised the Gateway directly rather than through the frontend's own API modules.
+
+### Fixed
+
+- **Every workspace API call 404'd (RC1).** `apiClient`'s base URL is `/api`, and the Gateway mounts its routers at `/api/v1/...`, but five workspace API modules issued bare paths (`/dashboard`, `/analytics/trends`, `/administration/overview`, `/administration/intelligence-configuration`, `/recommendations/{id}`, `/recommendations/{id}/decision`, `/investigations/{incidentId}`). `authApi.ts` and `copilotApi.ts` were already correct, which is why login and Copilot worked while every workspace showed an error state. Path string literals corrected to `/v1/...`; no method, hook, type, or response-handling change.
+- **Primary navigation linked to routes that do not exist (RC2).** `PRIMARY_NAVIGATION` listed Investigations and Recommendations at the bare `/investigations` and `/recommendations` paths, but the router only ever defined the parameterized detail routes (`/investigations/:incidentId`, `/recommendations/:recommendationId`) — clicking either sidebar entry produced a router error. Both entries removed; the sidebar is now Dashboard, Analytics, Administration. The detail routes, drill-down helpers, and both workspaces are untouched and still reachable from the Dashboard.
+- **No not-found or router-error surface (RC3).** Any unmatched URL fell through to react-router's raw "Unexpected Application Error!" developer screen. Added `RouteErrorView` (built from the existing `EmptyState` foundation — no new UI primitive, no new dependency), wired as the authenticated root route's `errorElement` and as a `path: '*'` catch-all child so it renders inside `AppShell` with the sidebar intact.
+- **The documented sample-data command had never worked (RC4).** `load_sample_complaints.py` resolved only a fixed in-repository path, which is absent from the backend image because `.dockerignore` deliberately excludes `datasets/`. Added an optional `--file` argument; the no-argument default path resolution is unchanged. README now documents the real two-step `docker cp` + `--file` workflow.
+
+### Verified
+
+- Full frontend suite green: 337 → 339 passed, 49 files (two new assertions covering the navigation contract and the not-found surface). `npm run lint`, `npm run typecheck`, and `npm run build` all clean.
+- Through the running Gateway with a real session cookie: `GET /api/v1/auth/me`, `/v1/dashboard`, `/v1/analytics/trends`, `/v1/administration/overview`, `/v1/administration/intelligence-configuration`, `/v1/investigations/{id}`, `/v1/recommendations/{id}` all `200`; the previously-used bare paths confirmed `404`, which is the defect itself reproduced.
+- Sample-data seeding executed end-to-end via `docker cp` + `--file`: 8 records processed, 8 inserted, 0 errors. The no-argument invocation still reports the unchanged default path.
+
+---
+
 # 2026-08-16 (Phase 13 closure)
 
 ## Phase 13 – Production Hardening
@@ -844,13 +974,3 @@ Phase 5 has been fully completed, successfully introducing the platform's core o
 - API endpoints.
 
 ---
-
-## Upcoming
-
-The next planned milestone is:
-
-**Phase 7 Step 3 – Business Impact Lifecycle & Validation**
-
-- Validate API endpoints
-- Write integration tests for API layer
-- Document lifecycle states

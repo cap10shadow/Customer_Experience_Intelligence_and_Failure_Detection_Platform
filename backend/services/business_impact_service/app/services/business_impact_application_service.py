@@ -82,7 +82,9 @@ class BusinessImpactApplicationService:
         self.engine = engine
         self.event_publisher = event_publisher
 
-    async def create_assessment(self, incident_id: uuid.UUID) -> BusinessImpactAssessmentEntity:
+    async def create_assessment(
+        self, incident_id: uuid.UUID, dataset_id: uuid.UUID, dataset_version_id: uuid.UUID
+    ) -> BusinessImpactAssessmentEntity:
         persisted_incident = await self.incident_read_repository.get_by_id(incident_id)
         if persisted_incident is None:
             raise IncidentNotFoundError(incident_id)
@@ -98,12 +100,14 @@ class BusinessImpactApplicationService:
 
         assessment = self.engine.analyze(incident, root_cause_summary, trend_metrics, anomaly_metrics)
 
-        entity = BusinessImpactOutputMapper.to_orm(incident_id, persisted_root_cause.id, assessment)
+        entity = BusinessImpactOutputMapper.to_orm(
+            incident_id, dataset_id, dataset_version_id, persisted_root_cause.id, assessment
+        )
         saved = await self.business_impact_repository.save(entity)
 
         publisher = self.event_publisher
         if publisher is not None:
-            await self._publish_completed_event(publisher, incident_id, persisted_incident.severity, saved, persisted_root_cause)
+            await self._publish_completed_event(publisher, incident_id, dataset_id, persisted_incident.severity, saved, persisted_root_cause)
 
         return saved
 
@@ -111,6 +115,7 @@ class BusinessImpactApplicationService:
         self,
         publisher: BusinessImpactEventPublisher,
         incident_id: uuid.UUID,
+        dataset_id: uuid.UUID,
         incident_severity,
         assessment: BusinessImpactAssessmentEntity,
         persisted_root_cause,
@@ -118,6 +123,7 @@ class BusinessImpactApplicationService:
         event = BusinessImpactCompletedEvent(
             event_id=uuid.uuid4(),
             incident_id=incident_id,
+            dataset_id=dataset_id,
             incident_severity=incident_severity,
             assessment=assessment,
             root_cause=persisted_root_cause,
@@ -136,5 +142,13 @@ class BusinessImpactApplicationService:
         severity: Optional[ImpactLevel] = None,
         priority: Optional[BusinessPriority] = None,
         incident_id: Optional[uuid.UUID] = None,
+        dataset_id: Optional[uuid.UUID] = None,
+        dataset_version_id: Optional[uuid.UUID] = None,
     ) -> Sequence[BusinessImpactAssessmentEntity]:
-        return await self.business_impact_repository.list(severity=severity, priority=priority, incident_id=incident_id)
+        return await self.business_impact_repository.list(
+            severity=severity,
+            priority=priority,
+            incident_id=incident_id,
+            dataset_id=dataset_id,
+            dataset_version_id=dataset_version_id,
+        )

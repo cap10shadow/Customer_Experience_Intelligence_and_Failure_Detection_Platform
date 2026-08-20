@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -22,13 +22,17 @@ NO_ROOT_CAUSE_INCIDENT_ID = uuid.uuid4()
 SAMPLE_ASSESSMENT_ID = uuid.uuid4()
 MISSING_ASSESSMENT_ID = uuid.uuid4()
 SAMPLE_ROOT_CAUSE_ID = uuid.uuid4()
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
 
 
 class _StubAssessment:
     """Plain object with the same attributes BusinessImpactAssessmentResponse.model_validate reads."""
 
-    def __init__(self, incident_id, assessment_id=None):
+    def __init__(self, incident_id, assessment_id=None, dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID):
         self.assessment_id = assessment_id or SAMPLE_ASSESSMENT_ID
+        self.dataset_id = dataset_id
+        self.dataset_version_id = dataset_version_id
         self.incident_id = incident_id
         self.root_cause_id = SAMPLE_ROOT_CAUSE_ID
         self.financial = ImpactLevel.HIGH
@@ -48,19 +52,19 @@ class _StubAssessment:
 
 
 class MockBusinessImpactApplicationService:
-    async def create_assessment(self, incident_id):
+    async def create_assessment(self, incident_id, dataset_id, dataset_version_id):
         if incident_id == MISSING_INCIDENT_ID:
             raise IncidentNotFoundError(incident_id)
         if incident_id == NO_ROOT_CAUSE_INCIDENT_ID:
             raise RootCauseNotFoundError(incident_id)
-        return _StubAssessment(incident_id)
+        return _StubAssessment(incident_id, dataset_id=dataset_id, dataset_version_id=dataset_version_id)
 
     async def get_assessment(self, assessment_id):
         if assessment_id == SAMPLE_ASSESSMENT_ID:
             return _StubAssessment(EXISTING_INCIDENT_ID, assessment_id)
         return None
 
-    async def list_assessments(self, *, severity=None, priority=None, incident_id=None):
+    async def list_assessments(self, *, severity=None, priority=None, incident_id=None, dataset_id=None, dataset_version_id=None):
         return [_StubAssessment(EXISTING_INCIDENT_ID)]
 
 
@@ -80,7 +84,7 @@ def anyio_backend():
 async def test_post_business_impact_returns_201(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/business-impact", json={"incident_id": str(EXISTING_INCIDENT_ID)})
+        response = await client.post("/api/v1/business-impact", json={"incident_id": str(EXISTING_INCIDENT_ID), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assert response.status_code == 201
         body = response.json()
         assert body["incident_id"] == str(EXISTING_INCIDENT_ID)
@@ -92,7 +96,7 @@ async def test_post_business_impact_returns_201(override_dependencies):
 async def test_post_business_impact_returns_404_when_incident_missing(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/business-impact", json={"incident_id": str(MISSING_INCIDENT_ID)})
+        response = await client.post("/api/v1/business-impact", json={"incident_id": str(MISSING_INCIDENT_ID), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assert response.status_code == 404
 
 
@@ -100,7 +104,7 @@ async def test_post_business_impact_returns_404_when_incident_missing(override_d
 async def test_post_business_impact_returns_404_when_root_cause_missing(override_dependencies):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/api/v1/business-impact", json={"incident_id": str(NO_ROOT_CAUSE_INCIDENT_ID)})
+        response = await client.post("/api/v1/business-impact", json={"incident_id": str(NO_ROOT_CAUSE_INCIDENT_ID), "dataset_id": str(DATASET_ID), "dataset_version_id": str(DATASET_VERSION_ID)})
         assert response.status_code == 404
 
 

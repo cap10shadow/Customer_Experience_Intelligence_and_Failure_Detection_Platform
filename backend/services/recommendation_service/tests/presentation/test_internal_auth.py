@@ -28,6 +28,10 @@ def anyio_backend():
     return "asyncio"
 
 
+DATASET_ID = uuid.uuid4()
+DATASET_VERSION_ID = uuid.uuid4()
+
+
 @pytest.fixture
 def wired_repository():
     repository = FakeRecommendationRepository()
@@ -125,7 +129,7 @@ async def test_the_401_body_never_contains_the_configured_secret(wired_consumer)
 @pytest.mark.anyio
 async def test_decision_patch_without_secret_is_rejected(wired_repository, make_recommendation):
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-1")], incident_id="INC-1", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-1")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-1", generation_id=uuid.uuid4()
     )
     async with await _client() as client:
         response = await client.patch(
@@ -138,7 +142,7 @@ async def test_decision_patch_without_secret_is_rejected(wired_repository, make_
 @pytest.mark.anyio
 async def test_decision_patch_with_the_correct_secret_succeeds(wired_repository, make_recommendation):
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-2")], incident_id="INC-2", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-2")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-2", generation_id=uuid.uuid4()
     )
     async with await _client() as client:
         response = await client.patch(
@@ -157,7 +161,7 @@ async def test_decision_patch_accepts_the_gateway_attested_principal_header_with
 ):
     """Phase 13 Batch 4/5: the principal header is now persisted (decided_by/actor_id) -- but never exposed on this response, AD-3 requiring no such API contract."""
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-3")], incident_id="INC-3", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-3")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-3", generation_id=uuid.uuid4()
     )
     async with await _client() as client:
         response = await client.patch(
@@ -183,7 +187,7 @@ async def test_decision_patch_persists_the_gateway_attested_principal_as_decided
     wired_repository, make_recommendation
 ):
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-ATTR-1")], incident_id="INC-ATTR-1", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-ATTR-1")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-ATTR-1", generation_id=uuid.uuid4()
     )
     actor_id = uuid.uuid4()
 
@@ -203,7 +207,7 @@ async def test_decision_patch_persists_the_gateway_attested_principal_as_decided
 @pytest.mark.anyio
 async def test_decision_patch_without_principal_header_persists_no_known_actor(wired_repository, make_recommendation):
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-ATTR-2")], incident_id="INC-ATTR-2", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-ATTR-2")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-ATTR-2", generation_id=uuid.uuid4()
     )
 
     async with await _client() as client:
@@ -225,7 +229,7 @@ async def test_decision_patch_malformed_principal_header_persists_no_known_actor
 ):
     """A malformed X-Authenticated-User-Id (not a valid UUID) never fails the request or fabricates an actor -- it degrades to 'no known actor', same as a missing header."""
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-ATTR-3")], incident_id="INC-ATTR-3", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-ATTR-3")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-ATTR-3", generation_id=uuid.uuid4()
     )
 
     async with await _client() as client:
@@ -247,7 +251,7 @@ async def test_decision_patch_ignores_any_client_supplied_actor_field_in_the_req
 ):
     """The request schema declares no actor/owner field at all -- a client attempting to spoof attribution via the body is structurally ignored, and the real actor still comes only from the trusted header."""
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-ATTR-4")], incident_id="INC-ATTR-4", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-ATTR-4")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-ATTR-4", generation_id=uuid.uuid4()
     )
     real_actor_id = uuid.uuid4()
     spoofed_actor_id = uuid.uuid4()
@@ -274,7 +278,7 @@ async def test_decision_patch_creates_a_history_record_with_the_correct_recommen
     wired_repository, make_recommendation
 ):
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-HIST-1")], incident_id="INC-HIST-1", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-HIST-1")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-HIST-1", generation_id=uuid.uuid4()
     )
     recommendation_id = saved[0].recommendation_id
     actor_id = uuid.uuid4()
@@ -299,7 +303,7 @@ async def test_decision_patch_creates_a_history_record_with_the_correct_recommen
 @pytest.mark.anyio
 async def test_decision_patch_repeated_calls_each_append_their_own_history_record(wired_repository, make_recommendation):
     saved = await wired_repository.save_many(
-        [make_recommendation(incident_id="INC-HIST-2")], incident_id="INC-HIST-2", generation_id=uuid.uuid4()
+        [make_recommendation(incident_id="INC-HIST-2")], dataset_id=DATASET_ID, dataset_version_id=DATASET_VERSION_ID, incident_id="INC-HIST-2", generation_id=uuid.uuid4()
     )
     recommendation_id = saved[0].recommendation_id
     first_actor = uuid.uuid4()
