@@ -36,6 +36,7 @@ This is the implemented, working path through the product today. Field mapping, 
 ## Key Capabilities
 
 ### Data Ingestion & Dataset Management
+
 - Upload a CSV/JSON file (or add a record manually), preview parsed rows, and submit — with per-row success/duplicate/failure outcomes, not a silent bulk import.
 - Field mapping against a real, enum-backed vocabulary, with unfamiliar values surfaced for an explicit mapping decision that is persisted and reused on future uploads.
 - Source-hash duplicate detection at the database layer — re-uploading the same record is a real, safe no-op, not a duplicate row.
@@ -43,6 +44,7 @@ This is the implemented, working path through the product today. Field mapping, 
 - Dataset archive / lifecycle status, with archived datasets protected from being selected or re-analyzed.
 
 ### Intelligence Pipeline
+
 - NLP enrichment: sentiment, category, urgency, and keyword extraction (deterministic classifiers).
 - Anomaly detection across volume, region, category, sentiment, and urgency, comparing each current time window against the prior equivalent window with fixed percentage-change thresholds — dataset-scoped, so unrelated datasets never contaminate each other's baseline.
 - Incident correlation groups related anomalies into a single incident.
@@ -51,18 +53,22 @@ This is the implemented, working path through the product today. Field mapping, 
 - An 8-rule recommendation engine generating prioritized, evidence-cited recommendations an operator can approve, reject, or defer — with the decision permanently attributed to a real, server-derived identity.
 
 ### Dashboard & Operational Visibility
+
 - Reads the currently selected, finalized dataset and shows real operational counts and trends — never a global, unscoped view.
 - An explicit "No dataset selected" state rather than an empty or fabricated chart.
 
 ### Analytics
+
 - Category, regional, urgency, trend, and sentiment analysis, drawn 1:1 from the dataset's real trend data.
 - Re-analysis and stale-state handling: extending a dataset re-runs analysis over its full cumulative record set, and the UI reflects which version's analysis is currently shown.
 
 ### Incident / Anomaly Detection
+
 - Detected incidents are drillable into root cause, business impact, and recommendations, all keyed to the same evidence.
 - A read-only Copilot interface is implemented with authenticated conversation ownership and an evidence/tool boundary; a live LLM provider is not currently configured.
 
 ### Administration & Dataset Lifecycle
+
 - Real dataset lifecycle controls (create, finalize, archive, version history) and platform/service health.
 - Intelligence configuration and platform operational state reflect real backend state.
 - A few sections of Administration (broader user/role administration, external system integrations, a full audit trail) are illustrative content, clearly labeled as such in the UI — see [Current Scope](#current-scope-and-future-improvements).
@@ -90,16 +96,16 @@ Nine independently owned backend services sit behind `gateway_service`, the plat
 
 ## Technology Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, TypeScript, Vite, React Router |
-| Backend | Python 3.11, FastAPI, SQLAlchemy, Alembic |
-| Database | PostgreSQL 15, one linear migration chain across all services |
-| Auth | Gateway-owned JWT session (HttpOnly cookie), bcrypt, role-based access control |
-| Observability | Prometheus, Loki/Promtail, OpenTelemetry → Tempo, Grafana |
-| Testing | pytest (backend), Vitest + Testing Library (frontend) |
-| CI | GitHub Actions — backend tests, frontend lint/typecheck/test/build, Compose config validation |
-| Infrastructure | Docker Compose (separate development and production-like configurations) |
+| Layer          | Technology                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| Frontend       | React 19, TypeScript, Vite, React Router                                                       |
+| Backend        | Python 3.11, FastAPI, SQLAlchemy, Alembic                                                      |
+| Database       | PostgreSQL 15, one linear migration chain across all services                                  |
+| Auth           | Gateway-owned JWT session (HttpOnly cookie), bcrypt, role-based access control                 |
+| Observability  | Prometheus, Loki/Promtail, OpenTelemetry → Tempo, Grafana                                     |
+| Testing        | pytest (backend), Vitest + Testing Library (frontend)                                          |
+| CI             | GitHub Actions — backend tests, frontend lint/typecheck/test/build, Compose config validation |
+| Infrastructure | Docker Compose (separate development and production-like configurations)                       |
 
 ## Repository Structure
 
@@ -167,9 +173,6 @@ cd frontend && npm test                                  # frontend
 
 The intelligence pipeline, authentication/RBAC, dataset isolation, and the full ingestion → dataset-finalization workflow have been manually walked through end-to-end against running services, in addition to the automated test suites (1,400+ backend tests, 380+ frontend tests, all passing in CI). A saved, evidence-labelled validation record covering the pipeline, dataset scoping, and known edge cases is in [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md).
 
-=======
-
-
 ## Current Scope and Future Improvements
 
 The end-to-end workflow described above — upload, map, normalize, ingest, finalize, and see the result reflected in a dataset-scoped Dashboard, Analytics, and incident/anomaly pipeline — is implemented and working today.
@@ -185,14 +188,14 @@ The next iteration of the platform is expected to focus on:
 
 ## Documentation
 
-| Document | Purpose |
-|---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design and service responsibilities |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision records |
-| [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) | Current implementation status |
-| [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | Dated engineering changelog |
-| [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md) | End-to-end validation evidence |
-| [`ROADMAP.md`](ROADMAP.md) | Forward-looking direction |
+| Document                                                  | Purpose                                    |
+| --------------------------------------------------------- | ------------------------------------------ |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md)                     | System design and service responsibilities |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md)                 | Architecture decision records              |
+| [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)       | Current implementation status              |
+| [`docs/CHANGELOG.md`](docs/CHANGELOG.md)                 | Dated engineering changelog                |
+| [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md) | End-to-end validation evidence             |
+| [`ROADMAP.md`](ROADMAP.md)                               | Forward-looking direction                  |
 
 ## License
 
