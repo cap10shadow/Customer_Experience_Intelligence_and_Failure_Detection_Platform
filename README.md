@@ -1,5 +1,7 @@
 # Customer Experience Intelligence & Failure Detection Platform
 
+[![CI](https://github.com/cap10shadow/Customer_Experience_Intelligence_and_Failure_Detection_Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/cap10shadow/Customer_Experience_Intelligence_and_Failure_Detection_Platform/actions/workflows/ci.yml)
+
 A modular platform that turns raw customer complaints into explainable operational intelligence. It ingests complaint data, normalizes and maps it against known vocabulary, runs it through an operational anomaly-detection and root-cause pipeline scoped to a versioned dataset, and lets an operator act on the result — with every decision attributed to a real identity.
 
 It is an engineering-focused prototype, not a deployed production service: the domain logic, persistence, authentication, and CI are real and independently verified (see [Validation](#validation)), but there is no live traffic, no cloud deployment, and no external customers. Where something is intentionally incomplete or deferred, this README says so directly rather than describing aspirational behavior as shipped.
