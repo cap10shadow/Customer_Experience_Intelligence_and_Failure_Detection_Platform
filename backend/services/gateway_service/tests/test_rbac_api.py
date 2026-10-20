@@ -16,6 +16,7 @@ JWT by hand), and deletes what it created afterward.
 import uuid
 from typing import AsyncIterator, Optional, Sequence
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, text
@@ -24,6 +25,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.services.gateway_service.app.core.auth_dependency import get_current_user
 from backend.services.gateway_service.app.core.security import hash_password
+from backend.services.gateway_service.app.dependencies.http_client import get_http_client
 from backend.services.gateway_service.app.main import app
 from backend.services.gateway_service.app.models.identity import Role, User, UserRole
 from backend.shared.config.settings import Settings
@@ -258,36 +260,98 @@ async def test_operator_passes_the_authorization_gate_on_the_copilot_delete_rout
     assert response.status_code != 403
 
 
-# --- Operator-level route (POST /ingestion/complaints) ---------------------------------
+# --- Operator-level route (POST /field-mappings/bulk-approve) --------------------------
+
+
+@pytest.fixture
+def mock_ingestion_service():
+    """Stands in for ingestion_service (not running in CI) so the Gateway's real handler outcome is deterministic once the authorization gate is passed."""
+
+    def _apply(handler):
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        app.dependency_overrides[get_http_client] = lambda: client
+
+    yield _apply
+    app.dependency_overrides.pop(get_http_client, None)
 
 
 @pytest.mark.anyio
-async def test_viewer_only_gets_403_on_the_operator_only_ingestion_route(viewer_user: _TestUser):
+async def test_anonymous_request_to_the_bulk_approve_route_is_401():
+    with TestClient(app) as client:
+        response = client.post("/api/v1/field-mappings/bulk-approve", json={})
+
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_viewer_only_gets_403_on_the_operator_only_bulk_approve_route(viewer_user: _TestUser):
     with TestClient(app) as client:
         _login(client, viewer_user)
-        response = client.post("/api/v1/ingestion/complaints", json={"complaint_text": "a" * 20})
+        response = client.post("/api/v1/field-mappings/bulk-approve", json={})
 
     assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
 
 
 @pytest.mark.anyio
-async def test_operator_passes_the_authorization_gate_on_the_ingestion_route(operator_user: _TestUser):
+async def test_operator_gets_a_success_response_from_the_bulk_approve_route(operator_user: _TestUser, mock_ingestion_service):
+    mock_ingestion_service(lambda request: httpx.Response(200, json={"approved_count": 2}))
+
     with TestClient(app) as client:
         _login(client, operator_user)
-        response = client.post("/api/v1/ingestion/complaints", json={"complaint_text": "a" * 20})
+        response = client.post("/api/v1/field-mappings/bulk-approve", json={"mapping_ids": ["a", "b"]})
 
-    assert response.status_code != 401
-    assert response.status_code != 403
+    assert response.status_code == 200
+    assert response.json() == {"approved_count": 2}
 
 
 @pytest.mark.anyio
-async def test_viewer_passes_the_authorization_gate_on_the_ingestion_list_route(viewer_user: _TestUser):
+async def test_operator_gets_a_validation_response_when_ingestion_rejects_the_bulk_approve(
+    operator_user: _TestUser, mock_ingestion_service
+):
+    mock_ingestion_service(lambda request: httpx.Response(422, json={"detail": "invalid"}))
+
+    with TestClient(app) as client:
+        _login(client, operator_user)
+        response = client.post("/api/v1/field-mappings/bulk-approve", json={})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+# --- Viewer-level route (GET /datasets/{dataset_id}/complaints) --------------------------
+
+
+@pytest.mark.anyio
+async def test_anonymous_request_to_the_dataset_complaints_list_route_is_401():
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/datasets/{uuid.uuid4()}/complaints")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_viewer_gets_the_dataset_complaints_list(viewer_user: _TestUser, mock_ingestion_service):
+    mock_ingestion_service(
+        lambda request: httpx.Response(200, json={"items": [], "total_count": 0, "skip": 0, "limit": 100})
+    )
+
     with TestClient(app) as client:
         _login(client, viewer_user)
-        response = client.get("/api/v1/ingestion/complaints")
+        response = client.get(f"/api/v1/datasets/{uuid.uuid4()}/complaints")
 
-    assert response.status_code != 401
-    assert response.status_code != 403
+    assert response.status_code == 200
+    assert response.json()["totalCount"] == 0
+    assert response.json()["items"] == []
+
+
+@pytest.mark.anyio
+async def test_viewer_only_gets_403_on_the_operator_only_dataset_complaint_create_route(viewer_user: _TestUser):
+    with TestClient(app) as client:
+        _login(client, viewer_user)
+        response = client.post(f"/api/v1/datasets/{uuid.uuid4()}/complaints", json={"complaint_text": "a" * 20})
+
+    assert response.status_code == 403
 
 
 # --- Operator-level routes (root-cause confirm/reject/refresh) -------------------------
