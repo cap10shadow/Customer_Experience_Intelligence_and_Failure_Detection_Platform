@@ -1663,7 +1663,7 @@ The task requiring this decision asked for the reverse: an uploaded dataset must
 **Pros**
 
 - Two unrelated datasets can never contaminate each other's anomalies, incidents, or recommendations — enforced at the schema level (`(fingerprint, dataset_id)` uniqueness), not just by convention in application code.
-- Extending a dataset with new records and finalizing a new version re-analyzes honestly over the dataset's full, cumulative record set; prior versions remain queryable rows, never overwritten or deleted.
+- Extending a dataset with new records and finalizing a new version re-analyzes honestly over the dataset's full, cumulative record set; prior versions remain queryable rows, never overwritten or deleted; derived Incident/ActiveAnomaly state is not version-frozen (see AD-12 Addendum, item 5).
 - No workspace can silently fall back to a global, unscoped query — the Gateway rejects the request outright, and the frontend never constructs one.
 - No new infrastructure (task queue, second orchestration service, ORM cross-service coupling) was introduced; every mechanism used already existed elsewhere in the codebase for a different purpose.
 

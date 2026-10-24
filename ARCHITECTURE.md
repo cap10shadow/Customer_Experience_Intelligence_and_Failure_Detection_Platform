@@ -93,7 +93,7 @@ Responsible for:
 - complaint storage
 - operational event storage
 - analytics data
-- historical trend tracking
+- historical trend tracking (target; today trends are computed at query time from stored complaints)
 - recommendation history
 
 Primary technologies:
@@ -325,11 +325,13 @@ Outputs:
 
 The database layer should:
 - support analytical workloads
-- preserve historical intelligence
-- track issue evolution over time
+- preserve historical intelligence (target)
+- track issue evolution over time (target)
 - support explainability and traceability
-- preserve historical intelligence evolution over time
-- support longitudinal operational analysis
+- preserve historical intelligence evolution over time (target)
+- support longitudinal operational analysis (target)
+
+Implemented today: anomaly history events, root causes, business-impact assessments and recommendations are kept per dataset version. Incident content is not yet historized, and current anomaly and incident state is updated in place.
 
 Core database categories:
 - complaints
