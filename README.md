@@ -62,7 +62,7 @@ This is the implemented, working path through the product today. Field mapping, 
 ### Analytics
 
 - Category, regional, urgency, trend, and sentiment analysis, drawn 1:1 from the dataset's real trend data.
-- Re-analysis and stale-state handling: extending a dataset re-runs enrichment, anomaly detection, incident correlation and business-impact scoring over its full cumulative record set. Existing root-cause records are kept, not recomputed. The dataset selector shows the version number and status, and the Investigations and Recommendations views show a shortened id of the version their result is attributed to.
+- Re-analysis and stale-state handling: extending a dataset re-runs enrichment, anomaly detection, incident correlation and business-impact scoring over its full cumulative record set. Existing root-cause records are kept, not recomputed automatically. The dataset selector shows the version number and status, and the Investigations and Recommendations views show a shortened id of the version their result is attributed to.
 
 ### Incident / Anomaly Detection
 
