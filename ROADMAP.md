@@ -15,7 +15,7 @@ The platform has reached its completed prototype implementation and closure stag
 ## Completed Foundation
 
 - **Modular service architecture** — nine independently owned backend services behind a single Gateway/BFF, one shared PostgreSQL instance, one linear Alembic migration chain.
-- **Dataset identity & versioning** (AD-12) — every complaint belongs to a real, isolated Dataset; extending a dataset creates a new version and re-analyzes its full, cumulative record set without destroying prior versions. Dashboard, Analytics, and the full detection/investigation/recommendation pipeline are all dataset-scoped, with no global-query fallback.
+- **Dataset identity & versioning** (AD-12) — every complaint belongs to a real, isolated Dataset; extending a dataset finalizes a new numbered version and re-analyzes its full, cumulative record set. Version records and per-version business-impact and recommendation outputs are kept; current anomaly and incident state is updated in place. Dashboard, Analytics, and the full detection/investigation/recommendation pipeline are all dataset-scoped, with no global-query fallback.
 - **The full intelligence pipeline** — complaint ingestion, NLP enrichment, statistical anomaly detection, incident correlation, deterministic root-cause analysis, weighted business-impact scoring, and recommendation generation.
 - **Authentication & session handling** — Gateway-owned JWT session in an HttpOnly, same-origin cookie; bcrypt password hashing.
 - **RBAC** — `viewer`/`operator`/`admin`, enforced on every Gateway route.

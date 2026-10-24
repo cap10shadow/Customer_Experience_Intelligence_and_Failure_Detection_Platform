@@ -14,7 +14,7 @@ Operational teams — e-commerce, logistics, fintech, SaaS — receive a continu
 
 ## What the Platform Does
 
-A user uploads a batch of complaint records into a **Dataset**. The platform maps each column to its known field vocabulary (asking for confirmation on anything unfamiliar), normalizes and deduplicates the rows, and ingests them with full source-file provenance. Finalizing a dataset version runs the whole intelligence pipeline against it — NLP enrichment, anomaly detection, incident correlation, root-cause analysis, business-impact scoring, and recommendation generation — all scoped to that one dataset, with no cross-dataset leakage. The Dashboard and Analytics workspaces then read from whichever dataset is currently selected, and an operator can review, confirm, or act on what the pipeline found.
+A user uploads a batch of complaint records into a **Dataset**. The platform maps each column to its known field vocabulary (asking for confirmation on anything unfamiliar), normalizes and deduplicates the rows, and ingests them with full source-file provenance. Finalizing a dataset version runs the intelligence pipeline against it — NLP enrichment, anomaly detection, incident correlation, root-cause analysis, business-impact scoring, and recommendation generation — all scoped to that one dataset, with no cross-dataset leakage. On a re-run, an incident's existing root-cause record is kept rather than recomputed automatically. The Dashboard and Analytics workspaces then read from whichever dataset is currently selected, and an operator can review, confirm, or act on what the pipeline found.
 
 ## End-to-End Workflow
 
@@ -42,7 +42,7 @@ This is the implemented, working path through the product today. Field mapping, 
 - Upload a CSV/JSON file (or add a record manually), preview parsed rows, and submit — with per-row success/duplicate/failure outcomes, not a silent bulk import.
 - Field mapping against a real, enum-backed vocabulary, with unfamiliar values surfaced for an explicit mapping decision that is persisted and reused on future uploads.
 - Source-hash duplicate detection at the database layer — re-uploading the same record is a real, safe no-op, not a duplicate row.
-- Every complaint belongs to a real, isolated **Dataset**; extending a dataset creates a new, independently queryable **DatasetVersion** rather than overwriting history.
+- Every complaint belongs to a real, isolated **Dataset**; extending a dataset finalizes a new numbered **DatasetVersion** record. Version records and per-version business-impact and recommendation outputs are kept. Current anomaly and incident state is updated in place.
 - Dataset archive / lifecycle status, with archived datasets protected from being selected or re-analyzed.
 
 ### Intelligence Pipeline
@@ -62,7 +62,7 @@ This is the implemented, working path through the product today. Field mapping, 
 ### Analytics
 
 - Category, regional, urgency, trend, and sentiment analysis, drawn 1:1 from the dataset's real trend data.
-- Re-analysis and stale-state handling: extending a dataset re-runs analysis over its full cumulative record set, and the UI reflects which version's analysis is currently shown.
+- Re-analysis and stale-state handling: extending a dataset re-runs enrichment, anomaly detection, incident correlation and business-impact scoring over its full cumulative record set. Existing root-cause records are kept, not recomputed. The dataset selector shows the version number and status, and the Investigations and Recommendations views show a shortened id of the version their result is attributed to.
 
 ### Incident / Anomaly Detection
 
