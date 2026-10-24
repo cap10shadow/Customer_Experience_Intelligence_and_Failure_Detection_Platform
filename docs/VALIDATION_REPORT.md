@@ -131,7 +131,7 @@ Real, currently-observed limitations only:
 | Requirement | PASS | PARTIAL | NOT VERIFIED | Evidence |
 |---|---|---|---|---|
 | Dataset identity | ✅ | | | §4 — real UUIDs, `GET /datasets` lists independent entries |
-| Dataset versioning | ✅ | | | §4 — v1/v2 both independently retrievable after extend |
+| Dataset versioning | 🟡 | | | §4 — v1/v2 both independently retrievable after extend; version records retrievable; incident and anomaly state not point-in-time |
 | Ingestion pipeline | ✅ | | | §4, §5 — 12/12, 6/6, 5/5 real ingests across three batches |
 | Mapping | | | ✅ | §5 — validated via existing passing test suites, not re-driven live in this pass |
 | Normalization | | | ✅ | §5 — same |
@@ -140,7 +140,7 @@ Real, currently-observed limitations only:
 | Duplicate handling | ✅ | | | §4 — real `409 CONFLICT` on resubmission |
 | Dataset-scoped intelligence | ✅ | | | §6, §7, §8 — two datasets, two independent, correctly-scoped intelligence sets |
 | Dataset isolation | ✅ | | | §6 — direct evidence, not inferred |
-| Re-analysis | ✅ | | | §4 — version 2 correctly reflects cumulative 17 records |
+| Re-analysis | 🟡 | | | §4 — version 2 correctly reflects cumulative 17 records; version records retrievable; incident and anomaly state not point-in-time |
 | Stale-state handling | 🟡 | | | §7 — old and new recommendations both remain visible under one incident after re-analysis, rather than showing only the latest |
 | Archived dataset protection | 🟡 | | | §6, §11 — real, but enforced at the dataset-detail layer, not the Dashboard/Analytics data routes |
 | Dashboard | ✅ | | | §7 — internally consistent with input, not just rendering |
